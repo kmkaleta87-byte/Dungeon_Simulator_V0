@@ -1,13 +1,92 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Game</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Dungeon Simulation, a game in development.">
+  <meta name="theme-color" content="#e9e5d9">
+  <title>Dungeon Simulation</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
 </head>
-
 <body>
-    <h1>My Game</h1>
-    <p>Website coming soon.</p>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" id="top">
+    <a class="wordmark" href="#top">Dungeon <span>Simulation</span></a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open navigation">
+      <span class="menu-toggle-label">Menu</span>
+      <span class="menu-icon" aria-hidden="true"><span></span><span></span></span>
+    </button>
+    <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+      <a href="#equipment">Equipment</a>
+      <a href="Images/ART_ASSET_CHECKLIST.txt">Art checklist</a>
+      <span class="nav-status">In development</span>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-mark" aria-hidden="true"></span> Game in development</p>
+        <h1 id="page-title">Dungeon<br><em>Simulation</em></h1>
+        <p class="hero-note">A game project in development.</p>
+        <a class="hero-link" href="#equipment">View equipment <span aria-hidden="true">↘</span></a>
+      </div>
+
+      <section class="equipment-preview" id="equipment" aria-labelledby="equipment-title">
+        <div class="equipment-heading">
+          <div>
+            <p class="section-kicker">Arms &amp; implements</p>
+            <h2 id="equipment-title">Equipment</h2>
+          </div>
+          <span class="equipment-count" aria-hidden="true">01—03</span>
+        </div>
+        <div class="weapon-shelf">
+          <figure class="weapon-item">
+            <div class="sprite-stage">
+              <img src="Images/Weapons/Warrior/ironfang.png" alt="Ironfang sword artwork">
+              <span class="sprite-fallback">Artwork slot</span>
+            </div>
+            <figcaption><span>Warrior</span><strong>Ironfang</strong></figcaption>
+          </figure>
+          <figure class="weapon-item">
+            <div class="sprite-stage">
+              <img src="Images/Weapons/Archer/emberwood-bow.png" alt="Emberwood Bow artwork">
+              <span class="sprite-fallback">Artwork slot</span>
+            </div>
+            <figcaption><span>Archer</span><strong>Emberwood Bow</strong></figcaption>
+          </figure>
+          <figure class="weapon-item">
+            <div class="sprite-stage">
+              <img src="Images/Weapons/Mage/apprentice-staff.png" alt="Apprentice Staff artwork">
+              <span class="sprite-fallback">Artwork slot</span>
+            </div>
+            <figcaption><span>Mage</span><strong>Apprentice Staff</strong></figcaption>
+          </figure>
+        </div>
+      </section>
+      <div class="hero-index" aria-hidden="true"><span>Dungeon Simulation</span><span>Game project</span></div>
+    </section>
+
+    <section class="art-section" aria-labelledby="art-title">
+      <div class="art-intro">
+        <p class="section-kicker">The project</p>
+        <h2 id="art-title">Built one piece<br>at a time.</h2>
+      </div>
+      <div class="art-description">
+        <p>Weapons, armor, enemies, rooms, and items each have their own place in the art archive.</p>
+        <a class="checklist-link" href="Images/ART_ASSET_CHECKLIST.txt">Open the art checklist <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="category-line" aria-label="Art categories">
+        <span>Weapons</span><span>Armor</span><span>Enemies</span><span>Items</span><span>Rooms</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a href="#top">Dungeon Simulation</a>
+    <span>In development</span>
+  </footer>
 </body>
 </html>

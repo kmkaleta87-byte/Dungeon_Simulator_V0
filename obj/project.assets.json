@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\Users\\kmkal\\!!!Coding\\C#\\CSharp-Learning\\Projects\\Dungeon_Simulation_V0\\Dungeon_Simulation_V0.csproj",
+      "projectUniqueName": "C:\\Users\\kmkal\\!!!Coding\\C#\\Dungeon_Simulator_V0\\Dungeon_Simulation_V0.csproj",
       "projectName": "Dungeon_Simulation_V0",
-      "projectPath": "c:\\Users\\kmkal\\!!!Coding\\C#\\CSharp-Learning\\Projects\\Dungeon_Simulation_V0\\Dungeon_Simulation_V0.csproj",
+      "projectPath": "C:\\Users\\kmkal\\!!!Coding\\C#\\Dungeon_Simulator_V0\\Dungeon_Simulation_V0.csproj",
       "packagesPath": "C:\\Users\\kmkal\\.nuget\\packages\\",
-      "outputPath": "c:\\Users\\kmkal\\!!!Coding\\C#\\CSharp-Learning\\Projects\\Dungeon_Simulation_V0\\obj\\",
+      "outputPath": "C:\\Users\\kmkal\\!!!Coding\\C#\\Dungeon_Simulator_V0\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\kmkal\\AppData\\Roaming\\NuGet\\NuGet.Config"

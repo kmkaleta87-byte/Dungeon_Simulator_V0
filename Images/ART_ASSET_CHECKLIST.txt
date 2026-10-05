@@ -1,0 +1,508 @@
+DUNGEON SIMULATION - ART ASSET CHECKLIST
+========================================
+
+File format: PNG. Keep transparent backgrounds for isolated sprites and icons.
+Use the exact paths and lowercase filenames below. Filenames use kebab-case.
+Suggested sprite framing: one object/enemy centered with some transparent padding.
+Weapon art is displayed beside the player/loadout, not as a player character sprite.
+
+RARITY DESIGN
+-------------
+Each weapon checklist line is tagged with its exact in-game rarity. Armor rarity
+is tagged by material/set. Keep the filenames unchanged; make higher-rarity art
+feel more distinctive through stronger silhouettes, detail, materials, and accents.
+Use the game's established rarity colors as accents where they suit the design:
+Common white, Uncommon light green, Rare dark blue, Epic purple, Legendary light
+orange/gold, Mythic red, Divine pale turquoise. Higher rarity should read as more
+special, not merely as the same item with a brighter tint.
+
+Potion rarity varies when dropped. Use one base potion sprite plus the matching
+rarity frame/accent rather than drawing seven near-identical full potion sprites.
+Small Health Potion in the starting/treasure rooms is Common; the weapon chest's
+Large Health Potion is Rare.
+
+FOLDER GUIDE
+------------
+Weapons/Warrior   Individual warrior weapons
+Weapons/Archer    Individual bows and crossbows
+Weapons/Mage      Individual wands and staffs
+Armor             Armor piece sprites, grouped by material set
+Enemies/Races     Regular race/class enemy sprites
+Enemies/Bosses    Named boss sprites
+Enemies/Overlays  Reusable elite/glass-cannon visual overlays
+Items/Potions     Potion sprites
+Items/Materials   Reusable material/arrow sprites
+Rooms             Room illustrations or room thumbnails
+UI                Reusable interface icons and frames
+
+WEAPONS - WARRIOR
+------------------
+[ ] [Common] Weapons/Warrior/cinder-knife.png
+[ ] [Common] Weapons/Warrior/frostbite-dirk.png
+[ ] [Common] Weapons/Warrior/breeze-shiv.png
+[ ] [Common] Weapons/Warrior/rootwood-axe.png
+[ ] [Common] Weapons/Warrior/crackle-axe.png
+[ ] [Common] Weapons/Warrior/rotting-hatchet.png
+[ ] [Common] Weapons/Warrior/lantern-blade.png
+[ ] [Common] Weapons/Warrior/dusksteel-sword.png
+[ ] [Common] Weapons/Warrior/ironfang.png
+[ ] [Common] Weapons/Warrior/harvest-scythe.png
+[ ] [Common] Weapons/Warrior/ashen-reaper.png
+[ ] [Common] Weapons/Warrior/winter-reaper.png
+[ ] [Uncommon] Weapons/Warrior/emberfang.png
+[ ] [Uncommon] Weapons/Warrior/glacier-needle.png
+[ ] [Uncommon] Weapons/Warrior/whisperwind.png
+[ ] [Uncommon] Weapons/Warrior/thorncleaver.png
+[ ] [Uncommon] Weapons/Warrior/stormsplitter.png
+[ ] [Uncommon] Weapons/Warrior/venom-hatchet.png
+[ ] [Uncommon] Weapons/Warrior/sunsteel.png
+[ ] [Uncommon] Weapons/Warrior/gloamfang.png
+[ ] [Uncommon] Weapons/Warrior/bloodletter.png
+[ ] [Uncommon] Weapons/Warrior/grave-harvester.png
+[ ] [Uncommon] Weapons/Warrior/bloomreaper.png
+[ ] [Uncommon] Weapons/Warrior/sparking-reaper.png
+[ ] [Rare] Weapons/Warrior/pyrefang.png
+[ ] [Rare] Weapons/Warrior/rimepiercer.png
+[ ] [Rare] Weapons/Warrior/gale-talons.png
+[ ] [Rare] Weapons/Warrior/elderroot-cleaver.png
+[ ] [Rare] Weapons/Warrior/thundermaul-axe.png
+[ ] [Rare] Weapons/Warrior/plaguecutter.png
+[ ] [Rare] Weapons/Warrior/radiant-edge.png
+[ ] [Rare] Weapons/Warrior/nightfall-saber.png
+[ ] [Rare] Weapons/Warrior/crimson-fang.png
+[ ] [Rare] Weapons/Warrior/soulharvest.png
+[ ] [Rare] Weapons/Warrior/verdant-reaper.png
+[ ] [Rare] Weapons/Warrior/storm-reaper.png
+[ ] [Epic] Weapons/Warrior/hellflame-twins.png
+[ ] [Epic] Weapons/Warrior/heart-of-winter.png
+[ ] [Epic] Weapons/Warrior/tempest-needles.png
+[ ] [Epic] Weapons/Warrior/worldroot-axe.png
+[ ] [Epic] Weapons/Warrior/mjolnirs-splinter.png
+[ ] [Epic] Weapons/Warrior/blightcleaver.png
+[ ] [Epic] Weapons/Warrior/dawnbringer.png
+[ ] [Epic] Weapons/Warrior/eclipse-blade.png
+[ ] [Epic] Weapons/Warrior/warlords-fang.png
+[ ] [Epic] Weapons/Warrior/blood-moon.png
+[ ] [Epic] Weapons/Warrior/reaper-of-spring.png
+[ ] [Epic] Weapons/Warrior/thunder-harvest.png
+[ ] [Legendary] Weapons/Warrior/solfang.png
+[ ] [Legendary] Weapons/Warrior/voidkiss.png
+[ ] [Legendary] Weapons/Warrior/venom-of-the-ancient-serpent.png
+[ ] [Legendary] Weapons/Warrior/infernal-executioner.png
+[ ] [Legendary] Weapons/Warrior/axe-of-the-skybreaker.png
+[ ] [Legendary] Weapons/Warrior/worldsplitter.png
+[ ] [Legendary] Weapons/Warrior/stormfang.png
+[ ] [Legendary] Weapons/Warrior/frostmournes-echo.png
+[ ] [Legendary] Weapons/Warrior/dragonsteel.png
+[ ] [Legendary] Weapons/Warrior/grave-kings-reaper.png
+[ ] [Legendary] Weapons/Warrior/worldroot-harvester.png
+[ ] [Legendary] Weapons/Warrior/heavens-reaper.png
+[ ] [Mythic] Weapons/Warrior/ignis-fang-of-the-first-flame.png
+[ ] [Mythic] Weapons/Warrior/absolute-zero.png
+[ ] [Mythic] Weapons/Warrior/zephyrs-last-breath.png
+[ ] [Mythic] Weapons/Warrior/axe-of-the-worldroot.png
+[ ] [Mythic] Weapons/Warrior/heavens-thunder.png
+[ ] [Mythic] Weapons/Warrior/plaguefather.png
+[ ] [Mythic] Weapons/Warrior/solaris.png
+[ ] [Mythic] Weapons/Warrior/nights-end.png
+[ ] [Mythic] Weapons/Warrior/sword-of-the-endless-duel.png
+[ ] [Mythic] Weapons/Warrior/the-red-harvest.png
+[ ] [Mythic] Weapons/Warrior/moonreaper.png
+[ ] [Mythic] Weapons/Warrior/garden-of-death.png
+[ ] [Divine] Weapons/Warrior/the-merciful-king.png
+[ ] [Divine] Weapons/Warrior/fang-of-the-first-flame.png
+[ ] [Divine] Weapons/Warrior/the-empty-sky.png
+[ ] [Divine] Weapons/Warrior/the-fallen-root.png
+[ ] [Divine] Weapons/Warrior/stormcrown.png
+[ ] [Divine] Weapons/Warrior/the-blooming-plague.png
+[ ] [Divine] Weapons/Warrior/excalibur.png
+[ ] [Divine] Weapons/Warrior/voidcrown.png
+[ ] [Divine] Weapons/Warrior/absolute-winter.png
+[ ] [Divine] Weapons/Warrior/the-last-reaper.png
+[ ] [Divine] Weapons/Warrior/gravebloom.png
+[ ] [Divine] Weapons/Warrior/the-fallen-hero.png
+
+WEAPONS - ARCHER
+----------------
+[ ] [Common] Weapons/Archer/emberwood-bow.png
+[ ] [Epic] Weapons/Archer/absolute-winter.png
+[ ] [Common] Weapons/Archer/frostpine-bow.png
+[ ] [Common] Weapons/Archer/gale-string.png
+[ ] [Common] Weapons/Archer/thornbranch-bow.png
+[ ] [Common] Weapons/Archer/stormstring.png
+[ ] [Common] Weapons/Archer/venomwood-crossbow.png
+[ ] [Common] Weapons/Archer/duskwillow-bow.png
+[ ] [Uncommon] Weapons/Archer/moonshadow-bow.png
+[ ] [Common] Weapons/Archer/iron-repeater.png
+[ ] [Common] Weapons/Archer/hunters-crossbow.png
+[ ] [Uncommon] Weapons/Archer/serpents-repeater.png
+[ ] [Uncommon] Weapons/Archer/blackpowder-crossbow.png
+[ ] [Rare] Weapons/Archer/heartwood-bow.png
+[ ] [Uncommon] Weapons/Archer/briarbow.png
+[ ] [Rare] Weapons/Archer/windpiercer.png
+[ ] [Rare] Weapons/Archer/plaguebolt.png
+[ ] [Common] Weapons/Archer/stonebolt.png
+[ ] [Epic] Weapons/Archer/nightwhisper.png
+[ ] [Uncommon] Weapons/Archer/falcons-crossbow.png
+[ ] [Uncommon] Weapons/Archer/windrunner-crossbow.png
+[ ] [Epic] Weapons/Archer/seraphs-bowgun.png
+[ ] [Rare] Weapons/Archer/black-star-crossbow.png
+[ ] [Rare] Weapons/Archer/dragonbreath-bow.png
+[ ] [Rare] Weapons/Archer/glacial-longbow.png
+[ ] [Epic] Weapons/Archer/tempest-bow.png
+[ ] [Epic] Weapons/Archer/worldroot-bow.png
+[ ] [Rare] Weapons/Archer/sunfall-crossbow.png
+[ ] [Epic] Weapons/Archer/venomfang-repeater.png
+[ ] [Legendary] Weapons/Archer/blackroot-ballista.png
+[ ] [Uncommon] Weapons/Archer/mountainbreaker.png
+[ ] [Uncommon] Weapons/Archer/cinderstring.png
+[ ] [Uncommon] Weapons/Archer/zephyr-bow.png
+[ ] [Uncommon] Weapons/Archer/thunderwood-bow.png
+[ ] [Rare] Weapons/Archer/eclipse-bow.png
+[ ] [Common] Weapons/Archer/sunbolt-crossbow.png
+[ ] [Uncommon] Weapons/Archer/dawnpiercer.png
+[ ] [Common] Weapons/Archer/ashen-crossbow.png
+[ ] [Legendary] Weapons/Archer/elderwoods-oath.png
+[ ] [Epic] Weapons/Archer/titanbreaker.png
+[ ] [Rare] Weapons/Archer/bloodshot-crossbow.png
+[ ] [Epic] Weapons/Archer/starfall-crossbow.png
+[ ] [Legendary] Weapons/Archer/stormrail.png
+[ ] [Legendary] Weapons/Archer/dooms-repeater.png
+[ ] [Legendary] Weapons/Archer/solbreaker.png
+[ ] [Uncommon] Weapons/Archer/winterglass-bow.png
+[ ] [Epic] Weapons/Archer/galehammer.png
+[ ] [Epic] Weapons/Archer/verdant-siegebow.png
+[ ] [Rare] Weapons/Archer/windlass-of-the-hunt.png
+[ ] [Legendary] Weapons/Archer/heavens-string.png
+[ ] [Epic] Weapons/Archer/thunderheart.png
+[ ] [Mythic] Weapons/Archer/nights-thousand-eyes.png
+[ ] [Epic] Weapons/Archer/infernos-spine.png
+[ ] [Mythic] Weapons/Archer/the-rotfang.png
+[ ] [Rare] Weapons/Archer/siege-crossbow.png
+[ ] [Rare] Weapons/Archer/stormcaller.png
+[ ] [Mythic] Weapons/Archer/tempests-eye.png
+[ ] [Divine] Weapons/Archer/mjolnirs-string.png
+[ ] [Legendary] Weapons/Archer/winters-end.png
+[ ] [Mythic] Weapons/Archer/apocalypse-bow.png
+[ ] [Legendary] Weapons/Archer/the-first-flamebow.png
+[ ] [Legendary] Weapons/Archer/the-wind-that-hunts.png
+[ ] [Divine] Weapons/Archer/the-worldbreaker.png
+[ ] [Divine] Weapons/Archer/the-bow-of-the-first-king.png
+[ ] [Divine] Weapons/Archer/the-voidless-bow.png
+[ ] [Divine] Weapons/Archer/the-first-dragons-crossbow.png
+[ ] [Divine] Weapons/Archer/the-seraphims-judgement.png
+[ ] [Legendary] Weapons/Archer/the-serpents-choir.png
+[ ] [Mythic] Weapons/Archer/worldtrees-branch.png
+[ ] [Mythic] Weapons/Archer/judgment-of-heaven.png
+[ ] [Divine] Weapons/Archer/the-thousand-year-hunt.png
+[ ] [Mythic] Weapons/Archer/the-eclipse.png
+[ ] [Divine] Weapons/Archer/the-sunshot.png
+[ ] [Mythic] Weapons/Archer/the-white-silence.png
+[ ] [Legendary] Weapons/Archer/titans-last-bolt.png
+[ ] [Mythic] Weapons/Archer/the-last-siege.png
+[ ] [Mythic] Weapons/Archer/the-verdant-ballista.png
+[ ] [Divine] Weapons/Archer/gungnirs-heir.png
+[ ] [Mythic] Weapons/Archer/thors-forgotten-bow.png
+[ ] [Divine] Weapons/Archer/yggdrasils-branch.png
+[ ] [Mythic] Weapons/Archer/heavens-arsenal.png
+[ ] [Divine] Weapons/Archer/artemis-bow-of-the-huntress.png
+[ ] [Divine] Weapons/Archer/apollos-last-arrow.png
+[ ] [Legendary] Weapons/Archer/bow-of-the-forgotten-moon.png
+
+WEAPONS - MAGE
+--------------
+[ ] [Common] Weapons/Mage/ember-wand.png
+[ ] [Common] Weapons/Mage/frost-wand.png
+[ ] [Common] Weapons/Mage/breezewand.png
+[ ] [Common] Weapons/Mage/rootbranch-wand.png
+[ ] [Common] Weapons/Mage/spark-wand.png
+[ ] [Common] Weapons/Mage/duskwand.png
+[ ] [Common] Weapons/Mage/apprentice-staff.png
+[ ] [Common] Weapons/Mage/venom-staff.png
+[ ] [Common] Weapons/Mage/oak-staff.png
+[ ] [Common] Weapons/Mage/ironwood-staff.png
+[ ] [Common] Weapons/Mage/ash-staff.png
+[ ] [Common] Weapons/Mage/moon-staff.png
+[ ] [Uncommon] Weapons/Mage/cinderbranch.png
+[ ] [Uncommon] Weapons/Mage/rimeglass-wand.png
+[ ] [Uncommon] Weapons/Mage/zephyr-wand.png
+[ ] [Uncommon] Weapons/Mage/thornwand.png
+[ ] [Uncommon] Weapons/Mage/stormspark.png
+[ ] [Uncommon] Weapons/Mage/shadowneedle.png
+[ ] [Uncommon] Weapons/Mage/staff-of-venom.png
+[ ] [Uncommon] Weapons/Mage/sunbranch-staff.png
+[ ] [Uncommon] Weapons/Mage/magicians-staff.png
+[ ] [Uncommon] Weapons/Mage/wandering-star-staff.png
+[ ] [Uncommon] Weapons/Mage/cinderstaff.png
+[ ] [Uncommon] Weapons/Mage/glacier-staff.png
+[ ] [Rare] Weapons/Mage/dragons-tooth.png
+[ ] [Rare] Weapons/Mage/frozen-fang.png
+[ ] [Rare] Weapons/Mage/windcaller.png
+[ ] [Rare] Weapons/Mage/living-root.png
+[ ] [Rare] Weapons/Mage/thunderwand.png
+[ ] [Rare] Weapons/Mage/void-needle.png
+[ ] [Rare] Weapons/Mage/staff-of-the-serpent.png
+[ ] [Rare] Weapons/Mage/dawnstaff.png
+[ ] [Rare] Weapons/Mage/staff-of-echoes.png
+[ ] [Rare] Weapons/Mage/manaweaver.png
+[ ] [Rare] Weapons/Mage/staff-of-the-tempest.png
+[ ] [Rare] Weapons/Mage/obsidian-staff.png
+[ ] [Epic] Weapons/Mage/infernal-wand.png
+[ ] [Epic] Weapons/Mage/winters-grasp.png
+[ ] [Epic] Weapons/Mage/eye-of-the-storm.png
+[ ] [Epic] Weapons/Mage/worldroot-wand.png
+[ ] [Epic] Weapons/Mage/stormwand.png
+[ ] [Epic] Weapons/Mage/nightfire-wand.png
+[ ] [Epic] Weapons/Mage/staff-of-the-plague-moon.png
+[ ] [Epic] Weapons/Mage/seraphs-staff.png
+[ ] [Epic] Weapons/Mage/arcane-overlord.png
+[ ] [Epic] Weapons/Mage/staff-of-replication.png
+[ ] [Epic] Weapons/Mage/staff-of-the-four-winds.png
+[ ] [Epic] Weapons/Mage/blackthorn-staff.png
+[ ] [Legendary] Weapons/Mage/wand-of-the-first-flame.png
+[ ] [Legendary] Weapons/Mage/heart-of-the-glacier.png
+[ ] [Legendary] Weapons/Mage/zephyrs-eye.png
+[ ] [Legendary] Weapons/Mage/root-of-yggdrasil.png
+[ ] [Legendary] Weapons/Mage/heavens-spark.png
+[ ] [Legendary] Weapons/Mage/voidtongue.png
+[ ] [Legendary] Weapons/Mage/staff-of-the-serpent-king.png
+[ ] [Legendary] Weapons/Mage/dawnbringer-staff.png
+[ ] [Legendary] Weapons/Mage/archmages-staff.png
+[ ] [Legendary] Weapons/Mage/staff-of-a-thousand-spells.png
+[ ] [Legendary] Weapons/Mage/staff-of-the-astral-gate.png
+[ ] [Legendary] Weapons/Mage/the-mana-furnace.png
+[ ] [Mythic] Weapons/Mage/apocalypses-spark.png
+[ ] [Mythic] Weapons/Mage/absolute-zero.png
+[ ] [Mythic] Weapons/Mage/eye-of-the-eternal-storm.png
+[ ] [Mythic] Weapons/Mage/worldseed.png
+[ ] [Mythic] Weapons/Mage/the-living-thunder.png
+[ ] [Mythic] Weapons/Mage/the-nameless-wand.png
+[ ] [Mythic] Weapons/Mage/the-plague-crown.png
+[ ] [Mythic] Weapons/Mage/staff-of-the-celestial-sun.png
+[ ] [Mythic] Weapons/Mage/the-infinite-grimoire.png
+[ ] [Mythic] Weapons/Mage/the-astral-staff.png
+[ ] [Mythic] Weapons/Mage/the-forbidden-staff.png
+[ ] [Mythic] Weapons/Mage/the-staff-of-creation.png
+[ ] [Divine] Weapons/Mage/merlins-wand.png
+[ ] [Divine] Weapons/Mage/the-first-flame.png
+[ ] [Divine] Weapons/Mage/wand-of-the-frozen-king.png
+[ ] [Divine] Weapons/Mage/the-wand-of-the-empty-sky.png
+[ ] [Divine] Weapons/Mage/the-wand-of-eight-elements.png
+[ ] [Divine] Weapons/Mage/excaliburs-arcane-staff.png
+[ ] [Divine] Weapons/Mage/staff-of-the-world-tree.png
+[ ] [Divine] Weapons/Mage/the-eye-of-eternity.png
+[ ] [Divine] Weapons/Mage/staff-of-the-void-emperor.png
+[ ] [Divine] Weapons/Mage/the-philosophers-staff.png
+[ ] [Divine] Weapons/Mage/staff-of-the-first-archmage.png
+[ ] [Divine] Weapons/Mage/aeternus.png
+
+ARMOR
+-----
+Each generated armor piece uses one of these materials and one of these slots.
+Use transparent, isolated piece sprites. Naming format is material-slot.png.
+Slots: helmet, chestplate, leggings, boots, shield.
+
+[ ] [Common] Armor/iron-helmet.png
+[ ] [Common] Armor/iron-chestplate.png
+[ ] [Common] Armor/iron-leggings.png
+[ ] [Common] Armor/iron-boots.png
+[ ] [Common] Armor/iron-shield.png
+[ ] [Uncommon] Armor/steel-helmet.png
+[ ] [Uncommon] Armor/steel-chestplate.png
+[ ] [Uncommon] Armor/steel-leggings.png
+[ ] [Uncommon] Armor/steel-boots.png
+[ ] [Uncommon] Armor/steel-shield.png
+[ ] [Rare] Armor/knightsteel-helmet.png
+[ ] [Rare] Armor/knightsteel-chestplate.png
+[ ] [Rare] Armor/knightsteel-leggings.png
+[ ] [Rare] Armor/knightsteel-boots.png
+[ ] [Rare] Armor/knightsteel-shield.png
+[ ] [Epic] Armor/runed-plate-helmet.png
+[ ] [Epic] Armor/runed-plate-chestplate.png
+[ ] [Epic] Armor/runed-plate-leggings.png
+[ ] [Epic] Armor/runed-plate-boots.png
+[ ] [Epic] Armor/runed-plate-shield.png
+[ ] [Legendary] Armor/dragonforged-helmet.png
+[ ] [Legendary] Armor/dragonforged-chestplate.png
+[ ] [Legendary] Armor/dragonforged-leggings.png
+[ ] [Legendary] Armor/dragonforged-boots.png
+[ ] [Legendary] Armor/dragonforged-shield.png
+[ ] [Mythic] Armor/starwoven-helmet.png
+[ ] [Mythic] Armor/starwoven-chestplate.png
+[ ] [Mythic] Armor/starwoven-leggings.png
+[ ] [Mythic] Armor/starwoven-boots.png
+[ ] [Mythic] Armor/starwoven-shield.png
+[ ] [Divine] Armor/celestial-helmet.png
+[ ] [Divine] Armor/celestial-chestplate.png
+[ ] [Divine] Armor/celestial-leggings.png
+[ ] [Divine] Armor/celestial-boots.png
+[ ] [Divine] Armor/celestial-shield.png
+
+ENEMIES - RACE / CLASS SPRITES
+------------------------------
+Draw one base sprite for each combination that exists in the current game.
+Elite versions can reuse these with the elite overlay below.
+
+[ ] Enemies/Races/slime.png
+[ ] Enemies/Races/skeleton-warrior.png
+[ ] Enemies/Races/skeleton-archer.png
+[ ] Enemies/Races/skeleton-mage.png
+[ ] Enemies/Races/goblin-warrior.png
+[ ] Enemies/Races/goblin-archer.png
+[ ] Enemies/Races/goblin-mage.png
+[ ] Enemies/Races/specter-warrior.png
+[ ] Enemies/Races/specter-mage.png
+[ ] Enemies/Races/vampire-warrior.png
+[ ] Enemies/Races/vampire-mage.png
+[ ] Enemies/Races/werewolf-warrior.png
+[ ] Enemies/Races/werewolf-archer.png
+[ ] Enemies/Races/golem-warrior.png
+[ ] Enemies/Races/summoned-skeleton.png
+
+ENEMIES - BOSSES
+----------------
+[ ] Enemies/Bosses/slime-sovereign.png
+[ ] Enemies/Bosses/bone-regent.png
+[ ] Enemies/Bosses/goblin-king.png
+[ ] Enemies/Bosses/veiled-haunt.png
+[ ] Enemies/Bosses/crimson-count.png
+[ ] Enemies/Bosses/moonfang-alpha.png
+[ ] Enemies/Bosses/mountain-heart.png
+[ ] Enemies/Bosses/bone-necromancer.png
+[ ] Enemies/Bosses/ashen-twin.png
+[ ] Enemies/Bosses/hollow-twin.png
+
+ENEMY OVERLAYS
+--------------
+[ ] Enemies/Overlays/elite-mark.png
+[ ] Enemies/Overlays/glass-cannon-mark.png
+
+ITEMS
+-----
+[ ] [Common] Items/Potions/small-health-potion.png
+[ ] [Rare] Items/Potions/large-health-potion.png
+[ ] [Variable: any rarity] Items/Potions/mana-potion.png
+[ ] [Variable: any rarity] Items/Potions/healing-potion.png
+[ ] [Common] Items/Materials/arrow.png
+[ ] [Common] Items/Materials/material-pile.png
+
+ROOMS
+-----
+Small room thumbnails or environmental illustrations. No fake map layouts.
+[ ] Rooms/starting-room.png
+[ ] Rooms/treasure-room.png
+[ ] Rooms/weapon-treasure-room.png
+[ ] Rooms/fountain-room.png
+[ ] Rooms/shop-room.png
+[ ] Rooms/empty-room.png
+[ ] Rooms/enemy-room.png
+[ ] Rooms/elite-room.png
+[ ] Rooms/boss-room.png
+[ ] Rooms/trap-room.png
+[ ] Rooms/mimic.png
+
+UI
+--
+Optional interface pieces. Keep backgrounds transparent where possible.
+[ ] UI/health-icon.png
+[ ] UI/mana-icon.png
+[ ] UI/xp-icon.png
+[ ] UI/gold-icon.png
+[ ] UI/arrow-icon.png
+[ ] UI/rarity-frame-common.png
+[ ] UI/rarity-frame-uncommon.png
+[ ] UI/rarity-frame-rare.png
+[ ] UI/rarity-frame-epic.png
+[ ] UI/rarity-frame-legendary.png
+[ ] UI/rarity-frame-mythic.png
+[ ] UI/rarity-frame-divine.png
+
+EFFECT ICONS
+------------
+Small reusable status / combat icons. Draw each once; weapons share them.
+[ ] UI/Effects/burn.png
+[ ] UI/Effects/freeze.png
+[ ] UI/Effects/gust.png
+[ ] UI/Effects/root.png
+[ ] UI/Effects/poison.png
+[ ] UI/Effects/blind.png
+[ ] UI/Effects/void.png
+[ ] UI/Effects/shock.png
+[ ] UI/Effects/bleed.png
+[ ] UI/Effects/life-steal.png
+[ ] UI/Effects/mana-steal.png
+[ ] UI/Effects/execution.png
+[ ] UI/Effects/momentum.png
+[ ] UI/Effects/marked.png
+[ ] UI/Effects/thorns.png
+[ ] UI/Effects/chain.png
+[ ] UI/Effects/pierce.png
+[ ] UI/Effects/ricochet.png
+[ ] UI/Effects/multishot.png
+[ ] UI/Effects/penetration.png
+[ ] UI/Effects/headshot.png
+[ ] UI/Effects/snipe.png
+[ ] UI/Effects/focus.png
+[ ] UI/Effects/draw.png
+[ ] UI/Effects/overdraw.png
+[ ] UI/Effects/volley.png
+[ ] UI/Effects/trap.png
+[ ] UI/Effects/pin.png
+[ ] UI/Effects/cripple.png
+[ ] UI/Effects/mark.png
+[ ] UI/Effects/homing.png
+[ ] UI/Effects/piercing-shot.png
+[ ] UI/Effects/ricochet-shot.png
+[ ] UI/Effects/afterimage.png
+[ ] UI/Effects/ammo-generation.png
+[ ] UI/Effects/salvo.png
+[ ] UI/Effects/execution-bolt.png
+[ ] UI/Effects/range-scaling.png
+[ ] UI/Effects/quiver.png
+[ ] UI/Effects/scatter.png
+[ ] UI/Effects/spell-echo.png
+[ ] UI/Effects/spell-power.png
+[ ] UI/Effects/mana-surge.png
+[ ] UI/Effects/overcast.png
+[ ] UI/Effects/cooldown-reduction.png
+[ ] UI/Effects/arcane-charge.png
+[ ] UI/Effects/spell-split.png
+[ ] UI/Effects/conjure.png
+[ ] UI/Effects/channel.png
+[ ] UI/Effects/spell-radius.png
+[ ] UI/Effects/delayed-cast.png
+[ ] UI/Effects/mana-shield.png
+[ ] UI/Effects/teleport.png
+[ ] UI/Effects/elemental-conversion.png
+
+ELEMENT ICONS
+-------------
+[ ] UI/Elements/fire.png
+[ ] UI/Elements/water.png
+[ ] UI/Elements/earth.png
+[ ] UI/Elements/nature.png
+[ ] UI/Elements/wind.png
+[ ] UI/Elements/ice.png
+[ ] UI/Elements/air.png
+[ ] UI/Elements/light.png
+[ ] UI/Elements/dark.png
+[ ] UI/Elements/void.png
+[ ] UI/Elements/lightning.png
+[ ] UI/Elements/physical.png
+[ ] UI/Elements/poison.png
+[ ] UI/Elements/arcane.png
+[ ] UI/Elements/astral.png
+
+NOTES
+-----
+- Weapon names above follow the current weapon catalogs. Use one distinct sprite per item.
+- Armor is generated from seven material sets across five equipment slots.
+- Enemy art is grouped by normal, elite, and boss rank rather than item rarity;
+  bosses are red and elites purple in the current game UI.
+- Rarity does not apply to rooms, enemy races, effect icons, or element icons.
+- ArmorSlot.Head is named "helmet" here; Feet is "boots"; Legs is "leggings".
+- Regular enemies have no Archer class for specters or vampires, no Mage werewolf,
+  and golems/slimes currently use the listed limited forms.
+- Bosses use their own named art; glass-cannon bosses may reuse the matching boss
+  art with the glass-cannon overlay.
+- More items/rooms may be added later; this is the current game's asset inventory.
