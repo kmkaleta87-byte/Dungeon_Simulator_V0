@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "Dungeon_Simulation_V0/1.0.0": {
+        "runtime": {
+          "Dungeon_Simulation_V0.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Dungeon_Simulation_V0/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
