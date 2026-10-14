@@ -200,7 +200,7 @@ class Program
         while (true)
         {
             List<string> lines = weapons
-                .Select(weapon => $"{weapon.Rarity} {weapon.Name} [{weapon.Type}] | {weapon.Element} | Effect: {weapon.Effect}")
+                .Select(weapon => $"{weapon.Rarity} {weapon.Name} [{weapon.Type}] | {weapon.Element} | Effect: {CombatEffectIcons.GetAttackPrefix(weapon.Effect)}{weapon.Effect}")
                 .ToList();
             ConsoleUi.DisplayBox(title, lines);
             Console.WriteLine("Type 'inspect [weapon name]' for the full description, or 'back'.");
@@ -230,7 +230,7 @@ class Program
             ConsoleUi.DisplayBox("WEAPON DETAIL", new[]
             {
                 $"Name: {weapon.Name}", $"Rarity: {weapon.Rarity}", $"Type: {weapon.Type}",
-                $"Element: {weapon.Element}", $"Effect: {weapon.Effect}",
+                $"Element: {weapon.Element}", $"Effect: {CombatEffectIcons.GetAttackPrefix(weapon.Effect)}{weapon.Effect}",
                 $"Description: {weapon.Description}"
             }, ConsoleColor.Yellow);
             Console.WriteLine("The effect glossary explains what this effect does.");
@@ -269,7 +269,7 @@ class Program
     private static void ShowEffectIndex()
     {
         List<string> effectLines = Enum.GetValues<CombatEffectType>()
-            .Select(effect => $"{effect}: {GetEffectDescription(effect)}")
+            .Select(effect => $"{CombatEffectIcons.GetIcon(effect)} {effect}: {GetEffectDescription(effect)}")
             .ToList();
         ConsoleUi.DisplayBox("EFFECT DETAILS", effectLines, ConsoleColor.Cyan);
         Console.WriteLine("Press Enter to continue.");

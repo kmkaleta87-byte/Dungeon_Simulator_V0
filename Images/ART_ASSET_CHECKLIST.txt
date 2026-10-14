@@ -37,31 +37,31 @@ UI                Reusable interface icons and frames
 
 WEAPONS - WARRIOR
 ------------------
-[ ] [Common] Weapons/Warrior/cinder-knife.png
-[ ] [Common] Weapons/Warrior/frostbite-dirk.png
-[ ] [Common] Weapons/Warrior/breeze-shiv.png
-[ ] [Common] Weapons/Warrior/rootwood-axe.png
-[ ] [Common] Weapons/Warrior/crackle-axe.png
-[ ] [Common] Weapons/Warrior/rotting-hatchet.png
-[ ] [Common] Weapons/Warrior/lantern-blade.png
-[ ] [Common] Weapons/Warrior/dusksteel-sword.png
-[ ] [Common] Weapons/Warrior/ironfang.png
-[ ] [Common] Weapons/Warrior/harvest-scythe.png
-[ ] [Common] Weapons/Warrior/ashen-reaper.png
-[ ] [Common] Weapons/Warrior/winter-reaper.png
-[ ] [Uncommon] Weapons/Warrior/emberfang.png
-[ ] [Uncommon] Weapons/Warrior/glacier-needle.png
-[ ] [Uncommon] Weapons/Warrior/whisperwind.png
-[ ] [Uncommon] Weapons/Warrior/thorncleaver.png
-[ ] [Uncommon] Weapons/Warrior/stormsplitter.png
-[ ] [Uncommon] Weapons/Warrior/venom-hatchet.png
-[ ] [Uncommon] Weapons/Warrior/sunsteel.png
-[ ] [Uncommon] Weapons/Warrior/gloamfang.png
-[ ] [Uncommon] Weapons/Warrior/bloodletter.png
-[ ] [Uncommon] Weapons/Warrior/grave-harvester.png
-[ ] [Uncommon] Weapons/Warrior/bloomreaper.png
-[ ] [Uncommon] Weapons/Warrior/sparking-reaper.png
-[ ] [Rare] Weapons/Warrior/pyrefang.png
+[X] [Common] Weapons/Warrior/cinder-knife.png
+[X] [Common] Weapons/Warrior/frostbite-dirk.png
+[X] [Common] Weapons/Warrior/breeze-shiv.png
+[X] [Common] Weapons/Warrior/rootwood-axe.png
+[X] [Common] Weapons/Warrior/crackle-axe.png
+[X] [Common] Weapons/Warrior/rotting-hatchet.png
+[X] [Common] Weapons/Warrior/lantern-blade.png
+[X] [Common] Weapons/Warrior/dusksteel-sword.png
+[X] [Common] Weapons/Warrior/ironfang.png
+[X] [Common] Weapons/Warrior/harvest-scythe.png
+[X] [Common] Weapons/Warrior/ashen-reaper.png
+[X] [Common] Weapons/Warrior/winter-reaper.png
+[X] [Uncommon] Weapons/Warrior/emberfang.png
+[X] [Uncommon] Weapons/Warrior/glacier-needle.png
+[X] [Uncommon] Weapons/Warrior/whisperwind.png
+[X] [Uncommon] Weapons/Warrior/thorncleaver.png
+[X] [Uncommon] Weapons/Warrior/stormsplitter.png
+[X] [Uncommon] Weapons/Warrior/venom-hatchet.png
+[X] [Uncommon] Weapons/Warrior/sunsteel.png
+[X] [Uncommon] Weapons/Warrior/gloamfang.png
+[X] [Uncommon] Weapons/Warrior/bloodletter.png
+[X] [Uncommon] Weapons/Warrior/grave-harvester.png
+[X] [Uncommon] Weapons/Warrior/bloomreaper.png
+[] [Uncommon] Weapons/Warrior/sparking-reaper.png
+[X] [Rare] Weapons/Warrior/pyrefang.png
 [ ] [Rare] Weapons/Warrior/rimepiercer.png
 [ ] [Rare] Weapons/Warrior/gale-talons.png
 [ ] [Rare] Weapons/Warrior/elderroot-cleaver.png
@@ -70,7 +70,7 @@ WEAPONS - WARRIOR
 [ ] [Rare] Weapons/Warrior/radiant-edge.png
 [ ] [Rare] Weapons/Warrior/nightfall-saber.png
 [ ] [Rare] Weapons/Warrior/crimson-fang.png
-[ ] [Rare] Weapons/Warrior/soulharvest.png
+[X] [Rare] Weapons/Warrior/soulharvest.png
 [ ] [Rare] Weapons/Warrior/verdant-reaper.png
 [ ] [Rare] Weapons/Warrior/storm-reaper.png
 [ ] [Epic] Weapons/Warrior/hellflame-twins.png
@@ -94,9 +94,9 @@ WEAPONS - WARRIOR
 [ ] [Legendary] Weapons/Warrior/stormfang.png
 [ ] [Legendary] Weapons/Warrior/frostmournes-echo.png
 [ ] [Legendary] Weapons/Warrior/dragonsteel.png
-[ ] [Legendary] Weapons/Warrior/grave-kings-reaper.png
+[X] [Legendary] Weapons/Warrior/grave-kings-reaper.png
 [ ] [Legendary] Weapons/Warrior/worldroot-harvester.png
-[ ] [Legendary] Weapons/Warrior/heavens-reaper.png
+[X] [Legendary] Weapons/Warrior/heavens-reaper.png
 [ ] [Mythic] Weapons/Warrior/ignis-fang-of-the-first-flame.png
 [ ] [Mythic] Weapons/Warrior/absolute-zero.png
 [ ] [Mythic] Weapons/Warrior/zephyrs-last-breath.png

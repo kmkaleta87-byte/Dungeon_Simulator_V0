@@ -122,14 +122,14 @@ public class CombatSession
                 WeaponType.Bow or WeaponType.Crossbow => $"Attack with your {weapon.Name} ({player.Inventory.Arrows}/{player.Inventory.MaximumArrows} arrows)",
                 _ => $"Attack with your {weapon.Name}"
             };
-            options.AppendLine($"  {primaryAction} [target] - {primaryDescription}");
+            options.AppendLine($"  {CombatEffectIcons.GetWeaponEffectIcons(weapon)}{primaryAction} [target] - {primaryDescription}");
 
             if (IsWarriorWeapon(weapon.Type))
             {
                 foreach (WeaponAttack attack in weapon.SpecialAttacks)
                 {
                     int cooldown = weaponAttackCooldowns.GetValueOrDefault(attack.Command);
-                    options.AppendLine($"  {attack.Command}{(attack.ChargesNextAttack ? "" : " [target]")} - {attack.Name} {CooldownText(cooldown)}");
+                    options.AppendLine($"  {CombatEffectIcons.GetAttackPrefix(attack.Effect)}{attack.Command}{(attack.ChargesNextAttack ? "" : " [target]")} - {attack.Name} {CooldownText(cooldown)}");
                 }
             }
             else if (IsArcherWeapon(weapon.Type))
@@ -137,7 +137,7 @@ public class CombatSession
                 foreach (WeaponAttack attack in weapon.SpecialAttacks)
                 {
                     int cooldown = weaponAttackCooldowns.GetValueOrDefault(attack.Command);
-                    options.AppendLine($"  {attack.Command}{(attack.ChargesNextAttack ? "" : " [target]")} - {attack.Name} {CooldownText(cooldown)}");
+                    options.AppendLine($"  {CombatEffectIcons.GetAttackPrefix(attack.Effect)}{attack.Command}{(attack.ChargesNextAttack ? "" : " [target]")} - {attack.Name} {CooldownText(cooldown)}");
                 }
             }
             else if (IsMageWeapon(weapon.Type))
@@ -145,7 +145,7 @@ public class CombatSession
                 foreach (WeaponAttack attack in weapon.SpecialAttacks)
                 {
                     int cooldown = weaponAttackCooldowns.GetValueOrDefault(attack.Command);
-                    options.AppendLine($"  {attack.Command}{(attack.ChargesNextAttack ? "" : " [target]")} - {attack.Name} {CooldownText(cooldown)}");
+                    options.AppendLine($"  {CombatEffectIcons.GetAttackPrefix(attack.Effect)}{attack.Command}{(attack.ChargesNextAttack ? "" : " [target]")} - {attack.Name} {CooldownText(cooldown)}");
                 }
                 options.AppendLine($"  focus - Restore mana and lose this turn {CooldownText(focusCooldown)}");
             }
