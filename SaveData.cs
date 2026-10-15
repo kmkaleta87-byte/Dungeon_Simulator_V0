@@ -171,6 +171,7 @@ public sealed class ItemSaveData
     public Rarity Rarity { get; set; }
     public int Quantity { get; set; }
     public int HealingAmount { get; set; }
+    public int HealingPercent { get; set; }
     public int ManaAmount { get; set; }
     public int GoldValue { get; set; }
     public List<EffectSaveData> Effects { get; set; } = new();

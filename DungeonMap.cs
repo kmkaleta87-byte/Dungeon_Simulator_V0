@@ -89,6 +89,29 @@ public class DungeonMap
         return map;
     }
 
+    public static bool IsValidSaveData(MapSaveData? saved)
+    {
+        if (saved?.Rooms == null || saved.Rooms.Count == 0)
+        {
+            return false;
+        }
+
+        HashSet<(int Row, int Column)> coordinates = new();
+        foreach (RoomSaveData? room in saved.Rooms)
+        {
+            if (room == null || room.Row < 0 || room.Row >= Height ||
+                room.Column < 0 || room.Column >= Width ||
+                !Enum.IsDefined(room.Type) || !coordinates.Add((room.Row, room.Column)) ||
+                room.Enemies == null || room.ShopStock == null ||
+                room.Enemies.Any(enemy => enemy == null))
+            {
+                return false;
+            }
+        }
+
+        return coordinates.Contains((saved.CurrentRow, saved.CurrentColumn));
+    }
+
     private void CreateRooms(int floor)
     {
         int startRow = Height / 2;

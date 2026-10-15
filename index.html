@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Play Dungeon Simulation, a dungeon adventure in development.">
+  <meta name="description" content="Play Dungeon Simulation, a turn-based dungeon adventure.">
   <meta name="theme-color" content="#e9e5d9">
   <title>Dungeon Simulation</title>
   <link rel="stylesheet" href="style.css">
+  <script src="game-index-data.js"></script>
+  <script src="game-rules.js"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -14,8 +16,6 @@
     <a class="wordmark" href="#top">Dungeon <span>Simulation</span></a>
     <nav class="site-nav" aria-label="Main navigation">
       <a href="#game">Play</a>
-      <a href="Images/ART_ASSET_CHECKLIST.txt">Art checklist</a>
-      <span class="nav-status">In development</span>
     </nav>
   </header>
 
@@ -24,22 +24,19 @@
       <div class="game-topbar">
         <div><span class="eyebrow">Browser build</span><h1>Dungeon Simulation</h1></div>
         <div class="game-topbar-actions">
-          <button class="inventory-button" id="inventory-button" type="button" hidden>Inventory <span></span></button>
+          <button class="quiet-button" id="index-button" type="button">Index</button>
+          <button class="quiet-button" id="leaderboard-button" type="button">Leaderboard</button>
           <button class="quiet-button" id="menu-button" type="button" hidden>Return to title</button>
         </div>
       </div>
       <div id="game-screen" aria-live="polite"></div>
     </section>
 
-    <section class="art-note" aria-label="About the art archive">
-      <p>Art still in progress? The game calls out the item name anywhere its sprite is missing.</p>
-      <a href="Images/ART_ASSET_CHECKLIST.txt">Open the art checklist <span aria-hidden="true">↗</span></a>
-    </section>
   </main>
 
   <footer class="site-footer">
     <a href="#top">Dungeon Simulation</a>
-    <span>In development</span>
+    <span>Explore · fight · endure</span>
   </footer>
 </body>
 </html>

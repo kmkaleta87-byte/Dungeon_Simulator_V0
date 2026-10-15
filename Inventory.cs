@@ -114,6 +114,7 @@ public class Inventory
             candidate.Type == item.Type &&
             candidate.Rarity == item.Rarity &&
             candidate.HealingAmount == item.HealingAmount &&
+            candidate.HealingPercent == item.HealingPercent &&
             candidate.ManaAmount == item.ManaAmount);
 
         if (existing == null)
@@ -285,26 +286,29 @@ public class Inventory
         }
 
         Item item = Items[index - 1];
-        if (item.Type != ItemType.Potion || (item.HealingAmount <= 0 && item.ManaAmount <= 0))
+        if (item.Type != ItemType.Potion || (item.HealingAmount <= 0 && item.HealingPercent <= 0 && item.ManaAmount <= 0))
         {
             message = $"You cannot use {item.Name} yet.";
             return false;
         }
 
-        bool canHeal = item.HealingAmount > 0 && player.Health < player.MaxHealth;
+        bool canHeal = (item.HealingAmount > 0 || item.HealingPercent > 0) && player.Health < player.MaxHealth;
         bool canRestoreMana = item.ManaAmount > 0 && player.Mana < player.MaxMana;
         if (!canHeal && !canRestoreMana)
         {
-            string fullResource = item.HealingAmount > 0 && item.ManaAmount > 0
+            string fullResource = (item.HealingAmount > 0 || item.HealingPercent > 0) && item.ManaAmount > 0
                 ? "health and mana"
-                : item.HealingAmount > 0 ? "health" : "mana";
+                : item.HealingAmount > 0 || item.HealingPercent > 0 ? "health" : "mana";
             message = $"You are already at full {fullResource}; {item.Name} was not used.";
             return false;
         }
 
         int healthBefore = player.Health;
         int manaBefore = player.Mana;
-        player.Heal(item.HealingAmount);
+        int healingAmount = item.HealingPercent > 0
+            ? (int)Math.Ceiling(player.MaxHealth * item.HealingPercent / 100.0)
+            : item.HealingAmount;
+        player.Heal(healingAmount);
         player.RestoreMana(item.ManaAmount);
         int healed = player.Health - healthBefore;
         int manaRestored = player.Mana - manaBefore;

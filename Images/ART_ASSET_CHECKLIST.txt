@@ -60,21 +60,21 @@ WEAPONS - WARRIOR
 [X] [Uncommon] Weapons/Warrior/bloodletter.png
 [X] [Uncommon] Weapons/Warrior/grave-harvester.png
 [X] [Uncommon] Weapons/Warrior/bloomreaper.png
-[] [Uncommon] Weapons/Warrior/sparking-reaper.png
+[X] [Uncommon] Weapons/Warrior/sparking-reaper.png
 [X] [Rare] Weapons/Warrior/pyrefang.png
-[ ] [Rare] Weapons/Warrior/rimepiercer.png
-[ ] [Rare] Weapons/Warrior/gale-talons.png
-[ ] [Rare] Weapons/Warrior/elderroot-cleaver.png
-[ ] [Rare] Weapons/Warrior/thundermaul-axe.png
-[ ] [Rare] Weapons/Warrior/plaguecutter.png
-[ ] [Rare] Weapons/Warrior/radiant-edge.png
-[ ] [Rare] Weapons/Warrior/nightfall-saber.png
-[ ] [Rare] Weapons/Warrior/crimson-fang.png
+[X] [Rare] Weapons/Warrior/rimepiercer.png
+[X] [Rare] Weapons/Warrior/gale-talons.png
+[X] [Rare] Weapons/Warrior/elderroot-cleaver.png
+[] [Rare] Weapons/Warrior/thundermaul-axe.png
+[X] [Rare] Weapons/Warrior/plaguecutter.png
+[X] [Rare] Weapons/Warrior/radiant-edge.png
+[X] [Rare] Weapons/Warrior/nightfall-saber.png
+[X] [Rare] Weapons/Warrior/crimson-fang.png
 [X] [Rare] Weapons/Warrior/soulharvest.png
-[ ] [Rare] Weapons/Warrior/verdant-reaper.png
-[ ] [Rare] Weapons/Warrior/storm-reaper.png
+[X] [Rare] Weapons/Warrior/verdant-reaper.png
+[X] [Rare] Weapons/Warrior/storm-reaper.png
 [ ] [Epic] Weapons/Warrior/hellflame-twins.png
-[ ] [Epic] Weapons/Warrior/heart-of-winter.png
+[X] [Epic] Weapons/Warrior/heart-of-winter.png
 [ ] [Epic] Weapons/Warrior/tempest-needles.png
 [ ] [Epic] Weapons/Warrior/worldroot-axe.png
 [ ] [Epic] Weapons/Warrior/mjolnirs-splinter.png
@@ -85,11 +85,11 @@ WEAPONS - WARRIOR
 [ ] [Epic] Weapons/Warrior/blood-moon.png
 [ ] [Epic] Weapons/Warrior/reaper-of-spring.png
 [ ] [Epic] Weapons/Warrior/thunder-harvest.png
-[ ] [Legendary] Weapons/Warrior/solfang.png
+[X] [Legendary] Weapons/Warrior/solfang.png
 [ ] [Legendary] Weapons/Warrior/voidkiss.png
 [ ] [Legendary] Weapons/Warrior/venom-of-the-ancient-serpent.png
 [ ] [Legendary] Weapons/Warrior/infernal-executioner.png
-[ ] [Legendary] Weapons/Warrior/axe-of-the-skybreaker.png
+[X] [Legendary] Weapons/Warrior/axe-of-the-skybreaker.png
 [ ] [Legendary] Weapons/Warrior/worldsplitter.png
 [ ] [Legendary] Weapons/Warrior/stormfang.png
 [ ] [Legendary] Weapons/Warrior/frostmournes-echo.png
@@ -379,9 +379,9 @@ ENEMY OVERLAYS
 
 ITEMS
 -----
-[ ] [Common] Items/Potions/small-health-potion.png
+[X] [Common] Items/Potions/small-health-potion.png
 [ ] [Rare] Items/Potions/large-health-potion.png
-[ ] [Variable: any rarity] Items/Potions/mana-potion.png
+[X] [Variable: any rarity] Items/Potions/mana-potion.png
 [ ] [Variable: any rarity] Items/Potions/healing-potion.png
 [ ] [Common] Items/Materials/arrow.png
 [ ] [Common] Items/Materials/material-pile.png
@@ -394,10 +394,10 @@ Small room thumbnails or environmental illustrations. No fake map layouts.
 [ ] Rooms/weapon-treasure-room.png
 [ ] Rooms/fountain-room.png
 [ ] Rooms/shop-room.png
-[ ] Rooms/empty-room.png
-[ ] Rooms/enemy-room.png
+[X] Rooms/empty-room.png
+[X] Rooms/enemy-room.png
 [ ] Rooms/elite-room.png
-[ ] Rooms/boss-room.png
+[X] Rooms/boss-room.png
 [ ] Rooms/trap-room.png
 [ ] Rooms/mimic.png
 
@@ -492,6 +492,97 @@ ELEMENT ICONS
 [ ] UI/Elements/poison.png
 [ ] UI/Elements/arcane.png
 [ ] UI/Elements/astral.png
+
+EMOJI KEY REPLACEMENT ICONS
+--------------------------
+These icons can replace the emoji symbols from the weapon-effect key in the UI.
+Keep the emoji key itself unchanged for now. Use small, readable transparent PNGs.
+Repeated emoji symbols share one icon; the nearby text identifies the exact effect.
+Paths below are relative to Images/.
+
+Reuse icons already listed above (do not draw a second copy):
+💀 -> UI/Effects/execution.png (also used for undead/on-kill contexts)
+☠️ -> UI/Elements/poison.png (also used for self-sacrifice contexts)
+🩸 -> UI/Effects/bleed.png
+🔥 -> UI/Elements/fire.png
+❄️, 🥶 -> UI/Elements/ice.png
+🌪️ -> UI/Elements/wind.png
+🌿 -> UI/Elements/nature.png
+⚡ -> UI/Elements/lightning.png
+🌑 -> UI/Elements/dark.png
+✨ -> UI/Elements/light.png
+🪄 -> UI/Elements/arcane.png
+🗡️ -> UI/Effects/pierce.png
+🔁, 🔗 -> UI/Effects/chain.png
+🧛 -> UI/Effects/life-steal.png
+⛓️ -> UI/Effects/root.png
+🕸️ -> UI/Effects/trap.png
+🪙 -> UI/gold-icon.png
+🔮 -> UI/mana-icon.png
+📚 -> UI/xp-icon.png
+🌀 -> UI/Effects/teleport.png
+
+New icons to draw:
+[ ] UI/Emoji/weapon-damage.png - ⚔️ damage boost
+[ ] UI/Emoji/burst-damage.png - 💥 burst damage
+[ ] UI/Emoji/target.png - 🎯 target bonus and accuracy
+[ ] UI/Emoji/critical-hit.png - 💢 critical hits
+[ ] UI/Emoji/random-damage.png - 🎲 random or chance-based effect
+[ ] UI/Emoji/damage-scaling.png - 📈 scaling or stacking
+[ ] UI/Emoji/explosion.png - 💣 explosion
+[ ] UI/Emoji/health.png - ❤️ health
+[ ] UI/Emoji/healing.png - 🩹 healing
+[ ] UI/Emoji/regeneration.png - 💚 regeneration
+[ ] UI/Emoji/low-health.png - 🫀 low-health condition
+[ ] UI/Emoji/desperation.png - 💔 low-health desperation
+[ ] UI/Emoji/defense.png - 🛡️ defense, damage reduction, or being hit
+[ ] UI/Emoji/shield.png - 💎 shield or gems
+[ ] UI/Emoji/recovery.png - 🔄 resource recovery
+[ ] UI/Emoji/slow.png - 🐌 slow
+[ ] UI/Emoji/stun.png - 💫 stun
+[ ] UI/Emoji/knockback.png - 🌀 knockback, evasion, or teleportation
+[ ] UI/Emoji/pull.png - 🧲 pull or pickup radius
+[ ] UI/Emoji/confusion.png - 😵 confusion
+[ ] UI/Emoji/sleep.png - 😴 sleep
+[ ] UI/Emoji/silence.png - 🤐 silence
+[ ] UI/Emoji/lockdown.png - 🔒 lockdown
+[ ] UI/Emoji/extra-attack.png - ➕ extra attack
+[ ] UI/Emoji/combo.png - 👊 combo
+[ ] UI/Emoji/projectile.png - 🏹 projectile
+[ ] UI/Emoji/projectile-speed.png - ↗️ projectile speed
+[ ] UI/Emoji/returning-attack.png - 🪃 returning attack
+[ ] UI/Emoji/wave-attack.png - 🌊 wave attack or area trigger
+[ ] UI/Emoji/multi-target.png - 👥 multitarget
+[ ] UI/Emoji/range.png - 📏 range
+[ ] UI/Emoji/cleave.png - 🪓 cleave
+[ ] UI/Emoji/armor.png - 🧱 armor
+[ ] UI/Emoji/resistance.png - 🪨 resistance
+[ ] UI/Emoji/reflect.png - 🪞 reflect or clone
+[ ] UI/Emoji/mobility.png - 🪽 mobility
+[ ] UI/Emoji/immunity.png - 🚫 immunity
+[ ] UI/Emoji/protection.png - 🧿 protection
+[ ] UI/Emoji/invulnerability.png - ⏳ invulnerability or duration
+[ ] UI/Emoji/counterattack.png - 🪤 counterattack
+[ ] UI/Emoji/curse-resistance.png - 🪬 curse resistance
+[ ] UI/Emoji/energy.png - 🔋 energy
+[ ] UI/Emoji/upgrade.png - ⬆️ upgrade
+[ ] UI/Emoji/luck.png - 🍀 luck
+[ ] UI/Emoji/loot.png - 🎁 loot
+[ ] UI/Emoji/key.png - 🗝️ keys
+[ ] UI/Emoji/refund.png - ♻️ refund
+[ ] UI/Emoji/potion.png - 🧪 potion effect
+[ ] UI/Emoji/duration.png - ⏱️ duration (also represents ⏳ invulnerability)
+[ ] UI/Emoji/spirit-summon.png - 👻 spirit summon
+[ ] UI/Emoji/companion.png - 🐺 companion
+[ ] UI/Emoji/growth.png - 🌱 growth
+[ ] UI/Emoji/mutation.png - 🧬 mutation
+[ ] UI/Emoji/detection.png - 👁️ detection
+[ ] UI/Emoji/aura.png - 🌟 aura
+[ ] UI/Emoji/recursion.png - ♾️ recursion
+[ ] UI/Emoji/boss-bonus.png - 👑 elite or boss bonus
+[ ] UI/Emoji/full-health.png - 🌕 full-health condition
+[ ] UI/Emoji/weakened-enemy.png - 📉 weakened enemy
+[ ] UI/Emoji/synergy.png - 🧩 synergy
 
 NOTES
 -----

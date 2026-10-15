@@ -19,6 +19,7 @@ public class Item
     public Rarity Rarity { get; set; }
     public int Quantity { get; set; }
     public int HealingAmount { get; set; }
+    public int HealingPercent { get; set; }
     public int ManaAmount { get; set; }
     public int GoldValue { get; set; }
     public List<CombatEffectSpec> CombatEffects { get; } = new();
@@ -31,7 +32,8 @@ public class Item
         string description = "",
         Rarity rarity = Rarity.Common,
         int healingAmount = 0,
-        int manaAmount = 0)
+        int manaAmount = 0,
+        int healingPercent = 0)
     {
         Name = name;
         Type = type;
@@ -39,6 +41,7 @@ public class Item
         GoldValue = goldValue;
         Quantity = quantity;
         HealingAmount = healingAmount;
+        HealingPercent = healingPercent;
         ManaAmount = manaAmount;
         Description = description;
     }

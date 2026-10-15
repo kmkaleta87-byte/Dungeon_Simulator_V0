@@ -24,9 +24,10 @@ public static class SaveSystem
         try
         {
             SaveData? save = JsonSerializer.Deserialize<SaveData>(File.ReadAllText(path), JsonOptions);
-            return save?.Version == 1 && save.Dungeon.Map.Rooms.Count > 0 ? save : null;
+            return IsValidSaveData(save) ? save : null;
         }
-        catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException or
+                                          NullReferenceException or ArgumentException or IndexOutOfRangeException)
         {
             return null;
         }
@@ -86,6 +87,26 @@ public static class SaveSystem
         dungeon.RestoreFromSave(saved.Dungeon);
         StartingRoom.Restore(saved.StartingClosetInspected, saved.StartingDeskInspected, saved.StartingWeaponChoiceOffered);
         return (player, dungeon);
+    }
+
+    private static bool IsValidSaveData(SaveData? save)
+    {
+        if (save?.Version != 1 || save.Player == null || save.Dungeon == null ||
+            save.Player.Weapons == null || save.Player.Armor == null ||
+            save.Player.EquippedArmor == null || save.Player.Items == null ||
+            save.Player.Weapons.Any(weapon => weapon == null || weapon.Effects == null || weapon.Attacks == null ||
+                weapon.Effects.Any(effect => effect == null) || weapon.Attacks.Any(attack => attack == null)) ||
+            save.Player.Armor.Any(armor => armor == null) ||
+            save.Player.EquippedArmor.Any(armor => armor == null) ||
+            save.Player.Items.Any(item => item == null || item.Effects == null || item.Effects.Any(effect => effect == null)) ||
+            !DungeonMap.IsValidSaveData(save.Dungeon.Map))
+        {
+            return false;
+        }
+
+        return save.Dungeon.Map.Rooms.All(room =>
+            room.Enemies.All(enemy => enemy.Effects != null && enemy.Effects.All(effect => effect != null)) &&
+            room.ShopStock.All(drop => drop == null || drop.Item != null || drop.Weapon != null || drop.Armor != null));
     }
 
     private static SaveData Capture(Player player, DungeonRun dungeon)
@@ -212,14 +233,14 @@ public static class SaveSystem
     private static ItemSaveData SaveItem(Item item) => new()
     {
         Name = item.Name, Description = item.Description, Type = item.Type, Rarity = item.Rarity,
-        Quantity = item.Quantity, HealingAmount = item.HealingAmount, ManaAmount = item.ManaAmount,
+        Quantity = item.Quantity, HealingAmount = item.HealingAmount, HealingPercent = item.HealingPercent, ManaAmount = item.ManaAmount,
         GoldValue = item.GoldValue, Effects = item.CombatEffects.Select(SaveEffect).ToList()
     };
 
     public static Item RestoreItem(ItemSaveData saved)
     {
         Item item = new(saved.Name, saved.Type, saved.GoldValue, saved.Quantity, saved.Description,
-            saved.Rarity, saved.HealingAmount, saved.ManaAmount);
+            saved.Rarity, saved.HealingAmount, saved.ManaAmount, saved.HealingPercent);
         item.CombatEffects.AddRange(saved.Effects.Select(RestoreEffect));
         return item;
     }

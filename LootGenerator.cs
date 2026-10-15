@@ -98,9 +98,21 @@ public static class LootGenerator
             goldValue: Math.Max(1, (int)Math.Round(8 * multiplier)),
             description: manaPotion ? "A blue potion that restores mana." : "A potion with a color that does not occur naturally.",
             rarity: rarity,
-            healingAmount: manaPotion ? 0 : 20 + (int)Math.Round(10 * multiplier),
-            manaAmount: manaPotion ? 12 + (int)Math.Round(8 * multiplier) : 0);
+            manaAmount: manaPotion ? 12 + (int)Math.Round(8 * multiplier) : 0,
+            healingPercent: manaPotion ? 0 : HealthPotionPercent(rarity));
     }
+
+    public static int HealthPotionPercent(Rarity rarity) => rarity switch
+    {
+        Rarity.Common => 20,
+        Rarity.Uncommon => 25,
+        Rarity.Rare => 30,
+        Rarity.Epic => 40,
+        Rarity.Legendary => 50,
+        Rarity.Mythic => 65,
+        Rarity.Divine => 80,
+        _ => 20
+    };
 
     public static LootDrop GenerateShopDrop(int floor, int upgradeLevel, Inventory? inventory = null)
     {
@@ -153,14 +165,14 @@ public static class LootGenerator
     {
         int roll = Random.Shared.Next(1000);
 
-        Rarity rarity = enemy.LootTier is >= 1 and <= 4
-            ? RollEnemyRoomRarity(enemy.LootTier, roll)
-            : enemy.Class switch
-            {
-                EnemyClass.Elite => RollEliteRarity(roll, enemy.IsUniqueVariant),
-                EnemyClass.Boss => RollBossRarity(roll),
-                _ => RollEnemyRoomRarity(1, roll)
-            };
+        Rarity rarity = enemy.Class switch
+        {
+            EnemyClass.Elite => RollEliteRarity(roll, enemy.IsUniqueVariant),
+            EnemyClass.Boss => RollBossRarity(roll),
+            _ => enemy.LootTier is >= 1 and <= 4
+                ? RollEnemyRoomRarity(enemy.LootTier, roll)
+                : RollEnemyRoomRarity(1, roll)
+        };
 
         if (enemy.Class == EnemyClass.Elite && rarity < Rarity.Rare)
         {

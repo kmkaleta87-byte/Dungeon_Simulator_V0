@@ -75,7 +75,7 @@ public static class StartingRoom
                 ItemType.Potion,
                 goldValue: 8,
                 description: "A simple red potion found beside the armor.",
-                healingAmount: 25));
+                healingPercent: LootGenerator.HealthPotionPercent(Rarity.Common)));
             closetInspected = true;
             message = "Behind a moth-eaten cloak, you find an iron chestplate and a small healing potion. The armor smells like rain and old smoke, but it fits well enough.";
             return true;
