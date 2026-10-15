@@ -110,15 +110,24 @@ function save() {
 function loadLeaderboard() {
   try {
     const entries = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || "[]");
-    return Array.isArray(entries) ? entries.filter(entry => Number.isFinite(entry.floors) && entry.floors > 0) : [];
+    if (!Array.isArray(entries)) return [];
+    const allowedClasses = [...Object.values(CLASS_NAMES), "Unchosen"];
+    const allowedDifficulties = Object.values(DIFFICULTIES).map(difficulty => difficulty.label);
+    return entries.filter(entry => entry && typeof entry === "object" &&
+      typeof entry.name === "string" && Number.isInteger(entry.floors) && entry.floors > 0 && entry.floors <= 100000 &&
+      Number.isInteger(entry.level) && entry.level > 0 && entry.level <= 100000 &&
+      allowedClasses.includes(entry.className) && allowedDifficulties.includes(entry.difficulty) &&
+      Number.isFinite(entry.date) && entry.name.trim().length > 0 && entry.name.length <= 22)
+      .sort((a, b) => b.floors - a.floors || b.level - a.level || a.date - b.date)
+      .slice(0, 10);
   } catch { return []; }
 }
 
 function recordLeaderboard(run) {
-  if (!run || run.devMode || run.floorsCleared < 1) return;
+  if (!run || run.devMode || !Number.isInteger(run.floorsCleared) || run.floorsCleared < 1 || run.floorsCleared > 100000) return;
   const entries = loadLeaderboard();
   const entry = {
-    name: run.name || "Adventurer", className: CLASS_NAMES[run.chosenClass || run.class] || "Unchosen",
+    name: String(run.name || "Adventurer").trim().slice(0, 22) || "Adventurer", className: CLASS_NAMES[run.chosenClass || run.class] || "Unchosen",
     difficulty: DIFFICULTIES[run.difficulty]?.label || "Normal", floors: run.floorsCleared,
     level: run.level || 1, date: Date.now()
   };
@@ -354,12 +363,12 @@ function renderMap() {
 
 function weaponArt(weapon, large = false) {
   const classFolder = weapon.type === "Bow" || weapon.type === "Crossbow" ? "Archer" : weapon.type === "Staff" || weapon.type === "Wand" ? "Mage" : "Warrior";
-  const path = `Images/Weapons/${classFolder}/${weapon.file}`;
+  const path = escapeHtml(`Images/Weapons/${classFolder}/${weapon.file}`);
   return `<div class="item-art ${large ? "large" : ""}"><img src="${path}" alt="${escapeHtml(weapon.name)}"><span>${escapeHtml(weapon.name)}</span></div>`;
 }
 
 function itemArt(path, name, large = false) {
-  return `<div class="item-art ${large ? "large" : ""}"><img src="${path}" alt="${escapeHtml(name)}"><span>${escapeHtml(name)}</span></div>`;
+  return `<div class="item-art ${large ? "large" : ""}"><img src="${escapeHtml(path)}" alt="${escapeHtml(name)}"><span>${escapeHtml(name)}</span></div>`;
 }
 
 function enemyArt(enemy) {
@@ -1019,7 +1028,7 @@ function showModal(){
     const fights=state.runStats?.fights||[];
     content=`<section class="modal recap-modal" role="dialog" aria-modal="true" aria-labelledby="recap-title"><div class="modal-heading"><div><p class="section-kicker">Run record · Floor ${state.floor}</p><h2 id="recap-title">Expedition recap</h2></div><button class="icon-close" data-close-modal aria-label="Close run recap">×</button></div><div class="recap-totals"><span><b>${state.floorsCleared}</b> floors cleared</span><span><b>${state.runStats?.enemiesDefeated||0}</b> enemies defeated</span><span><b>${state.runStats?.damageDealt||0}</b> damage dealt</span><span><b>${state.runStats?.damageTaken||0}</b> damage taken</span></div><div class="recap-list">${fights.length?fights.map((fight,index)=>`<details class="recap-entry" ${index===0?"open":""}><summary>${fight.floorClear?`Floor ${fight.floor} cleared`:fight.defeat?`Defeat on Floor ${fight.floor}`:`Floor ${fight.floor} · ${fight.boss?"Boss fight":"Battle"} · ${fight.enemies.map(escapeHtml).join(", ")}`}</summary>${fight.floorClear?`<p>Level ${fight.level} · ${fight.enemiesDefeated} enemies defeated · ${fight.gold} gold carried</p>`:`<p>${escapeHtml(fight.rewards||"Run ended before victory.")}</p><p>${fight.damageDealt||0} damage dealt · ${fight.damageTaken||0} damage taken</p>`}<div class="recap-log">${(fight.log||[]).map(entry=>`<p class="${escapeHtml(entry.tone||"")}">${escapeHtml(entry.text)}</p>`).join("")||"<p>No battle events recorded.</p>"}</div></details>`).join(""):`<p class="empty-list">No battles recorded yet.</p>`}</div></section>`;
   } else if(modal==="leaderboard"){
-    content=`<section class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title"><div class="modal-heading"><div><p class="section-kicker">All-time · this browser</p><h2 id="leaderboard-title">Highest floors</h2></div><button class="icon-close" data-close-modal aria-label="Close leaderboard">×</button></div><p class="leaderboard-note">Best floor clears across your characters. Dev-slot runs are excluded.</p>${renderLeaderboard()}</section>`;
+    content=`<section class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title"><div class="modal-heading"><div><p class="section-kicker">Personal records · this browser</p><h2 id="leaderboard-title">Highest floors</h2></div><button class="icon-close" data-close-modal aria-label="Close leaderboard">×</button></div><p class="leaderboard-note">Local scores are not verified or shared. Dev-slot runs are excluded.</p>${renderLeaderboard()}</section>`;
   } else if(modal==="index"){
     content=`<section class="modal index-modal" role="dialog" aria-modal="true" aria-labelledby="index-title"><div class="modal-heading"><div><p class="section-kicker">Field reference</p><h2 id="index-title">Index</h2></div><button class="icon-close" data-close-modal aria-label="Close Index">×</button></div><div class="index-layout"><nav class="index-categories" aria-label="Index categories">${[["warrior","Warrior Weapons"],["archer","Archer Weapons"],["mage","Mage Weapons"],["armor","Armor"],["items","Items"],["effects","Effects"]].map(([key,label])=>`<button class="index-category ${indexCategory===key?"active":""}" data-index-category="${key}">${label}</button>`).join("")}</nav><div class="index-content" id="index-content">${renderIndexCategory()}</div></div></section>`;
   }

@@ -145,6 +145,24 @@ test("leaderboard keeps each character's best cleared-floor record and ignores D
   assert.equal(vm.runInContext("loadLeaderboard().length", context), 1);
 });
 
+test("malformed or injected local leaderboard data cannot inject markup", () => {
+  const context = loadBrowserGame();
+  const key = "dungeon-simulation-local-leaderboard-v1";
+  context.localStorage.setItem(key, JSON.stringify([
+    { name: "<svg/onload=alert()>", className: "Mage", difficulty: "Hard", floors: 4, level: 8, date: 1 },
+    { name: "Bad score", className: "Mage", difficulty: "Hard", floors: 999999999, level: 1, date: 2 },
+    null
+  ]));
+  const markup = vm.runInContext("renderLeaderboard()", context);
+  assert.match(markup, /&lt;svg\/onload=alert\(\)&gt;/);
+  assert.doesNotMatch(markup, /<svg\/onload/);
+  assert.doesNotMatch(markup, /Bad score/);
+
+  context.testWeapon = {name:"Sword",type:"Sword",file:'x" onerror="alert(1)'};
+  const weaponMarkup = vm.runInContext("weaponArt(testWeapon)", context);
+  assert.doesNotMatch(weaponMarkup, /onerror="alert/);
+});
+
 test("class choice stays locked and off-class weapons remain sellable but unequippable", () => {
   const context = loadBrowserGame();
   vm.runInContext(`newRun("Tester"); chooseClass("warrior"); state.weapons.push({name:"Test Bow",type:"Bow",rarity:"Rare",damage:20,crit:0});`, context);
