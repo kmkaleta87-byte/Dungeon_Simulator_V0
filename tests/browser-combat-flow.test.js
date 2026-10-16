@@ -296,6 +296,29 @@ test("class defenses spend a turn, apply once, and begin their cooldown", () => 
   }
 });
 
+test("Mage retains a basic strike after Aegis and while a shield blocks spellcasting", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("mage");
+    const enemy={name:"Attacker",race:"goblin",klass:"Warrior",hp:1000,maxHp:1000,damage:1,dodge:0,intent:{key:"attack",label:"Strike"}};
+    state.target=0; state.combat={boss:false,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[enemy]};
+    combatAction("aegis");
+    var actionsAfterAegis=getActions();
+    state.equippedArmor.shield={defense:2};
+    state.weapon.attacks=[{name:"Magic Bolt",command:"magicbolt",multiplier:1,manaCost:3}];
+    enemy.intent={key:"guard",label:"Guard"};
+    var actionsWithShield=getActions();
+    var manaBeforeShieldStrike=state.mana, hpBeforeShieldStrike=enemy.hp;
+    Math.random=()=>0.99; combatAction("basic");
+    var manaAfterShieldStrike=state.mana, hpAfterShieldStrike=enemy.hp;
+  `, context);
+  assert.match(vm.runInContext("actionsAfterAegis", context), /data-attack="basic"(?! disabled)/);
+  assert.match(vm.runInContext("actionsWithShield", context), /data-attack="basic"(?! disabled)[^>]*>Staff strike/);
+  assert.match(vm.runInContext("actionsWithShield", context), /data-attack="magicbolt" disabled/);
+  assert.equal(vm.runInContext("manaAfterShieldStrike", context), vm.runInContext("manaBeforeShieldStrike", context));
+  assert.ok(vm.runInContext("hpAfterShieldStrike", context)<vm.runInContext("hpBeforeShieldStrike", context));
+});
+
 test("combat telegraphs before enemy damage instead of applying an unanswerable opening ambush", () => {
   const context = loadBrowserGame();
   context.Math.random = () => 0;
@@ -638,7 +661,8 @@ test("archer special mana recovery requires a successful hit", () => {
   assert.equal(vm.runInContext("state.mana", context), 0);
 });
 
-test("Patch 2 describes the Mage resource and drop-rate changes", () => {
+test("Update V0.1 consolidates features and bug fixes into separate sections", () => {
   const source = fs.readFileSync("patch-notes.js", "utf8");
-  assert.match(source, /"v0-patch-2"[\s\S]*?Tweaked mana consumption and drop rates to prevent Mage soft locking/i);
+  assert.match(source, /"v0\.1"[\s\S]*?heading: "New Features"[\s\S]*?Mage mana costs and drop rates[\s\S]*?heading: "Bugs"[\s\S]*?boss path[\s\S]*?Staff strike/i);
+  assert.doesNotMatch(source, /v0-patch-[123]/);
 });

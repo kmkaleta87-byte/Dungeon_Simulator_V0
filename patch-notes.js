@@ -9,36 +9,20 @@ window.GAME_PATCH_NOTES = {
       ] }
     ]
   },
-  "v0-patch-1": {
-    title: "V0 Patch 1",
-    subtitle: "Bug fixes",
+  "v0.1": {
+    title: "Update V0.1",
+    subtitle: "New content and fixes",
     sections: [
-      { heading: "Fixed", items: [
-        "Armor and item inventory views now remain selected after equipment, use, and sell actions.",
-        "Floor generation reserves the boss path and cannot replace the boss room with a fountain or another room.",
-        "Combat damage sources now consistently remove defeated enemies, including Sundering Strike effects and chained damage."
-      ] }
-    ]
-  },
-  "v0-patch-2": {
-    title: "V0 Patch 2",
-    subtitle: "Class balance and resource fixes",
-    sections: [
-      { heading: "Balance", items: [
-        "Tweaked mana consumption and drop rates to prevent Mage soft locking.",
-        "Weapon drops now favor your chosen class, while Warriors find mana potions less often.",
-        "Archer attacks restore small amounts of mana on a successful hit."
-      ] }
-    ]
-  },
-  "v0-patch-3": {
-    title: "V0 Patch 3",
-    subtitle: "Elemental elite enemies",
-    sections: [
-      { heading: "Combat", items: [
-        "Elite enemies can now appear within ordinary enemy rooms starting on floor 5. Each enemy rolls independently, with the chance rising by 3 percentage points per floor to a 30% cap on floor 14.",
-        "Elites have a random Fire, Water, Earth, or Wind affinity. Their damaging attacks have a fixed 15% chance to inflict Burn, Freeze, Cripple, or Blind, respectively.",
-        "Four-enemy encounters with an elite may be reduced by one normal enemy on floors 5–14; this chance tapers from 50% to 5%. Bosses are unchanged."
+      { heading: "New Features", items: [
+        "Enemy drops now favor weapons for your chosen class. Mage mana costs and drop rates were adjusted, and successful Archer hits restore a small amount of mana.",
+        "Elite enemies now appear in ordinary rooms from floor 5, gaining a random Fire, Water, Earth, or Wind affinity. Their landed damaging attacks can inflict Burn, Freeze, Cripple, or Blind.",
+        "Four-enemy fights with an elite may lose one normal enemy on floors 5–14; the chance tapers from 50% to 5%. Bosses are unchanged."
+      ] },
+      { heading: "Bugs", items: [
+        "Armor and item inventory lists now stay selected and preserve their position after equipment, use, and sell actions.",
+        "Floor generation now preserves the boss path, preventing the boss room from being replaced by a fountain or another room.",
+        "Combat now consistently removes defeated enemies, including kills from Sundering Strike and chained damage.",
+        "Mages can make a reduced-damage, mana-free Staff strike while shielded; shields still prevent spellcasting."
       ] }
     ]
   }

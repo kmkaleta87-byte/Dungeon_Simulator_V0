@@ -596,7 +596,7 @@ function getActions() {
   if (state.combat) {
     const weapon = state.weapon;
     const mageBlocked = state.class === "mage" && state.equippedArmor?.shield;
-    const basicFallback = DUNGEON_RULES.basicAttackFallback(state.class,weapon?.type,state.mana,state.arrows,(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0));
+    const basicFallback = mageBlocked ? "shield" : DUNGEON_RULES.basicAttackFallback(state.class,weapon?.type,state.mana,state.arrows,(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0));
     const basicLabel = state.class === "mage" ? "Basic spell" : state.class === "archer" ? "Basic shot" : "Basic attack";
     const arrowsOut = ["Bow", "Crossbow"].includes(weapon?.type) && state.arrows < (weapon?.effect==="Overdraw"?2:1) && !basicFallback;
     const manaCost = (weapon?.manaCost || 5) + (weapon?.effect==="Overcast"?2:0);
@@ -615,8 +615,9 @@ function getActions() {
     const defense=classDefenseOption();
     const defenseAction=defense?`<button class="action-button secondary" data-attack="${defense.action}" ${defense.disabled?"disabled":""}>${defense.label}<small>${defense.description}</small></button>`:"";
     const disruptAction=disruptable?`<button class="action-button secondary" data-attack="disrupt" ${!DUNGEON_RULES.canDisrupt(selectedEnemy,disruptCooldown)?"disabled":""}>Disrupt<small>${disruptCooldown?`Cooldown ${disruptCooldown}`:`Cancel ${escapeHtml(selectedEnemy.intent.label)}`}</small></button>`:"";
-    const basicDisabled=state.class==="mage"?(mageBlocked||state.mana<manaCost&&!basicFallback):state.class==="archer"?arrowsOut:false;
-    return `<div class="action-grid"><button class="action-button" data-attack="basic" ${basicDisabled?"disabled":""}>${basicFallback?state.class==="mage"?"Staff strike":"Unarmed jab":basicLabel}<small>~${basicPreview.primaryDamage} dmg · ${Math.round(basicPreview.critChance*100)}% crit${basicPreview.effect?` · ${effectIcon(basicPreview.effect)}`:""}${basicFallback?" · No resource needed, reduced damage":state.class==="mage"?` · ${manaCost} mana`:state.class==="archer"?` · ${state.arrows||0} arrows · +1 mana on hit`:" · Always available"}</small></button>${state.class==="warrior"?`<button class="action-button" data-attack="heavy" ${state.cooldown>0?"disabled":""}>Heavy attack<small>${state.cooldown?`Cooldown ${state.cooldown}`:`~${heavyPreview.primaryDamage} dmg · ${Math.round(heavyPreview.critChance*100)}% crit${heavyPreview.effect?` · ${effectIcon(heavyPreview.effect)}`:""} · 2 turn cooldown`}</small></button>`:""}${specials}${disruptAction}${defenseAction}<button class="action-button" data-action="heal">Use health potion</button><button class="action-button" data-action="mana">Use mana potion</button><button class="action-button secondary" data-action="flee">Flee</button></div>`;
+    const basicDisabled=state.class==="mage"?state.mana<manaCost&&!basicFallback:state.class==="archer"?arrowsOut:false;
+    const basicFallbackName=state.class==="mage"?"Staff strike":"Unarmed jab";
+    return `<div class="action-grid"><button class="action-button" data-attack="basic" ${basicDisabled?"disabled":""}>${basicFallback?basicFallbackName:basicLabel}<small>~${basicPreview.primaryDamage} dmg · ${Math.round(basicPreview.critChance*100)}% crit${basicPreview.effect?` · ${effectIcon(basicPreview.effect)}`:""}${basicFallback?" · No resource needed, reduced damage":state.class==="mage"?` · ${manaCost} mana`:state.class==="archer"?` · ${state.arrows||0} arrows · +1 mana on hit`:" · Always available"}</small></button>${state.class==="warrior"?`<button class="action-button" data-attack="heavy" ${state.cooldown>0?"disabled":""}>Heavy attack<small>${state.cooldown?`Cooldown ${state.cooldown}`:`~${heavyPreview.primaryDamage} dmg · ${Math.round(heavyPreview.critChance*100)}% crit${heavyPreview.effect?` · ${effectIcon(heavyPreview.effect)}`:""} · 2 turn cooldown`}</small></button>`:""}${specials}${disruptAction}${defenseAction}<button class="action-button" data-action="heal">Use health potion</button><button class="action-button" data-action="mana">Use mana potion</button><button class="action-button secondary" data-action="flee">Flee</button></div>`;
   }
   if (room.type === "boss" && room.cleared) return `<p class="prompt-note">The chamber falls quiet. The stair to the next floor is open.</p><div class="action-grid"><button class="action-button" data-next-floor>Descend to floor ${state.floor + 1}</button></div>`;
   if (room.type === "start") return `<div class="action-grid"><button class="action-button" data-action="inspect-desk">Inspect the desk</button><button class="action-button" data-action="inspect-closet">Inspect the closet</button></div>${state.starter.classOffer && !state.class ? `<div class="class-choice"><p>The desk holds three forgotten weapons. Choose one.</p><div class="action-grid"><button class="action-button" data-class="warrior">Warrior · Sword</button><button class="action-button" data-class="archer">Archer · Bow</button><button class="action-button" data-class="mage">Mage · Staff</button></div></div>` : ""}`;
@@ -963,11 +964,11 @@ function combatAction(action) {
   const special=DUNGEON_RULES.getSpecialAttack(weapon,action);
   const isBasic=action==="basic"||action==="attack";
   const isHeavy=action==="heavy";
-  const basicFallback=isBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon.type,state.mana,state.arrows,(weapon.manaCost||5)+(weapon.effect==="Overcast"?2:0)):null;
-  const attack=special|| (isHeavy?{name:"Heavy attack",multiplier:1.5,critBonus:0.10,cooldown:2}:isBasic?{name:basicFallback==="mana"?"Staff strike":basicFallback==="arrows"?"Unarmed jab":"Basic attack",multiplier:basicFallback?0.5:1,critBonus:0,cooldown:0}:null);
+  const basicFallback=isBasic&&state.class==="mage"&&state.equippedArmor?.shield?"shield":isBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon.type,state.mana,state.arrows,(weapon.manaCost||5)+(weapon.effect==="Overcast"?2:0)):null;
+  const attack=special|| (isHeavy?{name:"Heavy attack",multiplier:1.5,critBonus:0.10,cooldown:2}:isBasic?{name:basicFallback&&state.class==="mage"?"Staff strike":basicFallback==="arrows"?"Unarmed jab":"Basic attack",multiplier:basicFallback?0.5:1,critBonus:0,cooldown:0}:null);
   if(!attack){message("That attack is not available for this weapon.");render();return;}
   if(special&&DUNGEON_RULES.isAttackOnCooldown(state.attackCooldowns,action)){message(`${attack.name} is cooling down for ${state.attackCooldowns[action]} turn(s).`);render();return;}
-  if(state.class==="mage"&&state.equippedArmor?.shield){message("You cannot cast while a shield is equipped.");render();return;}
+  if(state.class==="mage"&&state.equippedArmor?.shield&&!basicFallback){message("You cannot cast while a shield is equipped.");render();return;}
   if(special?.chargesNextAttack){
     if(wasBonusAttack){message("Use a direct attack for your extra action.");render();return;}
     if(state.class==="mage"){const cost=(special.manaCost||0)+(weapon.effect==="Overcast"?2:0);if(state.mana<cost){message(`Not enough mana. Channeling costs ${cost}.`);render();return;}state.mana-=cost;}
@@ -1474,7 +1475,7 @@ function renderPatchNotes(version){
 }
 
 document.querySelectorAll?.("[data-patch]").forEach(button=>button.addEventListener("click",()=>renderPatchNotes(button.dataset.patch)));
-renderPatchNotes("v0-patch-3");
+renderPatchNotes("v0.1");
 if(typeof fetch==="function")fetch("about.txt").then(response=>{if(!response.ok)throw new Error("About text unavailable");return response.text();}).then(text=>{
   const target=document.querySelector("#about-copy");
   if(!target)return;
