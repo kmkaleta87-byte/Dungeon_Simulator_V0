@@ -3,13 +3,13 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 
-function loadBrowserGame() {
+function loadBrowserGame(leaderboardApi = "") {
   const screen = { innerHTML: "", querySelectorAll: () => [], querySelector: () => null, addEventListener: () => {}, insertAdjacentHTML: () => {} };
   const button = { hidden: false, addEventListener: () => {} };
   const storage = new Map();
   const context = {
     document: { querySelector: selector => selector === "#game-screen" ? screen : button },
-    window: {},
+    window: { LEADERBOARD_API: leaderboardApi },
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
     confirm: () => true,
     Math: Object.assign(Object.create(Math), { random: () => 0.5 })
@@ -129,20 +129,68 @@ test("health potions scale by rarity and max HP while mana potions stay flat", (
   assert.match(itemMarkup, /Restores 24 mana/);
 });
 
-test("leaderboard keeps each character's best cleared-floor record and ignores Dev runs", () => {
+test("legacy local leaderboard data is difficulty-filtered and capped at 100", () => {
   const context = loadBrowserGame();
-  vm.runInContext(`
-    recordLeaderboard({name:"Mira",chosenClass:"mage",difficulty:"hard",floorsCleared:4,level:9});
-    recordLeaderboard({name:"Mira",chosenClass:"mage",difficulty:"easy",floorsCleared:2,level:12});
-    recordLeaderboard({name:"Mira",chosenClass:"mage",difficulty:"normal",floorsCleared:5,level:10});
-    recordLeaderboard({name:"Dev Tester",chosenClass:"warrior",difficulty:"normal",floorsCleared:99,level:99,devMode:true});
-  `, context);
+  context.localStorage.setItem("dungeon-simulation-local-leaderboard-v1", JSON.stringify([
+    {name:"Mira",className:"Mage",difficulty:"Hard",floors:4,level:9,date:1},
+    {name:"Mira",className:"Mage",difficulty:"Easy",floors:2,level:12,date:2},
+    {name:"Mira",className:"Mage",difficulty:"Normal",floors:5,level:10,date:3},
+  ]));
+  vm.runInContext(`leaderboardDifficulty="normal"; leaderboardStatus="unconfigured"; leaderboardEntries=loadLeaderboard("normal")`, context);
   const markup = vm.runInContext("renderLeaderboard()", context);
   assert.match(markup, /Mira/);
-  assert.match(markup, /Mage · Normal/);
+  assert.match(markup, /Top 100 Normal scores/);
   assert.match(markup, />5</);
-  assert.doesNotMatch(markup, /Dev Tester/);
-  assert.equal(vm.runInContext("loadLeaderboard().length", context), 1);
+  assert.match(markup, /Easy/);
+  assert.match(markup, /Hard/);
+  assert.equal(vm.runInContext("loadLeaderboard('normal').length", context), 1);
+  assert.equal(vm.runInContext("loadLeaderboard('hard').length", context), 1);
+  assert.equal(vm.runInContext("loadLeaderboard('easy').length", context), 1);
+
+  vm.runInContext(`
+    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(Array.from({length:105},(_,i)=>({name:"Player "+i,className:"Mage",difficulty:"Normal",floors:105-i,level:1,date:i}))));
+  `, context);
+  assert.equal(vm.runInContext("loadLeaderboard('normal').length", context), 100);
+  assert.equal(vm.runInContext("loadLeaderboard('normal')[0].floors", context), 105);
+});
+
+test("personal bests update independently for Easy, Normal, and Hard and reject malformed storage", () => {
+  const context = loadBrowserGame();
+  const improved = vm.runInContext(`
+    const results = [
+      updatePersonalBest({name:"Easy Run",chosenClass:"warrior",difficulty:"easy",floorsCleared:3,level:4}),
+      updatePersonalBest({name:"Normal Run",chosenClass:"archer",difficulty:"normal",floorsCleared:5,level:6}),
+      updatePersonalBest({name:"Hard Run",chosenClass:"mage",difficulty:"hard",floorsCleared:2,level:3}),
+      updatePersonalBest({name:"Old Easy Run",chosenClass:"warrior",difficulty:"easy",floorsCleared:2,level:99})
+    ]; results;
+  `, context);
+  assert.deepEqual(Array.from(improved), [true, true, true, false]);
+  const bests = JSON.parse(context.localStorage.getItem("dungeon-simulation-personal-bests-v1"));
+  assert.deepEqual(Object.fromEntries(Object.entries(bests).map(([key, value]) => [key, { name: value.name, className: value.className, floors: value.floors, level: value.level }])), {
+    easy: { name: "Easy Run", className: "Warrior", floors: 3, level: 4 },
+    normal: { name: "Normal Run", className: "Archer", floors: 5, level: 6 },
+    hard: { name: "Hard Run", className: "Mage", floors: 2, level: 3 }
+  });
+  assert.ok(Object.values(bests).every(value => Number.isFinite(value.date)));
+  assert.match(vm.runInContext("renderPersonalBests()", context), /Easy Run/);
+  assert.match(vm.runInContext("renderPersonalBests()", context), /Normal Run/);
+  assert.match(vm.runInContext("renderPersonalBests()", context), /Hard Run/);
+  context.localStorage.setItem("dungeon-simulation-personal-bests-v1", "{bad json");
+  assert.deepEqual(Object.keys(vm.runInContext("loadPersonalBests()", context)), []);
+});
+
+test("completed-run global submission is once-only, avoids dev runs, and does not gate local bests", async () => {
+  const context = loadBrowserGame("https://api.example");
+  const requests = [];
+  context.fetch = async (...args) => { requests.push(args); return { ok: true, json: async () => ({ result: "not_eligible" }) }; };
+  vm.runInContext(`state={name:"Tester",chosenClass:"warrior",difficulty:"hard",floorsCleared:4,level:5}; updatePersonalBest(state); submitCompletedRun(state); submitCompletedRun(state);`, context);
+  assert.equal(JSON.parse(context.localStorage.getItem("dungeon-simulation-personal-bests-v1")).hard.floors, 4);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(vm.runInContext("state.leaderboardSubmitted", context), true);
+  assert.equal(requests.length, 1);
+  vm.runInContext(`submitCompletedRun({name:"Dev",devMode:true,difficulty:"normal",floorsCleared:999,level:99})`, context);
+  assert.equal(requests.length, 1);
+  assert.equal(vm.runInContext("submitCompletedRun({name:'Tester',difficulty:'normal',floorsCleared:0,level:1})", context), undefined);
 });
 
 test("malformed or injected local leaderboard data cannot inject markup", () => {
@@ -153,6 +201,7 @@ test("malformed or injected local leaderboard data cannot inject markup", () => 
     { name: "Bad score", className: "Mage", difficulty: "Hard", floors: 999999999, level: 1, date: 2 },
     null
   ]));
+  vm.runInContext(`leaderboardDifficulty="hard"; leaderboardStatus="unconfigured"; leaderboardEntries=loadLeaderboard("hard")`, context);
   const markup = vm.runInContext("renderLeaderboard()", context);
   assert.match(markup, /&lt;svg\/onload=alert\(\)&gt;/);
   assert.doesNotMatch(markup, /<svg\/onload/);

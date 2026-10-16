@@ -6,6 +6,9 @@ const DUNGEON_RULES = window.DungeonRules;
 const SAVE_KEY = "dungeon-simulation-browser-save-v1";
 const SAVE_SLOTS_KEY = "dungeon-simulation-browser-slots-v1";
 const LEADERBOARD_KEY = "dungeon-simulation-local-leaderboard-v1";
+const PERSONAL_BESTS_KEY = "dungeon-simulation-personal-bests-v1";
+const LEADERBOARD_API = window.LEADERBOARD_API || "";
+const LEADERBOARD_DIFFICULTIES = ["easy", "normal", "hard"];
 const SAVE_SLOT_IDS = ["slot1", "slot2", "slot3", "dev"];
 const CLASS_NAMES = { warrior: "Warrior", archer: "Archer", mage: "Mage" };
 const RARITIES = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Divine"];
@@ -68,6 +71,10 @@ let indexCategory = "warrior";
 let selectedIndexItem = null;
 let inventoryWeaponFamily = "warrior";
 let weaponSort = { key: "rarity", direction: "desc" };
+let leaderboardDifficulty = "normal";
+let leaderboardEntries = [];
+let leaderboardStatus = "idle";
+let leaderboardRequest = 0;
 
 indexButton.addEventListener("click", () => { modal = "index"; selectedIndexItem = null; showModal(); });
 document.querySelector("#leaderboard-button").addEventListener("click", () => { modal = "leaderboard"; showModal(); });
@@ -107,44 +114,135 @@ function save() {
   } catch { /* Browser storage may be disabled. */ }
 }
 
-function loadLeaderboard() {
+function validateLeaderboardEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+  const allowedClasses = [...Object.values(CLASS_NAMES), "Unchosen"];
+  const allowedDifficulties = Object.values(DIFFICULTIES).map(difficulty => difficulty.label);
+  return entries.filter(entry => entry && typeof entry === "object" &&
+    typeof entry.name === "string" && Number.isInteger(entry.floors) && entry.floors > 0 && entry.floors <= 100000 &&
+    Number.isInteger(entry.level) && entry.level > 0 && entry.level <= 100000 &&
+    allowedClasses.includes(entry.className) && allowedDifficulties.includes(entry.difficulty) &&
+    typeof entry.date === "number" && Number.isFinite(entry.date) && entry.name.trim().length > 0 && entry.name.length <= 22)
+    .sort((a, b) => b.floors - a.floors || b.level - a.level || a.date - b.date)
+    .slice(0, 100);
+}
+
+function loadLeaderboard(difficulty = leaderboardDifficulty) {
   try {
     const entries = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || "[]");
-    if (!Array.isArray(entries)) return [];
-    const allowedClasses = [...Object.values(CLASS_NAMES), "Unchosen"];
-    const allowedDifficulties = Object.values(DIFFICULTIES).map(difficulty => difficulty.label);
-    return entries.filter(entry => entry && typeof entry === "object" &&
-      typeof entry.name === "string" && Number.isInteger(entry.floors) && entry.floors > 0 && entry.floors <= 100000 &&
-      Number.isInteger(entry.level) && entry.level > 0 && entry.level <= 100000 &&
-      allowedClasses.includes(entry.className) && allowedDifficulties.includes(entry.difficulty) &&
-      Number.isFinite(entry.date) && entry.name.trim().length > 0 && entry.name.length <= 22)
-      .sort((a, b) => b.floors - a.floors || b.level - a.level || a.date - b.date)
-      .slice(0, 10);
+    return validateLeaderboardEntries(entries).filter(entry => entry.difficulty.toLowerCase() === difficulty)
+      .sort((a, b) => b.floors - a.floors || b.level - a.level || a.date - b.date).slice(0, 100);
   } catch { return []; }
 }
 
-function recordLeaderboard(run) {
-  if (!run || run.devMode || !Number.isInteger(run.floorsCleared) || run.floorsCleared < 1 || run.floorsCleared > 100000) return;
-  const entries = loadLeaderboard();
-  const entry = {
-    name: String(run.name || "Adventurer").trim().slice(0, 22) || "Adventurer", className: CLASS_NAMES[run.chosenClass || run.class] || "Unchosen",
-    difficulty: DIFFICULTIES[run.difficulty]?.label || "Normal", floors: run.floorsCleared,
-    level: run.level || 1, date: Date.now()
+function loadPersonalBests() {
+  const allowedClasses = new Set([...Object.values(CLASS_NAMES), "Unchosen"]);
+  try {
+    const saved = JSON.parse(localStorage.getItem(PERSONAL_BESTS_KEY) || "{}");
+    return Object.fromEntries(LEADERBOARD_DIFFICULTIES.flatMap(difficulty => {
+      const item = saved?.[difficulty];
+      if (!item || typeof item !== "object" || !Number.isInteger(item.floors) || item.floors < 0 || item.floors > 100000 ||
+          !Number.isInteger(item.level) || item.level < 1 || item.level > 100000 || typeof item.name !== "string" || item.name.length > 22 ||
+          !allowedClasses.has(item.className) || (item.date !== null && (!Number.isFinite(item.date) || item.date < 0))) return [];
+      return [[difficulty, { name: item.name, className: item.className, floors: item.floors, level: item.level, date: item.date }]];
+    }));
+  } catch { return {}; }
+}
+
+function updatePersonalBest(run) {
+  if (!run || run.devMode || !LEADERBOARD_DIFFICULTIES.includes(run.difficulty) || !Number.isInteger(run.floorsCleared) || run.floorsCleared < 1 || run.floorsCleared > 100000) return false;
+  let bests;
+  try { bests = JSON.parse(localStorage.getItem(PERSONAL_BESTS_KEY) || "{}"); } catch { bests = {}; }
+  if (!bests || typeof bests !== "object" || Array.isArray(bests)) bests = {};
+  const current = loadPersonalBests()[run.difficulty];
+  if (current && current.floors >= run.floorsCleared) return false;
+  bests[run.difficulty] = {
+    name: String(run.name || "Adventurer").trim().slice(0, 22) || "Adventurer",
+    className: CLASS_NAMES[run.chosenClass || run.class] || "Unchosen",
+    floors: run.floorsCleared, level: Number.isInteger(run.level) && run.level > 0 ? run.level : 1, date: Date.now()
   };
-  const previous = entries.findIndex(item => item.name.toLowerCase() === entry.name.toLowerCase() && item.className === entry.className);
-  if (previous >= 0) {
-    if (entries[previous].floors > entry.floors || (entries[previous].floors === entry.floors && entries[previous].level >= entry.level)) return;
-    entries.splice(previous, 1);
+  try { localStorage.setItem(PERSONAL_BESTS_KEY, JSON.stringify(bests)); return true; }
+  catch { return false; }
+}
+
+function submitCompletedRun(run) {
+  if (!run || run.devMode || run.leaderboardSubmitted || !LEADERBOARD_DIFFICULTIES.includes(run.difficulty) || !Number.isInteger(run.floorsCleared) || run.floorsCleared < 1 || run.floorsCleared > 100000) return;
+  run.leaderboardSubmitted = true;
+  run.runSubmissionStatus = LEADERBOARD_API ? "Submitting final score to the global board…" : "Global leaderboard is not configured; personal best is saved on this device.";
+  if (!LEADERBOARD_API) return;
+  fetch(`${LEADERBOARD_API.replace(/\/$/, "")}/scores`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: String(run.name || "Adventurer").trim().slice(0, 22) || "Adventurer", className: CLASS_NAMES[run.chosenClass || run.class] || "Unchosen", difficulty: run.difficulty, floors: run.floorsCleared, level: run.level || 1 })
+  }).then(async response => {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Score submission failed");
+    if (data.result === "invalid") throw new Error("The server rejected this score as invalid.");
+    run.runSubmissionStatus = data.result === "accepted" ? "Your score earned a place on the global top 100." : "Personal best saved. This score did not make the global top 100.";
+    if (data.result === "accepted" && modal === "leaderboard") refreshGlobalLeaderboard(run.difficulty);
+    if (state === run && modal === "death") render();
+  }).catch(error => {
+    run.runSubmissionStatus = `Personal best saved. Global submission failed: ${error.message}`;
+    if (state === run && modal === "death") render();
+  });
+}
+
+async function refreshGlobalLeaderboard(difficulty = leaderboardDifficulty) {
+  leaderboardDifficulty = LEADERBOARD_DIFFICULTIES.includes(difficulty) ? difficulty : "normal";
+  const requestId = ++leaderboardRequest;
+  leaderboardStatus = LEADERBOARD_API ? "loading" : "unconfigured";
+  leaderboardEntries = LEADERBOARD_API ? [] : loadLeaderboard(leaderboardDifficulty);
+  updateLeaderboardView();
+  if (!LEADERBOARD_API) return;
+  try {
+    const response = await fetch(`${LEADERBOARD_API.replace(/\/$/, "")}/scores?difficulty=${encodeURIComponent(leaderboardDifficulty)}`, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error("Leaderboard request failed");
+    const data = await response.json();
+    if (requestId !== leaderboardRequest) return;
+    leaderboardEntries = validateLeaderboardEntries(data.scores);
+    leaderboardStatus = "ready";
+  } catch {
+    if (requestId !== leaderboardRequest) return;
+    leaderboardEntries = [];
+    leaderboardStatus = "error";
   }
-  entries.push(entry);
-  entries.sort((a, b) => b.floors - a.floors || b.level - a.level || a.date - b.date);
-  try { localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries.slice(0, 10))); } catch { /* Browser storage may be disabled. */ }
+  updateLeaderboardView();
 }
 
 function renderLeaderboard() {
-  const entries = loadLeaderboard();
-  if (!entries.length) return `<p class="empty-list">No floors cleared yet. Clear a boss floor to set a record.</p>`;
-  return `<div class="leaderboard-table" role="table" aria-label="Highest floors cleared"><div class="leaderboard-row leaderboard-head" role="row"><span>Rank</span><span>Character</span><span>Class · Difficulty</span><span>Floors</span></div>${entries.map((entry, index) => `<div class="leaderboard-row" role="row"><span>${index + 1}</span><strong>${escapeHtml(entry.name)}</strong><span>${escapeHtml(entry.className)} · ${escapeHtml(entry.difficulty)}</span><b>${entry.floors}</b></div>`).join("")}</div>`;
+  const tabs = LEADERBOARD_DIFFICULTIES.map(key => `<button type="button" class="tab-button ${leaderboardDifficulty === key ? "active" : ""}" data-leaderboard-difficulty="${key}" aria-pressed="${leaderboardDifficulty === key}">${DIFFICULTIES[key].label}</button>`).join("");
+  let contents;
+  if (leaderboardStatus === "loading") contents = `<p class="empty-list">Loading the global ${DIFFICULTIES[leaderboardDifficulty].label} board…</p>`;
+  else if (leaderboardStatus === "error") contents = `<p class="empty-list">The global leaderboard could not be reached. Check your connection and try again.</p><button class="small-button" data-leaderboard-retry>Retry</button>`;
+  else contents = "";
+  if (!contents && !leaderboardEntries.length) contents = `<p class="empty-list">No ${DIFFICULTIES[leaderboardDifficulty].label} records yet. Clear a boss floor to set the first record.</p>`;
+  if (!contents) contents = `<div class="leaderboard-table" role="table" aria-label="Top 100 ${DIFFICULTIES[leaderboardDifficulty].label} scores"><div class="leaderboard-row leaderboard-head" role="row"><span>Rank</span><span>Character</span><span>Class</span><span>Level</span><span>Floors</span></div>${leaderboardEntries.map((entry, index) => `<div class="leaderboard-row" role="row"><span>${index + 1}</span><strong>${escapeHtml(entry.name)}</strong><span>${escapeHtml(entry.className)}</span><span>${entry.level}</span><b>${entry.floors}</b></div>`).join("")}</div>`;
+  const notice = leaderboardStatus === "unconfigured" ? `<p class="leaderboard-note">Global leaderboard setup is not finished. Showing scores saved in this browser only; these are not shared.</p>` : "";
+  return `${notice}<div class="leaderboard-tabs" role="tablist" aria-label="Difficulty leaderboard">${tabs}</div><div class="leaderboard-board">${contents}</div>`;
+}
+
+function updateLeaderboardView() {
+  const backdrop = screen.querySelector(".modal-backdrop");
+  if (!backdrop || modal !== "leaderboard") return;
+  const markup = renderLeaderboard();
+  const board = backdrop.querySelector(".leaderboard-board");
+  if (board) board.innerHTML = markup.match(/<div class="leaderboard-board">([\s\S]*)<\/div>$/)?.[1] || "";
+  const notice = backdrop.querySelector(".leaderboard-note");
+  const newNotice = markup.match(/<p class="leaderboard-note">([\s\S]*?)<\/p>/)?.[1];
+  if (notice && !newNotice) notice.remove();
+  else if (!notice && newNotice) backdrop.querySelector(".leaderboard-tabs")?.insertAdjacentHTML("beforebegin", `<p class="leaderboard-note">${newNotice}</p>`);
+  backdrop.querySelectorAll("[data-leaderboard-difficulty]").forEach(button => {
+    const active = button.dataset.leaderboardDifficulty === leaderboardDifficulty;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function renderPersonalBests() {
+  const bests = loadPersonalBests();
+  return `<section class="personal-bests" aria-labelledby="personal-bests-title"><h3 id="personal-bests-title">Personal bests · this browser</h3><div class="personal-best-list">${LEADERBOARD_DIFFICULTIES.map(difficulty => {
+    const best = bests[difficulty];
+    return `<div class="personal-best-row"><strong>${DIFFICULTIES[difficulty].label}</strong><span>${best ? `${best.floors} floor${best.floors === 1 ? "" : "s"} · Lv ${best.level} · ${escapeHtml(best.name)}` : "Not set"}</span></div>`;
+  }).join("")}</div></section>`;
 }
 
 function createWeapon(entry, rarity = entry[2], floor = 1) {
@@ -316,7 +414,7 @@ function startScreen() {
   titleButton.hidden = true;
   indexButton.hidden = false;
   const slots = loadSaveSlots();
-  screen.innerHTML = `<div class="title-screen"><div class="title-copy"><p class="eyebrow">A dungeon adventure</p><h2>Every room<br>is a choice.</h2><p>Explore a shifting dungeon, search what you find, and fight your way toward the next floor.</p><button class="secondary-button" data-open-leaderboard>View highest floors</button></div><div class="start-form"><label for="player-name">Character name for a new run</label><input id="player-name" maxlength="22" placeholder="Adventurer" autocomplete="off"><label for="difficulty-choice">Difficulty</label><select id="difficulty-choice"><option value="easy">Easy · gentler enemies, faster leveling, lower prices</option><option value="normal" selected>Normal · standard balance</option><option value="hard">Hard · tougher enemies, slower leveling, higher prices</option></select><div class="save-slots">${SAVE_SLOT_IDS.map(slot=>{const saved=slots[slot];const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;return `<article class="save-slot"><div><strong>${label}</strong><span>${escapeHtml(DUNGEON_RULES.describeSaveSlot(slots,slot))}${saved?` · ${DIFFICULTIES[saved.difficulty]?.label||"Normal"}`:""}</span></div><div class="save-slot-actions">${saved?`<button class="small-button" data-continue-slot="${slot}">Continue</button>`:""}<button class="small-button" data-new-slot="${slot}">${saved?"New run":"Start run"}</button>${saved?`<button class="text-button" data-delete-slot="${slot}">Delete</button>`:""}</div></article>`;}).join("")}</div><p class="fine-print">Saves and leaderboard records stay in this browser. Dev-slot runs do not count toward the leaderboard.</p></div></div>`;
+  screen.innerHTML = `<div class="title-screen"><div class="title-copy"><p class="eyebrow">A dungeon adventure</p><h2>Every room<br>is a choice.</h2><p>Explore a shifting dungeon, search what you find, and fight your way toward the next floor.</p><button class="secondary-button" data-open-leaderboard>View highest floors</button>${renderPersonalBests()}</div><div class="start-form"><label for="player-name">Character name for a new run</label><input id="player-name" maxlength="22" placeholder="Adventurer" autocomplete="off"><label for="difficulty-choice">Difficulty</label><select id="difficulty-choice"><option value="easy">Easy · gentler enemies, faster leveling, lower prices</option><option value="normal" selected>Normal · standard balance</option><option value="hard">Hard · tougher enemies, slower leveling, higher prices</option></select><div class="save-slots">${SAVE_SLOT_IDS.map(slot=>{const saved=slots[slot];const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;return `<article class="save-slot"><div><strong>${label}</strong><span>${escapeHtml(DUNGEON_RULES.describeSaveSlot(slots,slot))}${saved?` · ${DIFFICULTIES[saved.difficulty]?.label||"Normal"}`:""}</span></div><div class="save-slot-actions">${saved?`<button class="small-button" data-continue-slot="${slot}">Continue</button>`:""}<button class="small-button" data-new-slot="${slot}">${saved?"New run":"Start run"}</button>${saved?`<button class="text-button" data-delete-slot="${slot}">Delete</button>`:""}</div></article>`;}).join("")}</div><p class="fine-print">Run saves are stored in this browser. Global leaderboard records are separate; Dev-slot runs do not count.</p></div></div>`;
   screen.querySelector("[data-open-leaderboard]")?.addEventListener("click", () => { modal = "leaderboard"; showModal(); });
   screen.querySelectorAll("[data-new-slot]").forEach(button=>button.addEventListener("click",()=>{
     const slot=button.dataset.newSlot;const slotLabel=slot==="dev"?"dev":slot.slice(-1);const existing=slots[slot];
@@ -954,7 +1052,7 @@ function winFight() {
   state.runStats.fights.unshift({floor:state.floor,boss:fight.boss,enemies:fight.enemies.map(enemy=>enemy.name),gold:totalGold,xp:totalXp,damageDealt:fight.damageDealt||0,damageTaken:fight.damageTaken||0,rewards,log:[...(fight.log||[])]});
   state.runStats.fights=state.runStats.fights.slice(0,20);
   state.combat=null;state.braced=false;state.activeDefense=null;room.cleared=true;
-  if(fight.boss){state.currentFloor.bossCleared=true;state.floorsCleared++;recordLeaderboard(state);rewards+=" The way to the next floor opens.";state.runStats.fights[0].rewards=rewards;state.runStats.fights.unshift({floor:state.floor,floorClear:true,level:state.level,enemiesDefeated:state.runStats.enemiesDefeated,gold:state.gold});state.runStats.fights=state.runStats.fights.slice(0,20);}
+  if(fight.boss){state.currentFloor.bossCleared=true;state.floorsCleared++;rewards+=" The way to the next floor opens.";state.runStats.fights[0].rewards=rewards;state.runStats.fights.unshift({floor:state.floor,floorClear:true,level:state.level,enemiesDefeated:state.runStats.enemiesDefeated,gold:state.gold});state.runStats.fights=state.runStats.fights.slice(0,20);}
   message(rewards,"reward");render();
 }
 
@@ -1003,7 +1101,7 @@ function itemNameWithRarity(item) {
   return item.name.startsWith(prefix)?item.name:`${prefix}${item.name}`;
 }
 
-function die(){state.hp=0;state.braced=false;state.activeDefense=null;if(state.combat){state.runStats.fights.unshift({floor:state.floor,defeat:true,enemies:state.combat.enemies.map(enemy=>enemy.name),damageDealt:state.combat.damageDealt||0,damageTaken:state.combat.damageTaken||0,log:[...(state.combat.log||[])]});state.runStats.fights=state.runStats.fights.slice(0,20);}state.combat=null;state.deaths++;message(`${state.name} has fallen. The run is over.`,"danger");modal="death";render();}
+function die(){state.hp=0;state.braced=false;state.activeDefense=null;if(state.combat){state.runStats.fights.unshift({floor:state.floor,defeat:true,enemies:state.combat.enemies.map(enemy=>enemy.name),damageDealt:state.combat.damageDealt||0,damageTaken:state.combat.damageTaken||0,log:[...(state.combat.log||[])]});state.runStats.fights=state.runStats.fights.slice(0,20);}state.combat=null;state.deaths++;updatePersonalBest(state);submitCompletedRun(state);message(`${state.name} has fallen. The run is over.`,"danger");modal="death";render();}
 
 function openInventory(){
   state.inventoryNotice=false;
@@ -1023,12 +1121,12 @@ function showModal(){
   } else if(modal==="shop"){
     content=`<section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title"><div class="modal-heading"><div><p class="section-kicker">Floor ${state.floor} merchant · ${DIFFICULTIES[state.difficulty]?.label||"Normal"}</p><h2 id="shop-title">Shop</h2></div><button class="icon-close" data-close-modal aria-label="Close shop">×</button></div><div class="shop-upgrade"><div><strong>Stock quality · Level ${state.shopLootUpgradeLevel||0}/5</strong><p>Upgrade shop rarity odds for this run; current stock refreshes. Next upgrade: ${shopUpgradeCost()} gold.</p></div><button class="small-button" data-upgrade-shop ${(state.shopLootUpgradeLevel||0)>=5||state.gold<shopUpgradeCost()?"disabled":""}>Upgrade</button></div><div class="shop-list">${state.shopStock.map((item,index)=>`<article class="shop-item">${item.kind==="weapon"?weaponArt(item.value):item.kind==="armor"?itemArt(`Images/Armor/${item.value.file}`,item.value.name):potionArt(item.value)}<div><span class="item-meta">${escapeHtml(item.value.rarity)} ${escapeHtml(item.kind)}</span><strong>${escapeHtml(item.value.name)}</strong><p>${item.price} gold</p></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`).join("")}</div><div class="shop-footer"><span>${state.gold} gold</span><button class="small-button" data-reroll ${state.gold<shopRerollCost()?"disabled":""}>Reroll · ${shopRerollCost()} gold</button></div><details class="sell-inventory"><summary>Sell from inventory</summary>${renderSellList()}</details></section>`;
   } else if(modal==="death"){
-    content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-title"><p class="section-kicker">Run ended</p><h2 id="death-title">You have fallen.</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p><div class="action-grid"><button class="action-button" data-restart>Restart run</button><button class="action-button secondary" data-title>Return to title</button></div></section>`;
+    content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-title"><p class="section-kicker">Run ended</p><h2 id="death-title">You have fallen.</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:""}<div class="action-grid"><button class="action-button" data-restart>Restart run</button><button class="action-button secondary" data-title>Return to title</button></div></section>`;
   } else if(modal==="recap"){
     const fights=state.runStats?.fights||[];
     content=`<section class="modal recap-modal" role="dialog" aria-modal="true" aria-labelledby="recap-title"><div class="modal-heading"><div><p class="section-kicker">Run record · Floor ${state.floor}</p><h2 id="recap-title">Expedition recap</h2></div><button class="icon-close" data-close-modal aria-label="Close run recap">×</button></div><div class="recap-totals"><span><b>${state.floorsCleared}</b> floors cleared</span><span><b>${state.runStats?.enemiesDefeated||0}</b> enemies defeated</span><span><b>${state.runStats?.damageDealt||0}</b> damage dealt</span><span><b>${state.runStats?.damageTaken||0}</b> damage taken</span></div><div class="recap-list">${fights.length?fights.map((fight,index)=>`<details class="recap-entry" ${index===0?"open":""}><summary>${fight.floorClear?`Floor ${fight.floor} cleared`:fight.defeat?`Defeat on Floor ${fight.floor}`:`Floor ${fight.floor} · ${fight.boss?"Boss fight":"Battle"} · ${fight.enemies.map(escapeHtml).join(", ")}`}</summary>${fight.floorClear?`<p>Level ${fight.level} · ${fight.enemiesDefeated} enemies defeated · ${fight.gold} gold carried</p>`:`<p>${escapeHtml(fight.rewards||"Run ended before victory.")}</p><p>${fight.damageDealt||0} damage dealt · ${fight.damageTaken||0} damage taken</p>`}<div class="recap-log">${(fight.log||[]).map(entry=>`<p class="${escapeHtml(entry.tone||"")}">${escapeHtml(entry.text)}</p>`).join("")||"<p>No battle events recorded.</p>"}</div></details>`).join(""):`<p class="empty-list">No battles recorded yet.</p>`}</div></section>`;
   } else if(modal==="leaderboard"){
-    content=`<section class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title"><div class="modal-heading"><div><p class="section-kicker">Personal records · this browser</p><h2 id="leaderboard-title">Highest floors</h2></div><button class="icon-close" data-close-modal aria-label="Close leaderboard">×</button></div><p class="leaderboard-note">Local scores are not verified or shared. Dev-slot runs are excluded.</p>${renderLeaderboard()}</section>`;
+    content=`<section class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title"><div class="modal-heading"><div><p class="section-kicker">Global rankings · Top 100</p><h2 id="leaderboard-title">Highest floors</h2></div><button class="icon-close" data-close-modal aria-label="Close leaderboard">×</button></div>${renderLeaderboard()}</section>`;
   } else if(modal==="index"){
     content=`<section class="modal index-modal" role="dialog" aria-modal="true" aria-labelledby="index-title"><div class="modal-heading"><div><p class="section-kicker">Field reference</p><h2 id="index-title">Index</h2></div><button class="icon-close" data-close-modal aria-label="Close Index">×</button></div><div class="index-layout"><nav class="index-categories" aria-label="Index categories">${[["warrior","Warrior Weapons"],["archer","Archer Weapons"],["mage","Mage Weapons"],["armor","Armor"],["items","Items"],["effects","Effects"]].map(([key,label])=>`<button class="index-category ${indexCategory===key?"active":""}" data-index-category="${key}">${label}</button>`).join("")}</nav><div class="index-content" id="index-content">${renderIndexCategory()}</div></div></section>`;
   }
@@ -1045,6 +1143,9 @@ function showModal(){
   screen.querySelectorAll("[data-buy]").forEach(button=>button.addEventListener("click",()=>buyItem(Number(button.dataset.buy))));
   screen.querySelectorAll("[data-sell-type]").forEach(button=>button.addEventListener("click",()=>sellItem(button.dataset.sellType,Number(button.dataset.sellIndex))));
   screen.querySelectorAll("[data-index-category]").forEach(button=>button.addEventListener("click",()=>{indexCategory=button.dataset.indexCategory;selectedIndexItem=null;screen.querySelectorAll("[data-index-category]").forEach(category=>category.classList.toggle("active",category===button));screen.querySelector("#index-content").innerHTML=renderIndexCategory();bindIndexItems();}));
+  screen.querySelectorAll("[data-leaderboard-difficulty]").forEach(button=>button.addEventListener("click",()=>refreshGlobalLeaderboard(button.dataset.leaderboardDifficulty)));
+  screen.querySelector("[data-leaderboard-retry]")?.addEventListener("click",()=>refreshGlobalLeaderboard(leaderboardDifficulty));
+  if(modal==="leaderboard") refreshGlobalLeaderboard(leaderboardDifficulty);
   bindIndexItems();
   screen.querySelector("[data-reroll]")?.addEventListener("click",rerollShop);
   screen.querySelector("[data-upgrade-shop]")?.addEventListener("click",upgradeShopLoot);

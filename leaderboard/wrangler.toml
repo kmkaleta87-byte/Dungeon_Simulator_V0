@@ -1,0 +1,11 @@
+name = "dungeon-simulation-leaderboard"
+main = "worker.js"
+compatibility_date = "2026-10-15"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dungeon-simulation-leaderboard"
+database_id = "8bf4e631-36ae-46d4-b8b7-37bc2ae73429"
+
+[vars]
+ALLOWED_ORIGINS = "https://kmkaleta87-byte.github.io"
