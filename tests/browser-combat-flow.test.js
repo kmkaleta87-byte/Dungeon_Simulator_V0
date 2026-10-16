@@ -8,6 +8,7 @@ function loadBrowserGame(leaderboardApi = "") {
   const button = { hidden: false, addEventListener: () => {} };
   const storage = new Map();
   const context = {
+    testScreen: screen,
     document: { querySelector: selector => selector === "#game-screen" ? screen : button },
     window: { LEADERBOARD_API: leaderboardApi },
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
@@ -345,4 +346,58 @@ test("cleared enemy rooms use the same map tile as empty rooms", () => {
   const context = loadBrowserGame();
   assert.equal(vm.runInContext("mapRoomImage({type:'enemy', cleared:true})", context), "Images/Rooms/empty-room.png");
   assert.equal(vm.runInContext("mapRoomImage({type:'enemy', cleared:false})", context), "Images/Rooms/enemy-room.png");
+});
+
+test("generated floors retain one boss and place the guaranteed shop outside its path cell", () => {
+  const context = loadBrowserGame();
+  for (let floor = 1; floor <= 30; floor++) {
+    vm.runInContext(`state={floor:${floor},difficulty:'normal'}; var generatedFloor=makeFloor(${floor});`, context);
+    assert.equal(vm.runInContext("generatedFloor.rooms.filter(room=>room.type==='boss').length", context), 1, `floor ${floor}`);
+    assert.equal(vm.runInContext("generatedFloor.rooms.filter(room=>room.type==='shop').length", context), 1, `floor ${floor}`);
+    assert.ok(vm.runInContext("generatedFloor.rooms.find(room=>room.type==='boss').connections.length", context));
+  }
+});
+
+test("all combat damage sources clamp and remove a target killed by an elemental Sundering effect", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun('Tester'); chooseClass('warrior');
+    const primary={name:'Primary',hp:100,maxHp:100,effects:{},damage:1,intent:{key:'guard'}};
+    const chained={name:'Chained',hp:3,maxHp:3,effects:{},damage:1,intent:{key:'guard'}};
+    state.weapon.effect='Shock'; state.combat={boss:false,enemies:[primary,chained],damageDealt:0,damageTaken:0,summonedCount:0};
+    applyWeaponEffect(primary,'Shock',20,true);
+  `, context);
+  assert.equal(vm.runInContext("state.combat.enemies[1].hp", context), 0);
+  assert.equal(vm.runInContext("state.combat.damageDealt", context), 3);
+  assert.match(vm.runInContext("state.log[0].text", context), /Chained falls/);
+});
+
+test("inventory category survives armor and item actions that rerender the modal", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`newRun('Tester'); chooseClass('warrior'); state.items=[{name:'Test Potion',type:'health',amount:10,rarity:'Common',quantity:1}]; inventoryCategory='items'; modal='inventory';`, context);
+  vm.runInContext("sellItem('item',0,'inventory')", context);
+  assert.equal(vm.runInContext("inventoryCategory", context), 'items');
+  assert.match(vm.runInContext("renderInventoryItems(inventoryCategory)", context), /No items in your pack/);
+  vm.runInContext(`state.armor.push({name:'Test Boots',slot:'feet',rarity:'Common',defense:1,damageReduction:0,healthBonus:0}); inventoryCategory='armor';`, context);
+  vm.runInContext("equipArmor(0)", context);
+  assert.equal(vm.runInContext("inventoryCategory", context), 'armor');
+});
+
+test("equipping successive armor pieces updates the list in place and preserves its scroll offset", () => {
+  const context = loadBrowserGame();
+  const inventoryList = { scrollTop: 684, scrollLeft: 0, innerHTML: "" };
+  context.testScreen.querySelector = selector => selector === "#inventory-list" ? inventoryList : null;
+  vm.runInContext(`
+    newRun('Tester'); chooseClass('warrior');
+    state.armor=[
+      {name:'Iron Helm',slot:'head',rarity:'Common',defense:1,damageReduction:0,healthBonus:0},
+      {name:'Iron Chest',slot:'chest',rarity:'Common',defense:1,damageReduction:0,healthBonus:0},
+      {name:'Iron Boots',slot:'feet',rarity:'Common',defense:1,damageReduction:0,healthBonus:0}
+    ];
+    inventoryCategory='armor';modal='inventory';
+    equipArmor(0);equipArmor(1);equipArmor(2);
+  `, context);
+  assert.equal(inventoryList.scrollTop, 684);
+  assert.equal(vm.runInContext("inventoryCategory", context), "armor");
+  assert.equal(vm.runInContext("Object.keys(state.equippedArmor).length", context), 3);
 });

@@ -1,0 +1,6 @@
+This game started as a basic coding project to get a basic combat system where a player enters a command and does damage to an enemy. It was never supposed to get this big but I enjoyed adding stuff and one system after another popped into my head. I cant testify as to the joy brought from this game, but I hope you enjoy it!
+
+It is fully open source on GitHub if anybody ever sees this or knows what that means
+
+Full disclosure: There is AI art, and my good friend codex did ALL of the front end, and a lot of file management/debugging for me, but I did do like 80-95% of the backend, depending how you look at it. I will be learning HTML and probably some CSS in the future, but I currently only know Java (from APCSA, so barely anything) and C#, which I am solidly confident in. Any feedback would be appreciated @ kmkaleta87@gmail.com, and please don't hack my game >:(
+thanks! I hope you enjoy

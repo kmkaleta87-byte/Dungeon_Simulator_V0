@@ -34,6 +34,23 @@ a { color: inherit; }
 .nav-status { padding-left:1rem; border-left:1px solid var(--line-dark); color:var(--muted); }
 
 main { max-width:1500px; margin:0 auto; }
+.site-section { padding:3rem max(1.5rem,8vw); border-bottom:1px solid var(--line); }
+.section-heading { display:flex; align-items:baseline; gap:1rem; margin-bottom:1.4rem; border-bottom:1px solid var(--line-dark); }
+.section-heading .eyebrow { margin:0 0 .6rem; }
+.section-heading h2 { margin:0 0 .65rem; font:1.75rem var(--display); }
+.patch-layout { display:grid; grid-template-columns:minmax(10rem,.3fr) minmax(0,1fr); gap:2rem; }
+.patch-list { display:grid; align-content:start; border-top:1px solid var(--line); }
+.patch-link { display:flex; justify-content:space-between; gap:.6rem; padding:.8rem .2rem; border:0; border-bottom:1px solid var(--line); background:transparent; cursor:pointer; text-align:left; font-weight:650; }
+.patch-link span { color:var(--muted); font-size:.65rem; font-weight:400; }
+.patch-link.active { padding-left:.65rem; border-left:3px solid var(--green); }
+.patch-content { min-height:10rem; padding:.2rem 0; }
+.patch-content h3 { margin:0 0 .3rem; font:1.35rem var(--display); }
+.patch-date { margin:.2rem 0 1rem; color:var(--muted); font-size:.68rem; }
+.patch-content h4 { margin:1rem 0 .4rem; font-size:.77rem; }
+.patch-content ul { display:grid; gap:.45rem; padding-left:1.1rem; color:#45483f; font-size:.78rem; line-height:1.55; }
+.about-copy { max-width:55rem; min-height:3rem; color:#45483f; font-size:.86rem; line-height:1.8; }
+.about-copy p { margin:.4rem 0 .9rem; }
+.about-copy .about-placeholder { color:var(--muted); font-style:italic; }
 .game-shell { padding:2.2rem max(1.5rem,5vw) 2rem; background:var(--paper-light); border-bottom:1px solid var(--line); }
 .game-topbar { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding-bottom:1.2rem; border-bottom:1px solid var(--line); }
 .game-topbar-actions { display:flex; align-items:center; gap:1rem; }
@@ -284,6 +301,9 @@ button.index-entry:hover { background:#e2e5d9; }
 :focus-visible { outline:2px solid var(--green); outline-offset:3px; }
 
 @media(max-width:850px){
+  .patch-layout { grid-template-columns:1fr; gap:1rem; }
+  .patch-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .patch-link { flex-direction:column; gap:.2rem; }
   .game-shell { padding-right:1.25rem; padding-left:1.25rem; }
   .game-layout { grid-template-columns:1fr; gap:1.4rem; }
   .player-panel { display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:.8rem 1.2rem; }

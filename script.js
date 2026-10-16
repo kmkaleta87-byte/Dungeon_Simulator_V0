@@ -70,6 +70,7 @@ let modal = null;
 let indexCategory = "warrior";
 let selectedIndexItem = null;
 let inventoryWeaponFamily = "warrior";
+let inventoryCategory = "weapons";
 let weaponSort = { key: "rarity", direction: "desc" };
 let leaderboardDifficulty = "normal";
 let leaderboardEntries = [];
@@ -353,21 +354,17 @@ function makeFloor(floor) {
   const rooms = [];
   const start = makeRoom(DUNGEON_RULES.entryRoomType(floor), 3, 6, "r0");
   rooms.push(start);
-  let current = start;
   const path = [start];
   const occupied = new Set([`${start.x},${start.y}`]);
-  for (let i = 1; i < 9; i++) {
-    const options = [];
-    for (const [dx, dy, direction] of [[0, -1, "north"], [1, 0, "east"], [0, 1, "south"], [-1, 0, "west"]]) {
-      const x = current.x + dx, y = current.y + dy;
-      if (x >= 0 && x < width && y >= 0 && y < height && !occupied.has(`${x},${y}`)) options.push({ x, y, direction });
-    }
-    if (!options.length) break;
-    const next = choice(options);
-    const room = makeRoom(i === 8 ? "boss" : "enemy", next.x, next.y, `r${i}`);
-    current.connections.push({ id: room.id, direction: next.direction });
-    room.connections.push({ id: current.id, direction: ({ north: "south", south: "north", east: "west", west: "east" })[next.direction] });
-    rooms.push(room); path.push(room); occupied.add(`${room.x},${room.y}`); current = room;
+  const route = [[3,5],[2,5],[2,4],[3,4],[4,4],[4,3],[3,3],[3,2],[3,1]];
+  for (let i = 1; i <= route.length; i++) {
+    const [x,y]=route[i-1];
+    const previous=path[path.length-1];
+    const direction=x>previous.x?"east":x<previous.x?"west":y>previous.y?"south":"north";
+    const room=makeRoom(i===route.length?"boss":"enemy",x,y,`r${i}`);
+    previous.connections.push({id:room.id,direction});
+    room.connections.push({id:previous.id,direction:({north:"south",south:"north",east:"west",west:"east"})[direction]});
+    rooms.push(room);path.push(room);occupied.add(`${x},${y}`);
   }
   const extras = Math.min(4, Math.floor(floor / 2) + 1);
   for (let i = 0; i < extras; i++) {
@@ -633,6 +630,7 @@ function captureModalView(){
   if(!element)return null;
   return {
     title:element.getAttribute("aria-labelledby"),
+    inventoryCategory:element.getAttribute("aria-labelledby")==="inventory-title"?inventoryCategory:null,
     scroll:[".modal",".shop-list",".sell-list","#inventory-list"].map(selector=>({selector,top:screen.querySelector(selector)?.scrollTop||0,left:screen.querySelector(selector)?.scrollLeft||0})),
     details:[...element.querySelectorAll("details")].map(detail=>detail.open)
   };
@@ -642,8 +640,17 @@ function restoreModalView(view){
   if(!view)return;
   const element=screen.querySelector(".modal");
   if(!element||element.getAttribute("aria-labelledby")!==view.title)return;
+  if(view.inventoryCategory){
+    inventoryCategory=view.inventoryCategory;
+    element.querySelectorAll("[data-tab]").forEach(tab=>tab.classList.toggle("active",tab.dataset.tab===inventoryCategory));
+    const list=element.querySelector("#inventory-list");
+    if(list)list.innerHTML=renderInventoryItems(inventoryCategory);
+    bindInventoryListActions();bindUseItem();bindInventoryControls();
+  }
   [...element.querySelectorAll("details")].forEach((detail,index)=>{if(view.details[index]!==undefined)detail.open=view.details[index];});
-  for(const saved of view.scroll){const current=screen.querySelector(saved.selector);if(current){current.scrollTop=saved.top;current.scrollLeft=saved.left;}}
+  const restoreScroll=()=>{for(const saved of view.scroll){const current=screen.querySelector(saved.selector);if(current){current.scrollTop=saved.top;current.scrollLeft=saved.left;}}};
+  restoreScroll();
+  if(view.inventoryCategory&&typeof requestAnimationFrame==="function")requestAnimationFrame(restoreScroll);
 }
 
 function render() {
@@ -925,9 +932,7 @@ function combatAction(action) {
     if(target.effects?.Marked)damage=Math.round(damage*1.2);
     if(["Execution","ExecutionBolt"].includes(special?.effect)||["Execution","ExecutionBolt"].includes(weapon.effect))if(target.hp/target.maxHp<=0.3)damage=Math.round(damage*1.5);
     const isCrit=Math.random()<crit;if(isCrit)damage*=2;
-    const dealt=Math.min(target.hp,damage);
-    target.hp=Math.max(0,target.hp-damage);
-    state.combat.damageDealt+=dealt;state.runStats.damageDealt+=dealt;
+    const dealt=applyEnemyDamage(target,damage,`${attack.name} hits ${target.name}${isCrit?" critically":""}`);
     const applied=special?.effect||weapon.effect;
     if(weapon.effect==="Thorns")state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Thorns",damage);
     else if(weapon.effect)applyWeaponEffect(target,weapon.effect,damage,!special?.aoe);
@@ -938,9 +943,8 @@ function combatAction(action) {
     if(weapon.effect==="ArcaneCharge")state.arcaneCharge=Math.min(5,(state.arcaneCharge||0)+1);
     if(weapon.effect==="Momentum")state.momentum=Math.min(5,(state.momentum||0)+1);
     if(weapon.effect==="Afterimage"||weapon.effect==="Teleport")state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Afterimage",damage);
-    if(["SpellEcho","Conjure"].includes(weapon.effect)&&target.hp>0){const echo=Math.max(1,Math.round(damage*(weapon.effect==="Conjure"?0.2:0.3)));const dealt=Math.min(target.hp,echo);target.hp=Math.max(0,target.hp-echo);state.combat.damageDealt+=dealt;state.runStats.damageDealt+=dealt;message(`${weapon.effect==="Conjure"?"Conjured wisp":"Spell Echo"} adds ${echo} damage.`);}
-  message(`${attack.name} hits ${target.name} for ${damage}${isCrit?" critical":""} damage${matchup.relation!=="neutral"?` · elemental ${matchup.relation}`:""}${applied?` · ${applied}`:""}.`,target.hp===0?"story":"");
-    if(target.hp===0)message(`${target.name} falls.`,"story");
+    if(["SpellEcho","Conjure"].includes(weapon.effect)&&target.hp>0){const echo=Math.max(1,Math.round(damage*(weapon.effect==="Conjure"?0.2:0.3)));applyEnemyDamage(target,echo,`${weapon.effect==="Conjure"?"Conjured wisp":"Spell Echo"} adds damage to ${target.name}`);}
+    if(applied)message(`Effect applied: ${applied}${matchup.relation!=="neutral"?` · elemental ${matchup.relation}`:""}.`);
   }
   if(landed&&weapon.effect==="AmmoGeneration"&&Math.random()<0.2){state.arrows=Math.min(30,(state.arrows||0)+1);message("Ammo Generation recovers 1 arrow.");}
   if(landed&&weapon.effect==="Quiver"&&Math.random()<0.25){state.arrows=Math.min(30,(state.arrows||0)+2);message("Quiver recovers 2 arrows.");}
@@ -1003,18 +1007,25 @@ function applyWeaponEffect(enemy,effect,damage,allowChain=true){
   enemy.effects ||= {};
   enemy.effects=DUNGEON_RULES.applyCombatEffect(enemy.effects,effect,damage);
   if(allowChain&&["Shock","Chain","Ricochet","RicochetShot","PiercingShot"].includes(effect)){
-    const other=state.combat.enemies.find(item=>item!==enemy&&item.hp>0);if(other){const arc=Math.max(1,Math.round(damage*0.35));const dealt=Math.min(other.hp,arc);other.hp=Math.max(0,other.hp-arc);state.combat.damageDealt+=dealt;state.runStats.damageDealt+=dealt;message(`${effect} arcs to ${other.name} for ${arc} damage.`);}
+    const other=state.combat.enemies.find(item=>item!==enemy&&item.hp>0);if(other){const arc=Math.max(1,Math.round(damage*0.35));applyEnemyDamage(other,arc,`${effect} arcs to ${other.name}`);}
   }
   if(allowChain&&["Scatter","Multishot","Volley","Salvo","SpellRadius","SpellSplit"].includes(effect)){
-    const other=state.combat.enemies.find(item=>item!==enemy&&item.hp>0);if(other){const splash=Math.max(1,Math.round(damage*0.35));const dealt=Math.min(other.hp,splash);other.hp=Math.max(0,other.hp-splash);state.combat.damageDealt+=dealt;state.runStats.damageDealt+=dealt;message(`${effect} splashes ${other.name} for ${splash} damage.`);}
+    const other=state.combat.enemies.find(item=>item!==enemy&&item.hp>0);if(other){const splash=Math.max(1,Math.round(damage*0.35));applyEnemyDamage(other,splash,`${effect} splashes ${other.name}`);}
   }
 }
 
 function processEnemyEffects(enemy){
-  const tick=DUNGEON_RULES.tickCombatEffects(enemy.effects||{},{damageOnly:true});enemy.effects=tick.statuses;const dealt=Math.min(enemy.hp,tick.damage);enemy.hp=Math.max(0,enemy.hp-tick.damage);
-  state.combat.damageDealt+=dealt;state.runStats.damageDealt+=dealt;
-  for(const entry of tick.messages)message(`${entry.effect} deals ${entry.damage} damage to ${enemy.name}.`,"danger");
-  if(enemy.hp<=0)message(`${enemy.name} falls to its wounds.`,"story");
+  const tick=DUNGEON_RULES.tickCombatEffects(enemy.effects||{},{damageOnly:true});enemy.effects=tick.statuses;
+  for(const entry of tick.messages){applyEnemyDamage(enemy,entry.damage,`${entry.effect} damages ${enemy.name}`,"danger");if(!state.combat)return;}
+}
+
+function applyEnemyDamage(enemy,amount,description,tone=""){
+  if(!enemy||enemy.hp<=0)return 0;
+  const dealt=Math.min(enemy.hp,Math.max(0,Math.round(amount)));
+  enemy.hp=Math.max(0,enemy.hp-dealt);
+  if(state.combat){state.combat.damageDealt=(state.combat.damageDealt||0)+dealt;state.runStats.damageDealt=(state.runStats.damageDealt||0)+dealt;}
+  message(`${description} for ${dealt} damage${enemy.hp===0?`; ${enemy.name} falls`:""}.`,enemy.hp===0?"story":tone);
+  return dealt;
 }
 
 function effectiveDexterity(){return Math.max(1,effectiveStat("dex")+DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).dexterity-(state.class==="archer"&&state.equippedArmor?.shield?3:0));}
@@ -1106,11 +1117,21 @@ function die(){state.hp=0;state.braced=false;state.activeDefense=null;if(state.c
 function openInventory(){
   state.inventoryNotice=false;
   inventoryWeaponFamily=state.class||"warrior";
+  inventoryCategory="weapons";
   save();
   modal="inventory";render();
 }
 function equipWeapon(index){const weapon=state.weapons[index];if(!weapon)return;const family=weaponFamily(weapon);if(!family||family!==state.chosenClass){message(`Your ${CLASS_NAMES[state.chosenClass]||"chosen"} class cannot equip that weapon.`);modal="inventory";render();return;}state.weapon=weapon;state.class=state.chosenClass;weapon.attacks ||= DUNGEON_RULES.createWeaponAttacks(family,weapon.rarity,weapon.type,weapon.element||"Physical",weapon.manaCost||0);message(`${weapon.name} equipped.`);modal="inventory";render();}
-function equipArmor(index){const armor=state.armor[index];if(!armor)return;state.equippedArmor=DUNGEON_RULES.equipArmor(state.equippedArmor||{},armor);updateArmorBonuses();message(`${armor.name} equipped in the ${armor.slot} slot.`);modal="inventory";render();}
+function equipArmor(index){const armor=state.armor[index];if(!armor)return;const list=screen.querySelector("#inventory-list");const scrollTop=list?.scrollTop||0;const scrollLeft=list?.scrollLeft||0;state.equippedArmor=DUNGEON_RULES.equipArmor(state.equippedArmor||{},armor);updateArmorBonuses();message(`${armor.name} equipped in the ${armor.slot} slot.`);modal="inventory";if(modal==="inventory"&&list){list.innerHTML=renderInventoryItems("armor");bindInventoryListActions();bindUseItem();bindInventoryControls();list.scrollTop=scrollTop;list.scrollLeft=scrollLeft;updateInventoryEquipmentSummary();save();}else render();}
+
+function updateInventoryEquipmentSummary(){
+  const modalElement=screen.querySelector(".modal[aria-labelledby='inventory-title']");
+  if(!modalElement)return;
+  const slots=modalElement.querySelector(".equipped-slots");
+  if(slots)slots.innerHTML=["head","chest","legs","feet","shield"].map(slot=>`<div><span>${slot}</span><strong>${escapeHtml(state.equippedArmor[slot]?.name||"Empty")}</strong></div>`).join("");
+  const summary=modalElement.querySelector(".armor-set-summary");
+  if(summary)summary.textContent=armorSummaryText();
+}
 function showModal(){
   const old=screen.querySelector(".modal-backdrop");if(old)old.remove();
   let content="";
@@ -1134,7 +1155,7 @@ function showModal(){
   screen.insertAdjacentHTML("beforeend",`<div class="modal-backdrop">${content}</div>`);
   bindArtFallbacks();
   screen.querySelector("[data-close-modal]")?.addEventListener("click",()=>{modal=null;render();});
-  screen.querySelectorAll("[data-tab]").forEach(button=>button.addEventListener("click",()=>{screen.querySelectorAll("[data-tab]").forEach(tab=>tab.classList.toggle("active",tab===button));screen.querySelector("#inventory-list").innerHTML=renderInventoryItems(button.dataset.tab);bindInventoryListActions();bindUseItem();bindInventoryControls();}));
+  screen.querySelectorAll("[data-tab]").forEach(button=>button.addEventListener("click",()=>{inventoryCategory=button.dataset.tab;screen.querySelectorAll("[data-tab]").forEach(tab=>tab.classList.toggle("active",tab===button));screen.querySelector("#inventory-list").innerHTML=renderInventoryItems(inventoryCategory);bindInventoryListActions();bindUseItem();bindInventoryControls();}));
   bindInventoryListActions();
   screen.querySelectorAll("[data-open-skills]").forEach(button=>button.addEventListener("click",openSkills));
   screen.querySelectorAll("[data-spend-stat]").forEach(button=>button.addEventListener("click",()=>spendSkillPoint(button.dataset.spendStat)));
@@ -1301,3 +1322,23 @@ screen.addEventListener("click",event=>{
   if(event.target.closest("[data-next-floor]"))advanceFloor();
 });
 startScreen();
+
+function renderPatchNotes(version){
+  const patch=window.GAME_PATCH_NOTES?.[version];
+  const target=document.querySelector("#patch-content");
+  if(!patch||!target)return;
+  target.innerHTML=`<h3>${escapeHtml(patch.title)}</h3><p class="patch-date">${escapeHtml(patch.subtitle)}</p>${patch.sections.map(section=>`<section><h4>${escapeHtml(section.heading)}</h4><ul>${section.items.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`).join("")}`;
+  document.querySelectorAll("[data-patch]").forEach(button=>{const active=button.dataset.patch===version;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","true");else button.removeAttribute("aria-current");});
+}
+
+document.querySelectorAll?.("[data-patch]").forEach(button=>button.addEventListener("click",()=>renderPatchNotes(button.dataset.patch)));
+renderPatchNotes("v0-patch-1");
+if(typeof fetch==="function")fetch("about.txt").then(response=>{if(!response.ok)throw new Error("About text unavailable");return response.text();}).then(text=>{
+  const target=document.querySelector("#about-copy");
+  if(!target)return;
+  const paragraphs=text.trim().split(/\r?\n\s*\r?\n/).map(value=>value.trim()).filter(Boolean);
+  target.innerHTML=paragraphs.length?paragraphs.map(value=>`<p>${escapeHtml(value).replace(/\r?\n/g,"<br>")}</p>`).join(""):`<p class="about-placeholder">Add your introduction to about.txt.</p>`;
+}).catch(()=>{
+  const target=document.querySelector("#about-copy");
+  if(target)target.innerHTML='<p class="about-placeholder">Add your introduction to about.txt.</p>';
+});

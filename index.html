@@ -10,6 +10,7 @@
   <script src="game-index-data.js"></script>
   <script src="game-rules.js"></script>
   <script src="leaderboard-config.js"></script>
+  <script src="patch-notes.js"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -17,6 +18,8 @@
     <a class="wordmark" href="#top">Dungeon <span>Simulation</span></a>
     <nav class="site-nav" aria-label="Main navigation">
       <a href="#game">Play</a>
+      <a href="#patch-notes">Patch Notes</a>
+      <a href="#about">About</a>
     </nav>
   </header>
 
@@ -31,6 +34,19 @@
         </div>
       </div>
       <div id="game-screen" aria-live="polite"></div>
+    </section>
+
+    <section class="site-section" id="patch-notes" aria-labelledby="patch-title">
+      <div class="section-heading"><p class="eyebrow">Development history</p><h2 id="patch-title">Patch Notes</h2></div>
+      <div class="patch-layout"><nav class="patch-list" aria-label="Game versions">
+        <button class="patch-link active" type="button" data-patch="v0" aria-current="true">V0 <span>Release</span></button>
+        <button class="patch-link" type="button" data-patch="v0-patch-1">V0 Patch 1 <span>Current</span></button>
+      </nav><article class="patch-content" id="patch-content" aria-live="polite"></article></div>
+    </section>
+
+    <section class="site-section about-section" id="about" aria-labelledby="about-title">
+      <div class="section-heading"><p class="eyebrow">Creator's note</p><h2 id="about-title">About</h2></div>
+      <article class="about-copy" id="about-copy" aria-live="polite"><p>Loading…</p></article>
     </section>
 
   </main>
