@@ -19,5 +19,16 @@ window.GAME_PATCH_NOTES = {
         "Combat damage sources now consistently remove defeated enemies, including Sundering Strike effects and chained damage."
       ] }
     ]
+  },
+  "v0-patch-2": {
+    title: "V0 Patch 2",
+    subtitle: "Class balance and resource fixes",
+    sections: [
+      { heading: "Balance", items: [
+        "Tweaked mana consumption and drop rates to prevent Mage soft locking.",
+        "Weapon drops now favor your chosen class, while Warriors find mana potions less often.",
+        "Archer attacks restore small amounts of mana on a successful hit."
+      ] }
+    ]
   }
 };

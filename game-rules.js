@@ -146,7 +146,7 @@
       speed: entry.type === "Dagger" || entry.type === "Bow" ? 12 : entry.type === "Crossbow" ? 9 : 10,
       element: entry.element, effect: entry.effect, description: entry.description,
       arrows: ranged ? (entry.type === "Bow" ? 14 : 18) : 0,
-      manaCost: family === "mage" ? Math.max(1, 4 + floor) : 0
+      manaCost: family === "mage" ? Math.max(1, 3 + Math.floor((floor - 1) / 3)) : 0
     };
     weapon.attacks = createWeaponAttacks(family, entry.rarity, entry.type, entry.element, weapon.manaCost);
     return weapon;
@@ -157,7 +157,7 @@
     if (tier <= 0) return [];
     const attack = (name, command, description, multiplier, critBonus, cooldown, effect, options = {}) => ({
       name, command, description, multiplier, critBonus, cooldown, effect,
-      manaCost: options.manaCost || 0, chargesNextAttack: Boolean(options.chargesNextAttack),
+      manaCost: options.manaCost || 0, manaGain: options.manaGain || 0, chargesNextAttack: Boolean(options.chargesNextAttack),
       aoe: Boolean(options.aoe), secondaryMultiplier: options.secondaryMultiplier ?? 0.0
     });
 
@@ -172,11 +172,11 @@
     }
     if (family === "archer") {
       const attacks = [attack("Steady Draw", "steady", "Spend this turn lining up your next shot: +50% damage and +20% crit chance.", 1.5, 0.20, 0, "Focus", { chargesNextAttack: true })];
-      if (tier >= 2) attacks.push(attack("Pinning Shot", "pinshot", "A precise shot that roots the target.", 1.25, 0.15, 1, "Pin"));
-      if (tier >= 3) attacks.push(attack(type === "Bow" ? "Arrowstorm" : "Scatter Volley", type === "Bow" ? "arrowstorm" : "scattervolley", "Strike every enemy; secondary targets take reduced damage.", 1.0, 0.05, 2, type === "Bow" ? "Volley" : "Scatter", { aoe: true, secondaryMultiplier: type === "Bow" ? 0.65 : 0.70 }));
-      if (tier >= 4) attacks.push(attack("Ricochet Barrage", "ricochetbarrage", "A powerful shot ricochets through the enemy group.", 1.45, 0.10, 3, "Ricochet", { aoe: true, secondaryMultiplier: 0.80 }));
-      if (tier >= 5) attacks.push(attack("Worldpiercer", "worldpiercer", "A focused shot with execution pressure.", 2.0, 0.15, 4, "ExecutionBolt"));
-      if (tier >= 6) attacks.push(attack("Celestial Barrage", "celestialbarrage", `Call down ${element} arrows over every foe.`, 2.5, 0.25, 5, elementEffect(element), { aoe: true, secondaryMultiplier: 1.5 }));
+      if (tier >= 2) attacks.push(attack("Pinning Shot", "pinshot", "A precise shot that roots the target and restores 1 mana on hit.", 1.25, 0.15, 1, "Pin", { manaGain: 1 }));
+      if (tier >= 3) attacks.push(attack(type === "Bow" ? "Arrowstorm" : "Scatter Volley", type === "Bow" ? "arrowstorm" : "scattervolley", "Strike every enemy; secondary targets take reduced damage and restore 2 mana on a successful volley.", 1.0, 0.05, 2, type === "Bow" ? "Volley" : "Scatter", { aoe: true, secondaryMultiplier: type === "Bow" ? 0.65 : 0.70, manaGain: 2 }));
+      if (tier >= 4) attacks.push(attack("Ricochet Barrage", "ricochetbarrage", "A powerful shot ricochets through the enemy group and restores 2 mana on hit.", 1.45, 0.10, 3, "Ricochet", { aoe: true, secondaryMultiplier: 0.80, manaGain: 2 }));
+      if (tier >= 5) attacks.push(attack("Worldpiercer", "worldpiercer", "A focused shot with execution pressure that restores 2 mana on hit.", 2.0, 0.15, 4, "ExecutionBolt", { manaGain: 2 }));
+      if (tier >= 6) attacks.push(attack("Celestial Barrage", "celestialbarrage", `Call down ${element} arrows over every foe; the impact restores 3 mana.`, 2.5, 0.25, 5, elementEffect(element), { aoe: true, secondaryMultiplier: 1.5, manaGain: 3 }));
       return attacks;
     }
     const attacks = [attack("Arcane Channel", "channel", "Channel energy to empower your next basic spell.", 1.5, 0.15, 0, "SpellPower", { chargesNextAttack: true, manaCost: baseManaCost })];
@@ -313,6 +313,7 @@
       criticalDamage: primaryDamage * 2,
       critChance,
       manaCost: (attack.manaCost || (playerClass === "mage" ? weapon.manaCost || 5 : 0)) + (effect === "Overcast" && playerClass === "mage" ? 2 : 0),
+      manaGain: Math.max(0, Number(attack.manaGain) || 0),
       ammoCost: ["Bow", "Crossbow"].includes(weapon.type) && !attack.chargesNextAttack ? (effect === "Overdraw" || attack.overdraw ? 2 : 1) : 0,
       cooldown: Math.max(0, (attack.cooldown || 0) - (effect === "CooldownReduction" && attack.cooldown ? 1 : 0)),
       targetCount: attack.aoe ? Math.max(1, targetCount) : 1,
@@ -354,16 +355,31 @@
     return "Divine";
   }
 
-  function rollWeaponFamily(random = Math.random) {
+  function rollWeaponFamily(random = Math.random, preferredFamily = null) {
     const roll = random();
+    if (["warrior", "archer", "mage"].includes(preferredFamily)) {
+      if (roll < 0.75) return preferredFamily;
+      const alternatives = ["warrior", "archer", "mage"].filter(family => family !== preferredFamily);
+      const weights = { warrior: 63, archer: 28, mage: 9 };
+      const firstChance = weights[alternatives[0]] / (weights[alternatives[0]] + weights[alternatives[1]]);
+      return roll < 0.75 + 0.25 * firstChance ? alternatives[0] : alternatives[1];
+    }
     return roll < 0.63 ? "warrior" : roll < 0.91 ? "archer" : "mage";
   }
 
-  function rollLootKind(random = Math.random) {
+  function rollLootKind(random = Math.random, playerClass = null) {
     const roll = random();
+    if (playerClass === "mage") return roll < 0.54 ? "weapon" : roll < 0.80 ? "armor" : "item";
+    if (playerClass === "archer") return roll < 0.58 ? "weapon" : roll < 0.88 ? "armor" : "item";
+    if (playerClass === "warrior") return roll < 0.62 ? "weapon" : roll < 0.93 ? "armor" : "item";
     if (roll < 0.6) return "weapon";
     if (roll < 0.9) return "armor";
     return "item";
+  }
+
+  function rollPotionType(random = Math.random, playerClass = null) {
+    const manaChance = playerClass === "mage" ? 0.72 : playerClass === "archer" ? 0.25 : playerClass === "warrior" ? 0.08 : 0.35;
+    return random() < manaChance ? "mana" : "health";
   }
 
   function rollShopOfferKind(random = Math.random) {
@@ -383,8 +399,8 @@
     return (Number(cooldowns?.[command]) || 0) > 0;
   }
 
-  function basicAttackFallback(playerClass, weaponType, mana, arrows) {
-    if (playerClass === "mage" && (Number(mana) || 0) <= 0) return "mana";
+  function basicAttackFallback(playerClass, weaponType, mana, arrows, manaCost = 5) {
+    if (playerClass === "mage" && (Number(mana) || 0) < Math.max(1, Number(manaCost) || 5)) return "mana";
     if (playerClass === "archer" && ["Bow", "Crossbow"].includes(weaponType) && (Number(arrows) || 0) <= 0) return "arrows";
     return null;
   }
@@ -484,5 +500,5 @@
     return save ? `${save.name || "Adventurer"} · Floor ${save.floor || 1} · Level ${save.level || 1}` : "Empty";
   }
 
-  root.DungeonRules = { STAT_DEFINITIONS, effectiveStat, statSynergy, entryRoomType, spendSkillPoint, chooseCatalogWeapon, createCatalogWeapon, createWeaponAttacks, createCatalogArmor, equipArmor, armorSetBonus, armorDamageReduction, armorBonuses, getEffectDefinition, applyCombatEffect, tickCombatEffects, createAttackPreview, rollLootRarity, rollShopRarity, rollWeaponFamily, rollLootKind, rollShopOfferKind, getSpecialAttack, isAttackOnCooldown, basicAttackFallback, allEnemiesDefeated, avoidDuplicateDivine, elementMatchup, chooseEnemyIntent, hasDisruptibleIntent, canDisrupt, disruptEnemy, consumeDisruptedIntent, tickDisruptCooldown, guardDamage, brace, applyBraceToDamage, createSaveSlots, writeSaveSlot, describeSaveSlot };
+  root.DungeonRules = { STAT_DEFINITIONS, effectiveStat, statSynergy, entryRoomType, spendSkillPoint, chooseCatalogWeapon, createCatalogWeapon, createWeaponAttacks, createCatalogArmor, equipArmor, armorSetBonus, armorDamageReduction, armorBonuses, getEffectDefinition, applyCombatEffect, tickCombatEffects, createAttackPreview, rollLootRarity, rollShopRarity, rollWeaponFamily, rollLootKind, rollPotionType, rollShopOfferKind, getSpecialAttack, isAttackOnCooldown, basicAttackFallback, allEnemiesDefeated, avoidDuplicateDivine, elementMatchup, chooseEnemyIntent, hasDisruptibleIntent, canDisrupt, disruptEnemy, consumeDisruptedIntent, tickDisruptCooldown, guardDamage, brace, applyBraceToDamage, createSaveSlots, writeSaveSlot, describeSaveSlot };
 })(window);

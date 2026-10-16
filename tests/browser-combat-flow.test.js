@@ -416,3 +416,32 @@ test("equipping successive armor pieces updates the list in place and preserves 
   assert.equal(vm.runInContext("inventoryCategory", context), "armor");
   assert.equal(vm.runInContext("Object.keys(state.equippedArmor).length", context), 3);
 });
+
+test("archer basic hits restore mana", () => {
+  const context = loadBrowserGame();
+  context.Math.random = () => 0.5;
+  vm.runInContext(`
+    newRun('Tester');chooseClass('archer');state.mana=0;state.arrows=5;
+    state.combat={boss:false,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[{name:'Target',race:'slime',klass:'Warrior',hp:500,maxHp:500,damage:1,dodge:0,intent:{key:'guard',label:'Guard'}}]};state.target=0;
+    combatAction('basic');
+  `, context);
+  assert.equal(vm.runInContext("state.mana", context), 1);
+  assert.match(vm.runInContext("state.log.map(entry=>entry.text).join(' ')", context), /restores 1 mana/);
+});
+
+test("archer special mana recovery requires a successful hit", () => {
+  const context = loadBrowserGame();
+  context.Math.random = () => 0.99;
+  vm.runInContext(`
+    newRun('Tester');chooseClass('archer');state.mana=0;state.arrows=5;
+    state.weapon.attacks=[{name:'Pinning Shot',command:'pinshot',multiplier:1,cooldown:0,effect:'Pin',manaGain:1}];
+    state.combat={boss:false,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[{name:'Dodger',race:'specter',klass:'Warrior',hp:500,maxHp:500,damage:1,dodge:1,intent:{key:'guard',label:'Guard'}}]};state.target=0;
+    combatAction('pinshot');
+  `, context);
+  assert.equal(vm.runInContext("state.mana", context), 0);
+});
+
+test("Patch 2 describes the Mage resource and drop-rate changes", () => {
+  const source = fs.readFileSync("patch-notes.js", "utf8");
+  assert.match(source, /"v0-patch-2"[\s\S]*?Tweaked mana consumption and drop rates to prevent Mage soft locking/i);
+});

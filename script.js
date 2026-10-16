@@ -545,7 +545,7 @@ function getActions() {
   if (state.combat) {
     const weapon = state.weapon;
     const mageBlocked = state.class === "mage" && state.equippedArmor?.shield;
-    const basicFallback = DUNGEON_RULES.basicAttackFallback(state.class,weapon?.type,state.mana,state.arrows);
+    const basicFallback = DUNGEON_RULES.basicAttackFallback(state.class,weapon?.type,state.mana,state.arrows,(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0));
     const basicLabel = state.class === "mage" ? "Basic spell" : state.class === "archer" ? "Basic shot" : "Basic attack";
     const arrowsOut = ["Bow", "Crossbow"].includes(weapon?.type) && state.arrows < (weapon?.effect==="Overdraw"?2:1) && !basicFallback;
     const manaCost = (weapon?.manaCost || 5) + (weapon?.effect==="Overcast"?2:0);
@@ -556,7 +556,7 @@ function getActions() {
       const preview = attackPreview(attack);
       const disabled = cooldown > 0 || (state.class === "mage" && mageBlocked) || (state.class === "mage" && state.mana < preview.manaCost) || (state.class === "archer" && state.arrows < preview.ammoCost);
       const chargeLabel=attack.chargesNextAttack?`Next hit: ~${preview.primaryDamage} dmg · ${Math.round(preview.critChance*100)}% crit`:`~${preview.primaryDamage} dmg · ${Math.round(preview.critChance*100)}% crit`;
-      return `<button class="action-button special-action" data-attack="${escapeHtml(attack.command)}" ${disabled?"disabled":""}>${escapeHtml(attack.name)}<small>${cooldown?`Cooldown ${cooldown}`:`${chargeLabel}${attack.effect?` · ${effectIcon(attack.effect)}`:""}${attack.aoe?` · ${preview.targetCount} targets`:""}${preview.manaCost?` · ${preview.manaCost} mana`:""}${preview.ammoCost?` · ${preview.ammoCost} arrow`:""}`}</small></button>`;
+      return `<button class="action-button special-action" data-attack="${escapeHtml(attack.command)}" ${disabled?"disabled":""}>${escapeHtml(attack.name)}<small>${cooldown?`Cooldown ${cooldown}`:`${chargeLabel}${attack.effect?` · ${effectIcon(attack.effect)}`:""}${attack.aoe?` · ${preview.targetCount} targets`:""}${preview.manaCost?` · ${preview.manaCost} mana`:""}${preview.ammoCost?` · ${preview.ammoCost} arrow`:""}${preview.manaGain?` · +${preview.manaGain} mana on hit`:""}`}</small></button>`;
     }).join("");
     const selectedEnemy=state.combat.enemies[state.target];
     const disruptable=DUNGEON_RULES.hasDisruptibleIntent(selectedEnemy);
@@ -565,7 +565,7 @@ function getActions() {
     const defenseAction=defense?`<button class="action-button secondary" data-attack="${defense.action}" ${defense.disabled?"disabled":""}>${defense.label}<small>${defense.description}</small></button>`:"";
     const disruptAction=disruptable?`<button class="action-button secondary" data-attack="disrupt" ${!DUNGEON_RULES.canDisrupt(selectedEnemy,disruptCooldown)?"disabled":""}>Disrupt<small>${disruptCooldown?`Cooldown ${disruptCooldown}`:`Cancel ${escapeHtml(selectedEnemy.intent.label)}`}</small></button>`:"";
     const basicDisabled=state.class==="mage"?(mageBlocked||state.mana<manaCost&&!basicFallback):state.class==="archer"?arrowsOut:false;
-    return `<div class="action-grid"><button class="action-button" data-attack="basic" ${basicDisabled?"disabled":""}>${basicFallback?state.class==="mage"?"Staff strike":"Unarmed jab":basicLabel}<small>~${basicPreview.primaryDamage} dmg · ${Math.round(basicPreview.critChance*100)}% crit${basicPreview.effect?` · ${effectIcon(basicPreview.effect)}`:""}${basicFallback?" · No resource needed, reduced damage":state.class==="mage"?` · ${manaCost} mana`:state.class==="archer"?` · ${state.arrows||0} arrows`:" · Always available"}</small></button>${state.class==="warrior"?`<button class="action-button" data-attack="heavy" ${state.cooldown>0?"disabled":""}>Heavy attack<small>${state.cooldown?`Cooldown ${state.cooldown}`:`~${heavyPreview.primaryDamage} dmg · ${Math.round(heavyPreview.critChance*100)}% crit${heavyPreview.effect?` · ${effectIcon(heavyPreview.effect)}`:""} · 2 turn cooldown`}</small></button>`:""}${specials}${disruptAction}${defenseAction}<button class="action-button" data-action="heal">Use health potion</button><button class="action-button" data-action="mana">Use mana potion</button><button class="action-button secondary" data-action="flee">Flee</button></div>`;
+    return `<div class="action-grid"><button class="action-button" data-attack="basic" ${basicDisabled?"disabled":""}>${basicFallback?state.class==="mage"?"Staff strike":"Unarmed jab":basicLabel}<small>~${basicPreview.primaryDamage} dmg · ${Math.round(basicPreview.critChance*100)}% crit${basicPreview.effect?` · ${effectIcon(basicPreview.effect)}`:""}${basicFallback?" · No resource needed, reduced damage":state.class==="mage"?` · ${manaCost} mana`:state.class==="archer"?` · ${state.arrows||0} arrows · +1 mana on hit`:" · Always available"}</small></button>${state.class==="warrior"?`<button class="action-button" data-attack="heavy" ${state.cooldown>0?"disabled":""}>Heavy attack<small>${state.cooldown?`Cooldown ${state.cooldown}`:`~${heavyPreview.primaryDamage} dmg · ${Math.round(heavyPreview.critChance*100)}% crit${heavyPreview.effect?` · ${effectIcon(heavyPreview.effect)}`:""} · 2 turn cooldown`}</small></button>`:""}${specials}${disruptAction}${defenseAction}<button class="action-button" data-action="heal">Use health potion</button><button class="action-button" data-action="mana">Use mana potion</button><button class="action-button secondary" data-action="flee">Flee</button></div>`;
   }
   if (room.type === "boss" && room.cleared) return `<p class="prompt-note">The chamber falls quiet. The stair to the next floor is open.</p><div class="action-grid"><button class="action-button" data-next-floor>Descend to floor ${state.floor + 1}</button></div>`;
   if (room.type === "start") return `<div class="action-grid"><button class="action-button" data-action="inspect-desk">Inspect the desk</button><button class="action-button" data-action="inspect-closet">Inspect the closet</button></div>${state.starter.classOffer && !state.class ? `<div class="class-choice"><p>The desk holds three forgotten weapons. Choose one.</p><div class="action-grid"><button class="action-button" data-class="warrior">Warrior · Sword</button><button class="action-button" data-class="archer">Archer · Bow</button><button class="action-button" data-class="mage">Mage · Staff</button></div></div>` : ""}`;
@@ -692,7 +692,7 @@ function render() {
 function renderCombat(enemies) {
   const attacks = state.weapon?.attacks || [];
   const targetCount = state.combat?.enemies.filter(enemy => enemy.hp > 0).length || 1;
-  const basic = { name: state.class === "mage" ? "Basic spell" : state.class === "archer" ? "Basic shot" : "Basic attack", multiplier: 1, critBonus: 0, cooldown: 0, effect: state.weapon?.effect || null };
+  const basic = { name: state.class === "mage" ? "Basic spell" : state.class === "archer" ? "Basic shot" : "Basic attack", multiplier: 1, critBonus: 0, cooldown: 0, effect: state.weapon?.effect || null, manaGain: state.class === "archer" ? 1 : 0 };
   const listedAttacks = [basic, ...attacks];
   if (state.class === "warrior") listedAttacks.splice(1, 0, { name: "Heavy attack", multiplier: 1.5, critBonus: 0.1, cooldown: 2, effect: null });
   const enemyCards = enemies.map(({ enemy, index }) => {
@@ -705,7 +705,7 @@ function renderCombat(enemies) {
   const attackInfo = state.showWeaponInfo ? `<div class="weapon-attack-info">${listedAttacks.map(attack => {
     const preview = attackPreview(attack, targetCount);
     const matchup = preview.elementRelation === "neutral" ? "" : ` · elemental ${preview.elementRelation}`;
-    return `<article><strong>${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${preview.primaryDamage} damage${attack.aoe ? ` / ${preview.secondaryDamage} secondary · ${preview.targetCount} targets` : ""} · ${Math.round(preview.critChance * 100)}% crit${matchup} · ${preview.cooldown ? `${preview.cooldown} turn cooldown` : "No cooldown"}${preview.effect ? ` · ${escapeHtml(preview.effect)}` : ""}${preview.manaCost ? ` · ${preview.manaCost} mana` : ""}${preview.ammoCost ? ` · ${preview.ammoCost} arrow${preview.ammoCost === 1 ? "" : "s"}` : ""}</small></article>`;
+    return `<article><strong>${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${preview.primaryDamage} damage${attack.aoe ? ` / ${preview.secondaryDamage} secondary · ${preview.targetCount} targets` : ""} · ${Math.round(preview.critChance * 100)}% crit${matchup} · ${preview.cooldown ? `${preview.cooldown} turn cooldown` : "No cooldown"}${preview.effect ? ` · ${escapeHtml(preview.effect)}` : ""}${preview.manaCost ? ` · ${preview.manaCost} mana` : ""}${preview.ammoCost ? ` · ${preview.ammoCost} arrow${preview.ammoCost === 1 ? "" : "s"}` : ""}${preview.manaGain ? ` · restores ${preview.manaGain} mana on hit` : ""}</small></article>`;
   }).join("")}</div>` : "";
   return `<div class="combat-header"><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><div class="enemy-list">${enemyCards}</div>${renderPlayerCombatStatuses()}<div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>Your turn</h3>${getActions()}</div>`;
 }
@@ -900,7 +900,7 @@ function combatAction(action) {
   const special=DUNGEON_RULES.getSpecialAttack(weapon,action);
   const isBasic=action==="basic"||action==="attack";
   const isHeavy=action==="heavy";
-  const basicFallback=isBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon.type,state.mana,state.arrows):null;
+  const basicFallback=isBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon.type,state.mana,state.arrows,(weapon.manaCost||5)+(weapon.effect==="Overcast"?2:0)):null;
   const attack=special|| (isHeavy?{name:"Heavy attack",multiplier:1.5,critBonus:0.10,cooldown:2}:isBasic?{name:basicFallback==="mana"?"Staff strike":basicFallback==="arrows"?"Unarmed jab":"Basic attack",multiplier:basicFallback?0.5:1,critBonus:0,cooldown:0}:null);
   if(!attack){message("That attack is not available for this weapon.");render();return;}
   if(special&&DUNGEON_RULES.isAttackOnCooldown(state.attackCooldowns,action)){message(`${attack.name} is cooling down for ${state.attackCooldowns[action]} turn(s).`);render();return;}
@@ -951,6 +951,8 @@ function combatAction(action) {
     if(["SpellEcho","Conjure"].includes(weapon.effect)&&target.hp>0){const echo=Math.max(1,Math.round(damage*(weapon.effect==="Conjure"?0.2:0.3)));applyEnemyDamage(target,echo,`${weapon.effect==="Conjure"?"Conjured wisp":"Spell Echo"} adds damage to ${target.name}`);}
     if(applied)message(`Effect applied: ${applied}${matchup.relation!=="neutral"?` · elemental ${matchup.relation}`:""}.`);
   }
+  const manaGain=basicFallback?0:Math.max(0,Math.floor(Number(attack.manaGain)||(state.class==="archer"&&isBasic?1:0)));
+  if(landed&&manaGain){const restored=Math.min(manaGain,state.maxMana-state.mana);state.mana+=restored;if(restored)message(`Your attack restores ${restored} mana.`,"reward");}
   if(landed&&weapon.effect==="AmmoGeneration"&&Math.random()<0.2){state.arrows=Math.min(30,(state.arrows||0)+1);message("Ammo Generation recovers 1 arrow.");}
   if(landed&&weapon.effect==="Quiver"&&Math.random()<0.25){state.arrows=Math.min(30,(state.arrows||0)+2);message("Quiver recovers 2 arrows.");}
   state.chargedAttack=null;
@@ -1081,7 +1083,7 @@ function makeLootWeapon(forcedRarity=null,minimumRarity="Common"){
   if(RARITIES.indexOf(rarity)<RARITIES.indexOf(minimumRarity))rarity=minimumRarity;
   if(state.devMode&&Math.random()<0.6)rarity=choice(RARITIES.slice(2));
   const ownedDivines=[...state.weapons,...state.armor,...state.items].filter(item=>item.rarity==="Divine").map(item=>item.name);
-  let family=DUNGEON_RULES.rollWeaponFamily();
+  let family=DUNGEON_RULES.rollWeaponFamily(Math.random,state.chosenClass||state.class);
   if(rarity==="Divine"&&!GAME_INDEX_DATA.weapons[family].some(entry=>entry.rarity==="Divine"&&!ownedDivines.includes(entry.name))){
     const alternatives=["warrior","archer","mage"].filter(candidate=>GAME_INDEX_DATA.weapons[candidate].some(entry=>entry.rarity==="Divine"&&!ownedDivines.includes(entry.name)));
     if(alternatives.length)family=choice(alternatives);else rarity="Mythic";
@@ -1094,16 +1096,16 @@ function makeLootWeapon(forcedRarity=null,minimumRarity="Common"){
 
 function makeLoot(rarity=null){
   rarity=rarity||DUNGEON_RULES.rollLootRarity(currentRoom().enemyCount||1,Boolean(state.combat?.boss),Math.random());
-  const lootKind=DUNGEON_RULES.rollLootKind();
+  const lootKind=DUNGEON_RULES.rollLootKind(Math.random,state.chosenClass||state.class);
   if(lootKind==="weapon")return{kind:"weapon",value:makeLootWeapon(rarity)};
   if(lootKind==="armor"){
     const available=ARMOR_INDEX.filter(entry=>entry.rarity===rarity&&!(rarity==="Divine"&&[...state.armor,...state.items,...state.weapons].some(item=>item.name===entry.name)));
     const pool=available.length?available:ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");
     return{kind:"armor",value:DUNGEON_RULES.createCatalogArmor(choice(pool),state.floor)};
   }
-  const mana=Math.random()<0.4;
+  const mana=DUNGEON_RULES.rollPotionType(Math.random,state.chosenClass||state.class)==="mana";
   rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===(mana?"mana":"health")));
-  return{kind:"item",value:{name:`${rarity} ${mana?"Mana":"Healing"} Potion`,type:mana?"mana":"health",amount:mana?18+state.floor*3:0,quantity:1,rarity}};
+  return{kind:"item",value:{name:`${rarity} ${mana?"Mana":"Healing"} Potion`,type:mana?"mana":"health",amount:mana?24+state.floor*3:0,quantity:1,rarity}};
 }
 
 function grantLoot(loot){
@@ -1286,7 +1288,7 @@ function shopItem(){
   let rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const kind=DUNGEON_RULES.rollShopOfferKind();
   if(kind==="weapon"){const value=makeLootWeapon(rarity);rarity=value.rarity;return{kind:"weapon",value,price:priceFor(value.goldValue||value.damage*5,rarity)};}
   if(kind==="armor"){let entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);if(rarity==="Divine")entries=entries.filter(entry=>![...state.armor,...state.weapons,...state.items].some(item=>item.name===entry.name));if(!entries.length)entries=ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");const value=DUNGEON_RULES.createCatalogArmor(choice(entries),state.floor);return{kind:"armor",value,price:priceFor(value.goldValue,rarity)};}
-  const type=Math.random()<0.5?"health":"mana";rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===type));const value={name:`${rarity} ${type==="health"?"Health":"Mana"} Potion`,type,amount:30+state.floor*4,quantity:1,rarity};return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};
+  const type=DUNGEON_RULES.rollPotionType(Math.random,state.chosenClass||state.class);rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===type));const value={name:`${rarity} ${type==="health"?"Health":"Mana"} Potion`,type,amount:30+state.floor*4,quantity:1,rarity};return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};
 }
 function priceFor(base,rarity="Common"){const rarityScale=[1,1.35,1.9,2.8,4.5,8,15][Math.max(0,RARITIES.indexOf(rarity))];return Math.max(1,Math.round(base*rarityScale*(DIFFICULTIES[state.difficulty]?.shopCost||1)*(1-Math.max(0,effectiveStat("cha")-10)*0.02)));}
 function shopRerollCost(){return Math.round(30*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
@@ -1337,7 +1339,7 @@ function renderPatchNotes(version){
 }
 
 document.querySelectorAll?.("[data-patch]").forEach(button=>button.addEventListener("click",()=>renderPatchNotes(button.dataset.patch)));
-renderPatchNotes("v0-patch-1");
+renderPatchNotes("v0-patch-2");
 if(typeof fetch==="function")fetch("about.txt").then(response=>{if(!response.ok)throw new Error("About text unavailable");return response.text();}).then(text=>{
   const target=document.querySelector("#about-copy");
   if(!target)return;

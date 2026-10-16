@@ -95,7 +95,9 @@ test("every catalog weapon can be selected for gameplay and receives its family 
 
   assert.equal(rules.createCatalogWeapon(catalog.mage[0], 1).name, catalog.mage[0].name);
   assert.ok(catalog.mage.some(entry => entry.name !== "Cracked Ember Staff"));
-  assert.equal(rules.createCatalogWeapon(catalog.mage[0], 1).manaCost, 5);
+  assert.equal(rules.createCatalogWeapon(catalog.mage[0], 1).manaCost, 3);
+  assert.equal(rules.createCatalogWeapon(catalog.mage[0], 4).manaCost, 4);
+  assert.equal(rules.createCatalogWeapon(catalog.mage[0], 10).manaCost, 6);
   assert.equal(rules.chooseCatalogWeapon("mage", "Divine", catalog, () => 0, [catalog.mage.filter(item => item.rarity === "Divine")[0].name]).name,
     catalog.mage.filter(item => item.rarity === "Divine")[1].name);
 });
@@ -118,6 +120,20 @@ test("weapon drops use the existing weighted class-family pool", () => {
   assert.equal(rules.rollWeaponFamily(() => 0.63), "archer");
   assert.equal(rules.rollWeaponFamily(() => 0.90), "archer");
   assert.equal(rules.rollWeaponFamily(() => 0.91), "mage");
+  assert.equal(rules.rollWeaponFamily(() => 0.5, "mage"), "mage");
+  assert.equal(rules.rollWeaponFamily(() => 0.5, "warrior"), "warrior");
+  assert.notEqual(rules.rollWeaponFamily(() => 0.1, "archer"), "warrior");
+});
+
+test("class-aware loot favors the chosen weapon family and tailors mana potion odds", () => {
+  const rules = loadRules();
+  assert.equal(rules.rollLootKind(() => 0.99, "mage"), "item");
+  assert.equal(rules.rollLootKind(() => 0.99, "warrior"), "item");
+  assert.equal(rules.rollLootKind(() => 0.99, "archer"), "item");
+  assert.equal(rules.rollPotionType(() => 0.5, "mage"), "mana");
+  assert.equal(rules.rollPotionType(() => 0.5, "warrior"), "health");
+  assert.equal(rules.rollPotionType(() => 0.2, "archer"), "mana");
+  assert.equal(rules.rollPotionType(() => 0.3, "archer"), "health");
 });
 
 test("loot favors weapon drops enough that warrior weapons are not starter-only", () => {
@@ -146,6 +162,8 @@ test("basic attacks cannot be shadowed by weapon-special cooldown entries", () =
 test("an exhausted mage or archer retains a weak resource-free attack", () => {
   const rules = loadRules();
   assert.equal(rules.basicAttackFallback("mage", "Staff", 0, 12), "mana");
+  for (const mana of [0, 1, 2, 3, 4]) assert.equal(rules.basicAttackFallback("mage", "Staff", mana, 12, 5), "mana");
+  assert.equal(rules.basicAttackFallback("mage", "Staff", 5, 12, 5), null);
   assert.equal(rules.basicAttackFallback("archer", "Bow", 20, 0), "arrows");
   assert.equal(rules.basicAttackFallback("archer", "Bow", 20, 1), null);
   assert.equal(rules.basicAttackFallback("warrior", "Sword", 0, 0), null);
