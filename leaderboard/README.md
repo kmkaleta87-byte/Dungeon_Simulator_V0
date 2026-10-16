@@ -20,7 +20,7 @@ The game’s difficulty keys are `easy`, `normal`, and `hard` (the UI labels `no
 3. Create the D1 database: `npx wrangler d1 create dungeon-simulation-leaderboard`.
 4. Copy the database ID Wrangler returns into `wrangler.toml`, replacing `REPLACE_WITH_D1_DATABASE_ID`.
 5. Apply the initial schema to the remote database: `npx wrangler d1 execute dungeon-simulation-leaderboard --remote --file=schema.sql`.
-6. Set `ALLOWED_ORIGINS` in `wrangler.toml` to the exact origin serving the game. A GitHub Pages project site generally uses `https://<account>.github.io`; a custom domain should use that domain's origin. Do not include a path or trailing slash.
+6. Set `ALLOWED_ORIGINS` in `wrangler.toml` to the exact origins serving the game. Keep the published site origin (for this project, `https://kmkaleta87-byte.github.io`) and add only the local development origins you use. Do not include a path or trailing slash.
 7. Deploy the Worker from this folder with `npx wrangler deploy`.
 8. Set `window.LEADERBOARD_API` in the repository-root `leaderboard-config.js` to the deployed Worker URL, for example `https://dungeon-simulation-leaderboard.<your-subdomain>.workers.dev`.
 9. Publish the updated GitHub Pages files. Confirm both the Pages origin and Worker URL match the values above.

@@ -155,6 +155,21 @@ test("legacy local leaderboard data is difficulty-filtered and capped at 100", (
   assert.equal(vm.runInContext("loadLeaderboard('normal')[0].floors", context), 105);
 });
 
+test("global leaderboard API difficulty keys are accepted and normalized for display", () => {
+  const context = loadBrowserGame();
+  const apiRows = [
+    {name:"Kiki the Archer",className:"Archer",difficulty:"normal",floors:1,level:5,date:1792117637096},
+    {name:"Easy Player",className:"Warrior",difficulty:"easy",floors:2,level:3,date:100},
+    {name:"Hard Player",className:"Mage",difficulty:"hard",floors:3,level:4,date:200}
+  ];
+  context.testApiRows = apiRows;
+  const normalized = vm.runInContext("validateLeaderboardEntries(testApiRows)", context);
+  assert.deepEqual(Array.from(normalized, row=>row.difficulty), ["hard","easy","normal"]);
+  vm.runInContext(`leaderboardDifficulty="normal";leaderboardStatus="ready";leaderboardEntries=validateLeaderboardEntries(testApiRows).filter(row=>row.difficulty==="normal")`, context);
+  assert.match(vm.runInContext("renderLeaderboard()", context), /Kiki the Archer/);
+  assert.doesNotMatch(vm.runInContext("renderLeaderboard()", context), /No Normal records yet/);
+});
+
 test("personal bests update independently for Easy, Normal, and Hard and reject malformed storage", () => {
   const context = loadBrowserGame();
   const improved = vm.runInContext(`

@@ -115,15 +115,20 @@ function save() {
   } catch { /* Browser storage may be disabled. */ }
 }
 
+function normalizeLeaderboardDifficulty(value) {
+  const normalized=String(value||"").trim().toLowerCase();
+  return LEADERBOARD_DIFFICULTIES.find(key=>key===normalized||DIFFICULTIES[key].label.toLowerCase()===normalized)||null;
+}
+
 function validateLeaderboardEntries(entries) {
   if (!Array.isArray(entries)) return [];
   const allowedClasses = [...Object.values(CLASS_NAMES), "Unchosen"];
-  const allowedDifficulties = Object.values(DIFFICULTIES).map(difficulty => difficulty.label);
   return entries.filter(entry => entry && typeof entry === "object" &&
     typeof entry.name === "string" && Number.isInteger(entry.floors) && entry.floors > 0 && entry.floors <= 100000 &&
     Number.isInteger(entry.level) && entry.level > 0 && entry.level <= 100000 &&
-    allowedClasses.includes(entry.className) && allowedDifficulties.includes(entry.difficulty) &&
+    allowedClasses.includes(entry.className) && normalizeLeaderboardDifficulty(entry.difficulty) !== null &&
     typeof entry.date === "number" && Number.isFinite(entry.date) && entry.name.trim().length > 0 && entry.name.length <= 22)
+    .map(entry=>({...entry,difficulty:normalizeLeaderboardDifficulty(entry.difficulty)}))
     .sort((a, b) => b.floors - a.floors || b.level - a.level || a.date - b.date)
     .slice(0, 100);
 }
