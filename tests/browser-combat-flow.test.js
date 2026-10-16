@@ -72,17 +72,30 @@ test("difficulty scales enemy pressure, XP requirements, and shop prices", () =>
   assert.ok(hardPrice > vm.runInContext("priceFor(100, 'Rare')", context));
 });
 
+test("enemy floor scaling stays flat through floor two and begins on floor three", () => {
+  const context = loadBrowserGame();
+  assert.equal(vm.runInContext("floorEnemyScale(1,1.25)", context), 1);
+  assert.equal(vm.runInContext("floorEnemyScale(2,1.25)", context), 1);
+  assert.equal(vm.runInContext("floorEnemyScale(3,1.25)", context), 1.25);
+  vm.runInContext("newRun('Tester'); state.difficulty='normal'", context);
+  const floorOne = vm.runInContext("makeEnemy(1)", context);
+  const floorTwo = vm.runInContext("makeEnemy(2)", context);
+  const floorThree = vm.runInContext("makeEnemy(3)", context);
+  assert.equal(floorOne.maxHp, floorTwo.maxHp);
+  assert.equal(floorOne.damage, floorTwo.damage);
+  assert.ok(floorThree.maxHp > floorTwo.maxHp);
+  assert.ok(floorThree.damage > floorTwo.damage);
+  assert.ok(floorOne.maxHp < 48, `expected normal floor-one HP below old 48 baseline, got ${floorOne.maxHp}`);
+  assert.ok(floorOne.damage < 14, `expected normal floor-one damage below old 14 baseline, got ${floorOne.damage}`);
+});
+
 test("floor-four enemies deal meaningful damage against a high-health player", () => {
   const context = loadBrowserGame();
   vm.runInContext(`newRun("Tester"); chooseClass("warrior"); state.maxHp=280; state.hp=280; state.equippedArmor={head:{damageReduction:2},chest:{damageReduction:3},legs:{damageReduction:2},feet:{damageReduction:2}};`, context);
   const normal = vm.runInContext("makeEnemy(4, false)", context);
   const boss = vm.runInContext("makeEnemy(4, true)", context);
-  context.testEnemy = normal;
-  const normalHit = vm.runInContext("enemyIncomingDamage(testEnemy)", context);
-  context.testEnemy = boss;
-  const bossHit = vm.runInContext("enemyIncomingDamage(testEnemy)", context);
-  assert.ok(normalHit >= 10, `expected floor-four normal hit >= 10, got ${normalHit}`);
-  assert.ok(bossHit >= 20, `expected floor-four boss hit >= 20, got ${bossHit}`);
+  assert.ok(normal.damage >= 8, `expected floor-four normal damage >= 8, got ${normal.damage}`);
+  assert.ok(boss.damage > normal.damage, `expected floor-four boss damage > ${normal.damage}, got ${boss.damage}`);
 });
 
 test("bosses scale tougher than regular enemies and equipment stays out of weapon lists", () => {
@@ -304,7 +317,163 @@ test("a floor-two Legendary Warrior charge does not one-shot a normal floor-five
     var attackPreviewResult=attackPreview({multiplier:1.5,critBonus:0.1});
     var enemyMaxHp=enemy.maxHp;
   `, context);
-  assert.ok(vm.runInContext("attackPreviewResult.primaryDamage < enemyMaxHp", context));
+  assert.ok(vm.runInContext("attackPreviewResult.primaryDamage < enemyMaxHp", context), `charge damage ${vm.runInContext("attackPreviewResult.primaryDamage", context)} vs ${vm.runInContext("enemyMaxHp", context)} HP`);
+});
+
+test("weapon forge applies per-weapon upgrades, limits, floor resets, and class restrictions", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior"); state.gold=10000;
+    const entry=GAME_INDEX_DATA.weapons.warrior.find(item=>item.rarity==="Rare");
+    const forged=DUNGEON_RULES.createCatalogWeapon(entry,1);
+    state.weapons=[forged]; state.weapon=forged; state.upgradeWeaponIndex=0;
+    const baseDamage=forged.damage, baseCrit=forged.crit;
+    upgradeWeapon("damage"); upgradeWeapon("crit"); upgradeWeapon("effect");
+  `, context);
+  assert.equal(vm.runInContext("state.weapon.damageUpgrade", context), 1);
+  assert.equal(vm.runInContext("state.weapon.critUpgrade", context), 0.01);
+  assert.ok(Math.abs(vm.runInContext("state.weapon.effectChance", context)-0.24)<1e-12);
+  assert.equal(vm.runInContext("state.weapon.upgradesThisFloor", context), 3);
+  const goldAfterLimit = vm.runInContext("state.gold", context);
+  vm.runInContext("upgradeWeapon('speed')", context);
+  assert.equal(vm.runInContext("state.gold", context), goldAfterLimit);
+  vm.runInContext("state.floor=2; upgradeWeapon('damage')", context);
+  assert.equal(vm.runInContext("state.weapon.damageUpgrade", context), 3);
+  assert.equal(vm.runInContext("state.weapon.upgradesThisFloor", context), 1);
+  vm.runInContext(`state.weapons.push(DUNGEON_RULES.createCatalogWeapon(GAME_INDEX_DATA.weapons.archer.find(item=>item.rarity==="Rare"),2)); state.upgradeWeaponIndex=1; const goldBeforeOffClass=state.gold; upgradeWeapon("damage");`, context);
+  assert.equal(vm.runInContext("state.gold", context), vm.runInContext("goldBeforeOffClass", context));
+});
+
+test("high DEX grants one optional attack before enemy actions and never chains", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior"); state.dex=20; state.str=10;
+    const weapon=state.weapon; weapon.damage=1; weapon.attacks=[];
+    const enemy={name:"Training Target",hp:1000,maxHp:1000,damage:1,dex:10,dodge:0,gold:0,xp:0,intent:{key:"guard",label:"Guard"}};
+    state.combat={boss:false,enemies:[enemy],damageDealt:0,damageTaken:0,summonedCount:0};
+    state.attackCooldowns={sample:2}; state.target=0; Math.random=()=>0.4;
+    combatAction("basic");
+  `, context);
+  assert.equal(vm.runInContext("state.combat.bonusAttackPending", context), true);
+  assert.equal(vm.runInContext("state.attackCooldowns.sample", context), 2);
+  assert.match(vm.runInContext("state.log.map(entry=>entry.text).join(' ')", context), /too fast/i);
+  vm.runInContext("combatAction('basic')", context);
+  assert.equal(vm.runInContext("state.combat.bonusAttackPending", context), false);
+  assert.equal(vm.runInContext("state.attackCooldowns.sample", context), 1);
+  assert.match(vm.runInContext("renderCombat(state.combat.enemies.map((enemy,index)=>({enemy,index})))", context), /Your turn/);
+  let useHandler;
+  context.testScreen.querySelectorAll = selector => selector === "[data-use-item]" ? [{ dataset: { useItem: "0" }, addEventListener: (_type, handler) => { useHandler = handler; } }] : [];
+  vm.runInContext(`state.items=[{name:"Potion",type:"health",quantity:1}]; state.hp=50; state.combat.bonusAttackPending=true; bindUseItem();`, context);
+  useHandler();
+  assert.equal(vm.runInContext("state.items[0].quantity", context), 1);
+  assert.equal(vm.runInContext("state.hp", context), 50);
+  assert.equal(vm.runInContext("state.combat.bonusAttackPending", context), true);
+});
+
+test("elite spawn odds start on floor five, rise per enemy, and cap at thirty percent", () => {
+  const context = loadBrowserGame();
+  assert.equal(vm.runInContext("eliteChanceForFloor(4)", context), 0);
+  assert.equal(vm.runInContext("eliteChanceForFloor(5)", context), 0.03);
+  assert.equal(vm.runInContext("eliteChanceForFloor(14)", context), 0.3);
+  assert.equal(vm.runInContext("eliteChanceForFloor(54)", context), 0.3);
+  vm.runInContext(`
+    const group=[{name:"A",boss:false,element:"Water"},{name:"B",boss:false,element:"Earth"},{name:"Boss",boss:true,element:"Fire"}];
+    const rolls=[0.02,0,0.02,0.99,0];
+    applyEliteAffinities(group,5,()=>rolls.shift());
+    var eliteTestGroup=group;
+  `, context);
+  assert.equal(vm.runInContext("eliteTestGroup[0].elite", context), true);
+  assert.equal(vm.runInContext("eliteTestGroup[0].affinity", context), "Fire");
+  assert.equal(vm.runInContext("eliteTestGroup[0].element", context), "Fire");
+  assert.equal(vm.runInContext("eliteTestGroup[1].elite", context), true);
+  assert.equal(vm.runInContext("eliteTestGroup[1].affinity", context), "Wind");
+  assert.equal(vm.runInContext("eliteTestGroup[2].elite", context), undefined);
+});
+
+test("early elite crowd adjustment only softens four-enemy rooms and fades by floor fifteen", () => {
+  const context = loadBrowserGame();
+  assert.equal(vm.runInContext("eliteCrowdReductionChance(5)", context), 0.5);
+  assert.equal(vm.runInContext("eliteCrowdReductionChance(14)", context), 0.05);
+  assert.equal(vm.runInContext("eliteCrowdReductionChance(15)", context), 0);
+  assert.equal(vm.runInContext("eliteCrowdReductionChance(54)", context), 0);
+  vm.runInContext(`
+    var eliteFour=Array.from({length:4},(_,i)=>({elite:i===0}));
+    var adjustedAtFive=compensateEliteCrowd(eliteFour,5,()=>0.49);
+    var eliteThree=Array.from({length:3},(_,i)=>({elite:i===0}));
+    var adjustedAtFifteen=compensateEliteCrowd(eliteFour,15,()=>0);
+    var adjustedThree=compensateEliteCrowd(eliteThree,5,()=>0);
+  `, context);
+  assert.equal(vm.runInContext("adjustedAtFive", context), true);
+  assert.equal(vm.runInContext("eliteFour.length", context), 3);
+  assert.equal(vm.runInContext("eliteFour.some(enemy=>enemy.elite)", context), true);
+  assert.equal(vm.runInContext("adjustedAtFifteen", context), false);
+  assert.equal(vm.runInContext("adjustedThree", context), false);
+});
+
+test("elite affinity effects proc at a fixed fifteen percent only on landed damaging intents", () => {
+  const context = loadBrowserGame();
+  vm.runInContext("newRun('Tester')", context);
+  for (const [affinity,effect] of [["Fire","Burn"],["Water","Freeze"],["Earth","Cripple"],["Wind","Blind"]]) {
+    context.testAffinity=affinity; context.testEffect=effect;
+    assert.equal(vm.runInContext("tryApplyEliteAffinityEffect({elite:true,affinity:testAffinity,affinityEffect:testEffect,damage:10},'attack',true,()=>0.149)", context), true);
+    assert.ok(vm.runInContext("Boolean(state.playerEffects[testEffect])", context));
+    vm.runInContext("state.playerEffects={}", context);
+  }
+  assert.equal(vm.runInContext("tryApplyEliteAffinityEffect({elite:true,affinity:'Fire',affinityEffect:'Burn'},'attack',true,()=>0.15)", context), false);
+  assert.equal(vm.runInContext("tryApplyEliteAffinityEffect({elite:true,affinity:'Fire',affinityEffect:'Burn'},'attack',false,()=>0)", context), false);
+  assert.equal(vm.runInContext("tryApplyEliteAffinityEffect({elite:true,affinity:'Fire',affinityEffect:'Burn'},'guard',true,()=>0)", context), false);
+  assert.equal(vm.runInContext("state.playerEffects.Burn", context), undefined);
+});
+
+test("elite player effects tick, interrupt, weaken, and miss attacks with clear feedback", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun('Tester'); chooseClass('warrior');
+    state.playerEffects={Burn:{turns:1,stacks:2}}; state.hp=100; tickPlayerCombatEffects();
+    var burnTickHp=state.hp, burnExpired=!state.playerEffects.Burn;
+    const enemy={name:'Practice Enemy',hp:500,maxHp:500,damage:1,dex:20,dodge:0,gold:0,xp:0,intent:{key:'guard',label:'Guard'}};
+    state.combat={boss:false,enemies:[enemy],damageDealt:0,damageTaken:0,summonedCount:0};
+    state.target=0; state.playerEffects={Freeze:{turns:2,stacks:5}}; combatAction('basic');
+    var freezeEnemyHp=enemy.hp, freezeCleared=!state.playerEffects.Freeze;
+    state.playerEffects={};
+    var uncrippledPreview=attackPreview({multiplier:1}).primaryDamage;
+    state.playerEffects={Cripple:{turns:2,stacks:1}};
+    var cripplePreview=attackPreview({multiplier:1}).primaryDamage;
+    state.playerEffects={Blind:{turns:2,stacks:1}}; Math.random=()=>0.1;
+    var beforeBlindAttack=enemy.hp; combatAction('basic'); var blindDamage=beforeBlindAttack-enemy.hp;
+    var playerBadges=renderPlayerCombatStatuses();
+  `, context);
+  assert.equal(vm.runInContext("burnTickHp", context), 96);
+  assert.equal(vm.runInContext("burnExpired", context), true);
+  assert.equal(vm.runInContext("freezeEnemyHp", context), 500);
+  assert.equal(vm.runInContext("freezeCleared", context), true);
+  assert.ok(vm.runInContext("cripplePreview", context)<vm.runInContext("uncrippledPreview", context));
+  assert.equal(vm.runInContext("blindDamage", context), 0);
+  assert.match(vm.runInContext("playerBadges", context), /20% chance to miss/);
+  assert.match(vm.runInContext("state.log.map(entry=>entry.text).join(' ')", context), /lose this action|miss/i);
+});
+
+test("lethal elite Burn ends the run", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`newRun('Tester'); state.hp=3; state.playerEffects={Burn:{turns:1,stacks:5}}; tickPlayerCombatEffects();`, context);
+  assert.equal(vm.runInContext("state.hp", context), 0);
+  assert.equal(vm.runInContext("modal", context), "death");
+});
+
+test("new elite effects keep their full duration until the next enemy turn", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun('Tester'); state.hp=100;
+    state.combat={enemies:[],freshPlayerEffects:[]};
+    tryApplyEliteAffinityEffect({elite:true,affinity:'Fire',affinityEffect:'Burn',damage:1},'attack',true,()=>0);
+    tickPlayerCombatEffects();
+    var freshBurnHp=state.hp, freshBurnTurns=state.playerEffects.Burn.turns;
+    state.combat.freshPlayerEffects=[]; tickPlayerCombatEffects();
+    var nextBurnHp=state.hp;
+  `, context);
+  assert.equal(vm.runInContext("freshBurnHp", context), 100);
+  assert.equal(vm.runInContext("freshBurnTurns", context), 3);
+  assert.equal(vm.runInContext("nextBurnHp", context), 98);
 });
 
 test("shop odds keep divine rare with a small capped upgrade and prices rise steeply by tier", () => {
@@ -326,7 +495,35 @@ test("shop stock upgrade persists for the run and costs increase exponentially",
   vm.runInContext("upgradeShopLoot()", context);
   assert.equal(vm.runInContext("state.shopLootUpgradeLevel", context), 1);
   assert.equal(vm.runInContext("state.shopStock.length", context), 6);
+  assert.equal(vm.runInContext("state.shopPotions.length", context), 2);
   assert.equal(vm.runInContext("shopUpgradeCost()", context), firstCost * 2);
+});
+
+test("shop has six gear offers and a separate two-potion selection", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`newRun('Tester'); chooseClass('mage'); state.gold=100000; openShop();`, context);
+  assert.equal(vm.runInContext("state.shopStock.length", context), 6);
+  assert.ok(vm.runInContext("state.shopStock.every(item => item.kind === 'weapon' || item.kind === 'armor')", context));
+  assert.equal(vm.runInContext("state.shopPotions.length", context), 2);
+  vm.runInContext("buyPotion(0)", context);
+  assert.equal(vm.runInContext("state.shopPotions.length", context), 1);
+  assert.equal(vm.runInContext("state.items.length", context), 1);
+  vm.runInContext("state.gold=100000; rerollShop()", context);
+  assert.equal(vm.runInContext("state.shopPotions.length", context), 2);
+  assert.equal(vm.runInContext("state.shopStock.length", context), 6);
+});
+
+test("combat gear rewards can include a separate bonus potion", () => {
+  const context = loadBrowserGame();
+  context.Math.random = () => 0;
+  vm.runInContext(`
+    newRun('Tester'); chooseClass('warrior');
+    state.currentFloor.rooms[0]={...state.currentFloor.rooms[0],type:'enemy',enemyCount:1};
+    state.combat={boss:false,enemies:[{name:'Test Enemy',gold:5,xp:1,summoned:false}],damageDealt:0,damageTaken:0,log:[]};
+    winFight();
+  `, context);
+  assert.equal(vm.runInContext("state.weapons.length", context), 2);
+  assert.equal(vm.runInContext("state.items.length", context), 1);
 });
 
 test("shop sales remove chosen inventory goods and add gold", () => {

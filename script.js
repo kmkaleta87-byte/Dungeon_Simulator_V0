@@ -14,10 +14,19 @@ const CLASS_NAMES = { warrior: "Warrior", archer: "Archer", mage: "Mage" };
 const RARITIES = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Divine"];
 const HEALTH_POTION_PERCENT = { Common: 20, Uncommon: 25, Rare: 30, Epic: 40, Legendary: 50, Mythic: 65, Divine: 80 };
 const DIFFICULTIES = {
-  easy: { label: "Easy", enemyHealth: 0.8, enemyDamage: 1.5, xpRequirement: 0.8, shopCost: 0.8 },
-  normal: { label: "Normal", enemyHealth: 1.5, enemyDamage: 2, xpRequirement: 1, shopCost: 1 },
-  hard: { label: "Hard", enemyHealth: 2, enemyDamage: 2.5, xpRequirement: 1.4, shopCost: 1.5 }
+  easy: { label: "Easy", enemyHealth: 0.75, enemyDamage: 0.75, xpRequirement: 0.8, shopCost: 0.8 },
+  normal: { label: "Normal", enemyHealth: 1.1, enemyDamage: 0.9, xpRequirement: 1, shopCost: 1 },
+  hard: { label: "Hard", enemyHealth: 1.45, enemyDamage: 1.1, xpRequirement: 1.4, shopCost: 1.5 }
 };
+const ELITE_AFFINITIES = ["Fire", "Water", "Earth", "Wind"];
+const ELITE_EFFECTS = { Fire: "Burn", Water: "Freeze", Earth: "Cripple", Wind: "Blind" };
+const PLAYER_EFFECT_DESCRIPTIONS = {
+  Burn: "Burn deals damage over time.",
+  Freeze: "At five stacks, you lose your next action.",
+  Cripple: "Your attacks deal 15% less damage while this lasts.",
+  Blind: "Your attacks have a 20% chance to miss while this lasts."
+};
+function floorEnemyScale(floor, growth) { return Math.pow(growth, Math.max(0, floor - 2)); }
 const WEAPONS = {
   warrior: [["Cinder Knife", "Dagger", "Common", "cinder-knife.png", 7, "Fire"]],
   archer: [["Frayed Hunting Bow", "Bow", "Common", "frayed-hunting-bow.png", 7, "Physical"]],
@@ -321,6 +330,13 @@ function migrateBrowserSave() {
   }
   if (state.weapon) state.weapon = state.weapons.find(item => item.name === state.weapon.name && item.type === state.weapon.type) || state.weapon;
   for (const weapon of state.weapons || []) {
+    weapon.level ??= 1;
+    weapon.upgradeFloor ??= state.floor || 1;
+    weapon.upgradesThisFloor ??= 0;
+    weapon.damageUpgrade ??= 0;
+    weapon.critUpgrade ??= 0;
+    weapon.effectChance ??= 0.2;
+    weapon.speedUpgrade ??= 0;
     if (!weapon.attacks) weapon.attacks = DUNGEON_RULES.createWeaponAttacks(
       ["Bow", "Crossbow"].includes(weapon.type) ? "archer" : ["Wand", "Staff"].includes(weapon.type) ? "mage" : "warrior",
       weapon.rarity || "Common", weapon.type, weapon.element || "Physical", weapon.manaCost || 0
@@ -331,6 +347,12 @@ function migrateBrowserSave() {
       ["Bow", "Crossbow"].includes(state.weapon.type) ? "archer" : ["Wand", "Staff"].includes(state.weapon.type) ? "mage" : "warrior",
       state.weapon.rarity || "Common", state.weapon.type, state.weapon.element || "Physical", state.weapon.manaCost || 0
     );
+  }
+  if (state.weapon) {
+    state.weapon.level ??= 1; state.weapon.upgradeFloor ??= state.floor || 1;
+    state.weapon.upgradesThisFloor ??= 0; state.weapon.damageUpgrade ??= 0;
+    state.weapon.critUpgrade ??= 0; state.weapon.effectChance ??= 0.2;
+    state.weapon.speedUpgrade ??= 0;
   }
   updateArmorBonuses();
 }
@@ -343,10 +365,39 @@ function makeEnemy(floor, boss = false, index = 0) {
   const klass = boss ? "Boss" : variant[1];
   const baseHp = race === "golem" ? 95 : race === "werewolf" ? 58 : race === "slime" ? 42 : 32;
   const difficulty=DIFFICULTIES[state?.difficulty]||DIFFICULTIES.normal;
-  const hp = Math.round((boss ? baseHp * (floor * 0.5 + 2) * 1.5 : baseHp) * Math.pow(1.25, floor - 1)*difficulty.enemyHealth);
+  const hp = Math.round((boss ? baseHp * (floor * 0.5 + 2) * 1.5 : baseHp) * floorEnemyScale(floor, 1.35) * difficulty.enemyHealth);
   const baseDamage = race === "golem" ? 9 : race === "werewolf" ? 10 : 7;
   const element = ({ slime: "Water", skeleton: "Earth", goblin: "Wind", vampire: "Fire", werewolf: "Earth", golem: "Earth" })[race] || "None";
-  return { name, race, klass, element, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * (boss ? 1.5 : 1) * Math.pow(1.18, floor - 1)*difficulty.enemyDamage)), dodge: race === "specter" ? 0.12 : klass === "Archer" ? 0.05 : 0.02, boss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)) };
+  const dex = Math.max(1, 8 + ({goblin:2,specter:2,vampire:1,werewolf:2,golem:-1})[race] + ({Archer:2,Mage:1})[klass] + (boss?2:0));
+  return { name, race, klass, element, dex, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * (boss ? 1.5 : 1) * floorEnemyScale(floor, 1.1) * difficulty.enemyDamage)), dodge: race === "specter" ? 0.12 : klass === "Archer" ? 0.05 : 0.02, boss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)) };
+}
+
+function eliteChanceForFloor(floor) {
+  return floor < 5 ? 0 : Math.min(0.3, 0.03 * (floor - 4));
+}
+
+function applyEliteAffinities(enemies, floor, random = Math.random) {
+  for (const enemy of enemies) {
+    if (enemy.boss || random() >= eliteChanceForFloor(floor)) continue;
+    enemy.elite = true;
+    enemy.affinity = ELITE_AFFINITIES[Math.floor(random() * ELITE_AFFINITIES.length)];
+    enemy.affinityEffect = ELITE_EFFECTS[enemy.affinity];
+    enemy.raceElement = enemy.element;
+    enemy.element = enemy.affinity;
+  }
+  return enemies;
+}
+
+function eliteCrowdReductionChance(floor) {
+  return floor < 5 || floor >= 15 ? 0 : 0.5 * (15 - floor) / 10;
+}
+
+function compensateEliteCrowd(enemies, floor, random = Math.random) {
+  if (enemies.length !== 4 || !enemies.some(enemy => enemy.elite) || random() >= eliteCrowdReductionChance(floor)) return false;
+  let removeIndex = enemies.findIndex(enemy => !enemy.elite);
+  if (removeIndex < 0) removeIndex = enemies.length - 1;
+  enemies.splice(removeIndex, 1);
+  return true;
 }
 
 function makeRoom(type, x, y, id) {
@@ -508,7 +559,7 @@ function weaponCard(weapon, index, equipped = false) {
   const classLocked=Boolean(state.chosenClass && family!==state.chosenClass);
   const equippedLabel = equipped ? `<span class="equipped-tag">Equipped</span>` : classLocked ? `<button class="small-button" disabled title="Only ${CLASS_NAMES[state.chosenClass]} weapons can be equipped">${CLASS_NAMES[family]||"Unknown"} weapon</button>` : `<button class="small-button" data-equip-weapon="${index}">Equip</button>`;
   const ammo = ["Bow","Crossbow"].includes(weapon.type) ? ` · ${state.arrows ?? 0} shared arrows` : "";
-  return `<article class="inventory-item ${rarityClass(weapon.rarity)}">${weaponArt(weapon)}<div class="item-copy"><span class="item-meta">${escapeHtml(weapon.rarity)} ${escapeHtml(weapon.type)} · ${escapeHtml(weapon.element)}</span><strong>${escapeHtml(weapon.name)}</strong><span class="item-stats">${weapon.damage} damage · ${Math.round(weapon.crit*100)}% crit${ammo}</span></div><div class="inventory-item-actions">${equippedLabel}<button class="small-button" data-inventory-sell="weapon" data-sell-index="${index}" ${equipped?"disabled title=\"Equip another weapon before selling this one\"":""}>Sell · ${sellValue(weapon,"weapon")}g</button></div></article>`;
+  return `<article class="inventory-item ${rarityClass(weapon.rarity)}">${weaponArt(weapon)}<div class="item-copy"><span class="item-meta">${escapeHtml(weapon.rarity)} ${escapeHtml(weapon.type)} · ${escapeHtml(weapon.element)}</span><strong>${escapeHtml(weapon.name)}</strong><span class="item-stats">${weapon.damage+(weapon.damageUpgrade||0)} damage · ${Math.round(((weapon.crit||0)+(weapon.critUpgrade||0))*100)}% weapon crit${ammo}${weapon.level>1?` · Lv ${weapon.level}`:""}</span></div><div class="inventory-item-actions">${equippedLabel}<button class="small-button" data-inventory-sell="weapon" data-sell-index="${index}" ${equipped?"disabled title=\"Equip another weapon before selling this one\"":""}>Sell · ${sellValue(weapon,"weapon")}g</button></div></article>`;
 }
 
 function getConnected() {
@@ -675,7 +726,7 @@ function render() {
           <div class="stat-row"><div class="stat-label"><span>Mana</span><b>${state.mana} / ${state.maxMana}</b></div><div class="meter"><i class="mana-fill" style="width:${Math.max(0,state.mana/state.maxMana*100)}%"></i></div></div>
           <div class="resource-line"><span class="xp-color">XP ${state.xp} / ${xpToNext()}</span><span class="gold-color">${state.gold} gold</span></div>
         </div>
-        ${state.weapon ? `<div class="equipped-weapon">${weaponArt(state.weapon,true)}<div><span class="item-meta">${escapeHtml(state.class)} · ${escapeHtml(state.weapon.rarity)} ${escapeHtml(state.weapon.type)}</span><strong>${escapeHtml(state.weapon.name)}</strong><span>${state.weapon.damage} damage · ${state.weapon.element}</span>${["Bow","Crossbow"].includes(state.weapon.type) ? `<span>${state.arrows ?? 0} arrows</span>` : ""}</div></div>` : `<p class="no-weapon">No weapon equipped</p>`}
+        ${state.weapon ? `<div class="equipped-weapon">${weaponArt(state.weapon,true)}<div><span class="item-meta">${escapeHtml(state.class)} · ${escapeHtml(state.weapon.rarity)} ${escapeHtml(state.weapon.type)}</span><strong>${escapeHtml(state.weapon.name)}</strong><span>${state.weapon.damage+(state.weapon.damageUpgrade||0)} damage · ${state.weapon.element}</span>${["Bow","Crossbow"].includes(state.weapon.type) ? `<span>${state.arrows ?? 0} arrows</span>` : ""}</div></div>` : `<p class="no-weapon">No weapon equipped</p>`}
         <div class="equipped-armor">${["head","chest","legs","feet","shield"].map(slot=>`<span>${slot}: ${state.equippedArmor[slot]?escapeHtml(state.equippedArmor[slot].name):"empty"}</span>`).join("")}<span class="armor-bonus">${armorSummaryText()}</span></div>
         ${renderLog()}
       </aside>
@@ -700,14 +751,16 @@ function renderCombat(enemies) {
     const hint = intent.key === "guard" ? " · reduces incoming damage" : intent.key === "dodge" ? " · evades your next attack" : "";
     const incoming=enemyIncomingDamage(enemy);
     const preview=["attack","shoot","cast"].includes(intent.key)?`<span class="incoming-damage">Potential hit: ${incoming}</span>`:"";
-    return `<article class="enemy-card ${enemy.boss ? "boss-enemy" : ""}">${enemyArt(enemy)}<div class="enemy-information"><div class="enemy-name"><strong>${escapeHtml(enemy.name)}</strong><span>${escapeHtml(enemy.klass)}</span></div><div class="enemy-health"><span>${enemy.hp} / ${enemy.maxHp} HP</span><i><b style="width:${Math.max(0, enemy.hp / enemy.maxHp * 100)}%"></b></i></div><p>${enemy.damage} base damage · ${Math.round(enemy.dodge * 100)}% dodge · ${escapeHtml(enemy.element || "Neutral")}</p><p class="enemy-intent">Intent: <strong>${escapeHtml(intent.label)}</strong>${hint} ${preview}</p>${renderStatusBadges(enemy.effects)}</div><button class="small-button target-button" data-target="${index}">${state.target === index ? "Targeted" : "Target"}</button></article>`;
+    const eliteBadge=enemy.elite?`<span class="elite-tag">Elite · ${escapeHtml(enemy.affinity)} affinity</span>`:"";
+    const affinityTelegraph=enemy.elite&&["attack","shoot","cast"].includes(intent.key)?` · ${escapeHtml(enemy.affinityEffect)} has a 15% chance on hit`:"";
+    return `<article class="enemy-card ${enemy.boss ? "boss-enemy" : ""} ${enemy.elite ? "elite-enemy" : ""}">${enemyArt(enemy)}<div class="enemy-information"><div class="enemy-name"><strong>${escapeHtml(enemy.name)}</strong><span>${escapeHtml(enemy.klass)}</span></div>${eliteBadge}<div class="enemy-health"><span>${enemy.hp} / ${enemy.maxHp} HP</span><i><b style="width:${Math.max(0, enemy.hp / enemy.maxHp * 100)}%"></b></i></div><p>${enemy.damage} base damage · ${Math.round(enemy.dodge * 100)}% dodge · ${escapeHtml(enemy.element || "Neutral")}</p><p class="enemy-intent">Intent: <strong>${escapeHtml(intent.label)}</strong>${hint}${affinityTelegraph} ${preview}</p>${renderStatusBadges(enemy.effects)}</div><button class="small-button target-button" data-target="${index}">${state.target === index ? "Targeted" : "Target"}</button></article>`;
   }).join("");
   const attackInfo = state.showWeaponInfo ? `<div class="weapon-attack-info">${listedAttacks.map(attack => {
     const preview = attackPreview(attack, targetCount);
     const matchup = preview.elementRelation === "neutral" ? "" : ` · elemental ${preview.elementRelation}`;
     return `<article><strong>${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${preview.primaryDamage} damage${attack.aoe ? ` / ${preview.secondaryDamage} secondary · ${preview.targetCount} targets` : ""} · ${Math.round(preview.critChance * 100)}% crit${matchup} · ${preview.cooldown ? `${preview.cooldown} turn cooldown` : "No cooldown"}${preview.effect ? ` · ${escapeHtml(preview.effect)}` : ""}${preview.manaCost ? ` · ${preview.manaCost} mana` : ""}${preview.ammoCost ? ` · ${preview.ammoCost} arrow${preview.ammoCost === 1 ? "" : "s"}` : ""}${preview.manaGain ? ` · restores ${preview.manaGain} mana on hit` : ""}</small></article>`;
   }).join("")}</div>` : "";
-  return `<div class="combat-header"><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><div class="enemy-list">${enemyCards}</div>${renderPlayerCombatStatuses()}<div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>Your turn</h3>${getActions()}</div>`;
+  return `<div class="combat-header"><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><div class="enemy-list">${enemyCards}</div>${renderPlayerCombatStatuses()}<div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}${state.combat?.bonusAttackPending?`<p class="bonus-action-prompt">You’re too fast! Choose one attack before the enemies act.</p>`:""}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>Your turn</h3>${getActions()}</div>`;
 }
 
 function attackPreview(attack, targetCount = state.combat?.enemies.filter(enemy=>enemy.hp>0).length || 1) {
@@ -721,18 +774,19 @@ function attackPreview(attack, targetCount = state.combat?.enemies.filter(enemy=
   return preview;
 }
 
-function renderStatusBadges(effects = {}) {
+function renderStatusBadges(effects = {}, targetSide = "enemy") {
   const badges = Object.entries(effects || {}).map(([key,value])=>[key,typeof value==="number"?{turns:value,stacks:1}:value]).filter(([, value]) => value && typeof value === "object" && Number(value.turns) > 0).map(([key, value]) => {
     const info = DUNGEON_RULES.getEffectDefinition(key);
     if (!info) return "";
     const stacks = value.stacks > 1 ? ` ×${value.stacks}` : "";
-    return `<span class="status-badge" title="${escapeHtml(info.description)}"><b aria-hidden="true">${escapeHtml(key.slice(0,1))}</b> ${escapeHtml(key)}${stacks} · ${value.turns}t</span>`;
+    const description=targetSide==="player"?(PLAYER_EFFECT_DESCRIPTIONS[key]||info.description):info.description;
+    return `<span class="status-badge" title="${escapeHtml(description)}"><b aria-hidden="true">${escapeHtml(key.slice(0,1))}</b> ${escapeHtml(key)}${stacks} · ${value.turns}t</span>`;
   }).join("");
   return badges ? `<div class="status-list" aria-label="Active effects">${badges}</div>` : "";
 }
 
 function renderPlayerCombatStatuses() {
-  const effects=renderStatusBadges(state.playerEffects);
+  const effects=renderStatusBadges(state.playerEffects,"player");
   const brace=state.braced?`<div class="status-list" aria-label="Player stance"><span class="status-badge">Brace · next hit halved</span></div>`:"";
   return `${effects}${brace}`;
 }
@@ -849,16 +903,25 @@ function startCombat(boss) {
   const room=currentRoom();
   const count=boss?1:(room.enemyCount||1);
   const enemies=Array.from({length:count},(_,index)=>makeEnemy(state.floor,boss,index));
+  if(!boss){applyEliteAffinities(enemies,state.floor);compensateEliteCrowd(enemies,state.floor);}
   state.combat={enemies,boss,log:[],damageDealt:0,damageTaken:0,summonedCount:0};state.cooldown=0;state.attackCooldowns={};state.defenseCooldowns={aegis:0,block:0,dodge:0};state.activeDefense=null;state.disruptCooldown=0;state.braced=false;state.aimed=false;state.target=0;
   for(const enemy of enemies)enemy.intent=DUNGEON_RULES.chooseEnemyIntent(enemy.klass,enemy.race);
   const enemy=enemies[0];
-  const opening=choice([`${enemy.name} leaps from the dark!`,`A scrape of stone, then ${enemy.name} blocks the way.`,`Something rushes at you through the doorway: ${enemy.name}!`,`You hear a sharp cry as ${enemy.name} attacks!`]);
+  const displayedName=enemy.elite?`${enemy.affinity} Elite ${enemy.name}`:enemy.name;
+  const opening=choice([`${displayedName} leaps from the dark!`,`A scrape of stone, then ${displayedName} blocks the way.`,`Something rushes at you through the doorway: ${displayedName}!`,`You hear a sharp cry as ${displayedName} attacks!`]);
   message(opening,"danger"); render();
 }
 
 function combatAction(action) {
   const fight=state.combat; if(!fight)return;
+  const wasBonusAttack=Boolean(fight.bonusAttackPending);
+  if(wasBonusAttack && !["basic","attack"].includes(action) && !DUNGEON_RULES.getSpecialAttack(state.weapon,action)){message("You’re too fast! Choose an attack before the enemies act.");render();return;}
   if(DUNGEON_RULES.allEnemiesDefeated(fight.enemies)){winFight();return;}
+  if(state.playerEffects?.Freeze?.stacks>=5){
+    delete state.playerEffects.Freeze;
+    message("Freeze takes hold. You lose this action.","danger");
+    enemyTurn();return;
+  }
   let enemy=fight.enemies[state.target];
   if(!enemy||enemy.hp<=0){state.target=fight.enemies.findIndex(candidate=>candidate.hp>0);enemy=fight.enemies[state.target];}
   if(!enemy)return;
@@ -906,6 +969,7 @@ function combatAction(action) {
   if(special&&DUNGEON_RULES.isAttackOnCooldown(state.attackCooldowns,action)){message(`${attack.name} is cooling down for ${state.attackCooldowns[action]} turn(s).`);render();return;}
   if(state.class==="mage"&&state.equippedArmor?.shield){message("You cannot cast while a shield is equipped.");render();return;}
   if(special?.chargesNextAttack){
+    if(wasBonusAttack){message("Use a direct attack for your extra action.");render();return;}
     if(state.class==="mage"){const cost=(special.manaCost||0)+(weapon.effect==="Overcast"?2:0);if(state.mana<cost){message(`Not enough mana. Channeling costs ${cost}.`);render();return;}state.mana-=cost;}
     state.chargedAttack={multiplier:special.multiplier,critBonus:special.critBonus};
     message(`${special.name} is ready. Your next basic attack is empowered.`);enemyTurn();return;
@@ -918,10 +982,11 @@ function combatAction(action) {
   const charged=state.chargedAttack||{multiplier:1,critBonus:0};
   const multiplier=attack.multiplier*charged.multiplier;
   const armorBonuses=DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class);
-  const crit=Math.min(1,state.critChance+armorBonuses.critChance+(weapon.crit||0)+(attack.critBonus||0)+charged.critBonus+(weapon.effect==="Focus"?0.1:0)+(["Headshot","Snipe"].includes(weapon.effect)||["Headshot","Snipe"].includes(attack.effect)?0.2:0));
+  const crit=Math.min(1,state.critChance+armorBonuses.critChance+(weapon.crit||0)+(weapon.critUpgrade||0)+(attack.critBonus||0)+charged.critBonus+(weapon.effect==="Focus"?0.1:0)+(["Headshot","Snipe"].includes(weapon.effect)||["Headshot","Snipe"].includes(attack.effect)?0.2:0));
   const targets=special?.aoe?fight.enemies.filter(candidate=>candidate.hp>0):[enemy];
   let landed=false;
   for(const target of targets){
+    if(state.playerEffects?.Blind&&Math.random()<0.2){message(`Blindness makes your ${attack.name.toLowerCase()} miss.` ,"danger");continue;}
     const tracksTarget=["Homing","Snipe","Headshot"].includes(weapon.effect)||["Homing","Snipe","Headshot"].includes(attack.effect);
     if(target.intent?.key==="dodge"&&!target.effects?.Root&&!tracksTarget){target.intentDodging=true;message(`${target.name} reads your movement and evades the attack!`,"danger");continue;}
     if(Math.random()<target.dodge&&!target.effects?.Root&&!tracksTarget){message(`${target.name} dodges the attack!`,"danger");continue;}
@@ -930,7 +995,8 @@ function combatAction(action) {
     const momentumBonus=weapon.effect==="Momentum"?1+Math.min(5,state.momentum||0)*0.04:1;
     const defensePierce=["Void","Penetration","Pierce","PiercingShot"].includes(weapon.effect)?0.5:0;
     const matchup=DUNGEON_RULES.elementMatchup(weapon.element,target.element);
-    const rawDamage=((state.class==="mage"?effectiveStat("int"):effectiveStat("str"))+weapon.damage)*multiplier*passiveBonus*momentumBonus*(target===enemy?1:special.secondaryMultiplier||0.5)*matchup.multiplier;
+    const crippleScale=state.playerEffects?.Cripple?0.85:1;
+    const rawDamage=((state.class==="mage"?effectiveStat("int"):effectiveStat("str"))+weapon.damage+(weapon.damageUpgrade||0))*multiplier*passiveBonus*momentumBonus*crippleScale*(target===enemy?1:special.secondaryMultiplier||0.5)*matchup.multiplier;
     let damage=Math.max(1,Math.round(rawDamage-(target.damageReduction||0)*(1-defensePierce)));
     if(target.intent?.key==="guard")damage=DUNGEON_RULES.guardDamage(damage,isHeavy);
     if(target.intent?.key==="ward")damage=Math.max(1,Math.round(damage*0.7));
@@ -938,10 +1004,10 @@ function combatAction(action) {
     if(["Execution","ExecutionBolt"].includes(special?.effect)||["Execution","ExecutionBolt"].includes(weapon.effect))if(target.hp/target.maxHp<=0.3)damage=Math.round(damage*1.5);
     const isCrit=Math.random()<crit;if(isCrit)damage*=2;
     const dealt=applyEnemyDamage(target,damage,`${attack.name} hits ${target.name}${isCrit?" critically":""}`);
-    const applied=special?.effect||weapon.effect;
+    let applied=weapon.effect||null;
     if(weapon.effect==="Thorns")state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Thorns",damage);
     else if(weapon.effect)applyWeaponEffect(target,weapon.effect,damage,!special?.aoe);
-    if(special?.effect&&special.effect!==weapon.effect)applyWeaponEffect(target,special.effect,damage,!special.aoe);
+    if(special?.effect&&special.effect!==weapon.effect){if(Math.random()<(weapon.effectChance??0.2)){applyWeaponEffect(target,special.effect,damage,!special.aoe);applied=special.effect;}else message(`${special.effect} did not trigger.`);}
     if(weapon.effect==="LifeSteal"||special?.effect==="LifeSteal")state.hp=Math.min(state.maxHp,state.hp+Math.max(1,Math.round(damage*0.05)));
     if(weapon.effect==="ManaSteal"||special?.effect==="ManaSteal")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.05)));
     if(weapon.effect==="ManaSurge")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.08)));
@@ -961,12 +1027,17 @@ function combatAction(action) {
   if(special?.cooldown){const effectiveCooldown=Math.max(0,special.cooldown-(weapon.effect==="CooldownReduction"?1:0));if(effectiveCooldown)state.attackCooldowns[action]=effectiveCooldown+1;}
   if(isHeavy)state.cooldown=3;
   if(DUNGEON_RULES.allEnemiesDefeated(fight.enemies)){winFight();return;}
+  if(wasBonusAttack){fight.bonusAttackPending=false;enemyTurn();return;}
+  const living=fight.enemies.filter(candidate=>candidate.hp>0);
+  const averageEnemyDex=living.reduce((sum,candidate)=>sum+(candidate.dex||8),0)/Math.max(1,living.length);
+  if(living.length&&effectiveStat("dex")>=2*averageEnemyDex&&Math.random()<0.5){fight.bonusAttackPending=true;message("You’re too fast! Attack again before the enemies.","reward");render();return;}
   enemyTurn();
 }
 
 function enemyTurn() {
   if(!state.combat)return;
   if(DUNGEON_RULES.allEnemiesDefeated(state.combat.enemies)){winFight();return;}
+  state.combat.freshPlayerEffects=[];
   const enemies=state.combat?.enemies.filter(enemy=>enemy.hp>0)||[];
   for(const enemy of enemies){
     processEnemyEffects(enemy);if(enemy.hp<=0)continue;
@@ -992,6 +1063,7 @@ function enemyTurn() {
     if(Math.random()<enemy.dodge||state.playerEffects?.Afterimage||Math.random()<passiveEvasionChance()||Math.random()>blind){delete state.playerEffects?.Afterimage;message(`You evade ${enemy.name}'s ${intent==="shoot"?"shot":intent==="cast"?"spell":"attack"}.`,"story");}
     else {
       const damage=takePlayerDamage(Math.round(enemy.damage*damageScale));message(`${enemy.name} ${intent==="shoot"?"shoots":intent==="cast"?"casts":"strikes"} you for ${damage} damage.`,"danger");
+      if(state.hp>0)tryApplyEliteAffinityEffect(enemy,intent,true);
       const thorns=Math.max(DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).thorns,state.playerEffects?.Thorns?0.2:0);
       if(thorns){const reflected=Math.max(1,Math.round(damage*thorns));const dealt=Math.min(enemy.hp,reflected);enemy.hp=Math.max(0,enemy.hp-reflected);state.combat.damageDealt+=dealt;state.runStats.damageDealt+=dealt;message(`Your thorns reflect ${reflected} damage to ${enemy.name}.`);}
       if(state.hp<=0){die();return;}
@@ -1001,13 +1073,38 @@ function enemyTurn() {
   if(DUNGEON_RULES.allEnemiesDefeated(state.combat.enemies)){winFight();return;}
   for(const enemy of enemies)enemy.effects=DUNGEON_RULES.tickCombatEffects(enemy.effects||{},{durationOnly:true}).statuses;
   for(const enemy of state.combat.enemies.filter(item=>item.hp>0))enemy.intent=DUNGEON_RULES.chooseEnemyIntent(enemy.klass,enemy.race);
-  if(state.playerEffects){state.playerEffects=DUNGEON_RULES.tickCombatEffects(state.playerEffects).statuses;}
+  if(!tickPlayerCombatEffects())return;
   for(const [key,value] of Object.entries(state.attackCooldowns||{})){state.attackCooldowns[key]=Math.max(0,value-1);if(!state.attackCooldowns[key])delete state.attackCooldowns[key];}
   for(const key of Object.keys(state.defenseCooldowns||{}))state.defenseCooldowns[key]=Math.max(0,state.defenseCooldowns[key]-1);
   state.activeDefense=null;
   state.cooldown=Math.max(0,(state.cooldown||0)-1);
   state.disruptCooldown=DUNGEON_RULES.tickDisruptCooldown(state.disruptCooldown||0);
   render();
+}
+
+function tryApplyEliteAffinityEffect(enemy,intent,hit,random=Math.random){
+  if(!enemy?.elite||!hit||!["attack","shoot","cast"].includes(intent)||!enemy.affinityEffect||random()>=0.15)return false;
+  state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},enemy.affinityEffect,enemy.damage||1);
+  state.combat?.freshPlayerEffects?.push(enemy.affinityEffect);
+  message(`${enemy.affinity} affinity inflicts ${enemy.affinityEffect} on you.` ,"danger");
+  return true;
+}
+
+function tickPlayerCombatEffects(){
+  if(!state.playerEffects)return true;
+  const fresh=new Set(state.combat?.freshPlayerEffects||[]);
+  const freshStatuses=Object.fromEntries([...fresh].filter(effect=>state.playerEffects[effect]).map(effect=>[effect,state.playerEffects[effect]]));
+  if(state.combat)state.combat.freshPlayerEffects=[];
+  const tick=DUNGEON_RULES.tickCombatEffects(state.playerEffects);
+  state.playerEffects=tick.statuses;
+  Object.assign(state.playerEffects,freshStatuses);
+  for(const entry of tick.messages){
+    if(fresh.has(entry.effect))continue;
+    const damage=takePlayerDamage(entry.damage);
+    message(`${entry.effect} deals ${damage} damage to you.`,"danger");
+    if(state.hp<=0){die();return false;}
+  }
+  return true;
 }
 
 function applyWeaponEffect(enemy,effect,damage,allowChain=true){
@@ -1036,7 +1133,7 @@ function applyEnemyDamage(enemy,amount,description,tone=""){
 }
 
 function effectiveDexterity(){return Math.max(1,effectiveStat("dex")+DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).dexterity-(state.class==="archer"&&state.equippedArmor?.shield?3:0));}
-function passiveEvasionChance(){return Math.min(0.5,Math.max(0,effectiveDexterity()-10)*0.01+Math.max(0,effectiveStat("speed")-10)*0.005);}
+function passiveEvasionChance(){return Math.min(0.5,Math.max(0,effectiveDexterity()-10)*0.01+Math.max(0,effectiveStat("speed")-10)*0.005+Math.max(0,(state.weapon?.speed||10)-10)*0.005);}
 
 function takePlayerDamage(damage) {
   let incoming=damage;
@@ -1061,7 +1158,7 @@ function winFight() {
   for(const enemy of fight.enemies){totalGold+=enemy.gold;totalXp+=enemy.xp;}
   state.gold+=totalGold;totalXp+=Math.round(totalXp*0.35);const levels=gainXp(totalXp);
   let rewards=`Victory. +${totalGold} gold and +${totalXp} XP.`;
-  if(Math.random()<0.8){const lootRarity=DUNGEON_RULES.rollLootRarity(room.enemyCount||1,fight.boss,Math.random());const loot=makeLoot(lootRarity);grantLoot(loot);rewards+=` Loot: ${loot.value.rarity} ${loot.value.name}${loot.kind==="weapon"?` (${loot.value.type})`:loot.kind==="armor"?` (${loot.value.slot})`:""}.`;}
+  if(Math.random()<0.8){const lootRarity=DUNGEON_RULES.rollLootRarity(room.enemyCount||1,fight.boss,Math.random());const loot=makeLoot(lootRarity);grantLoot(loot);rewards+=` Loot: ${loot.value.rarity} ${loot.value.name}${loot.kind==="weapon"?` (${loot.value.type})`:loot.kind==="armor"?` (${loot.value.slot})`:""}.`;if(loot.kind!=="item"&&Math.random()<0.6){const potion=makePotionLoot(lootRarity);grantLoot(potion);rewards+=` Bonus: ${potion.value.rarity} ${potion.value.name}.`;}}
   if(state.weapons.some(weapon=>["Bow","Crossbow"].includes(weapon.type))&&Math.random()<0.45){state.arrows=Math.min(30,(state.arrows||0)+6);rewards+=" +6 arrows.";}
   if(fight.enemies.some(enemy=>enemy.klass==="Archer")){state.arrows=Math.min(30,(state.arrows||0)+4);rewards+=" Archer dropped 4 arrows.";}
   if(levels)rewards+=` You leveled up! Current skillpoints: ${state.skillPoints}.`;
@@ -1103,9 +1200,13 @@ function makeLoot(rarity=null){
     const pool=available.length?available:ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");
     return{kind:"armor",value:DUNGEON_RULES.createCatalogArmor(choice(pool),state.floor)};
   }
-  const mana=DUNGEON_RULES.rollPotionType(Math.random,state.chosenClass||state.class)==="mana";
-  rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===(mana?"mana":"health")));
-  return{kind:"item",value:{name:`${rarity} ${mana?"Mana":"Healing"} Potion`,type:mana?"mana":"health",amount:mana?24+state.floor*3:0,quantity:1,rarity}};
+  return makePotionLoot(rarity);
+}
+
+function makePotionLoot(rarity="Common"){
+  const type=DUNGEON_RULES.rollPotionType(Math.random,state.chosenClass||state.class);
+  rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===type));
+  return{kind:"item",value:{name:`${rarity} ${type==="mana"?"Mana":"Healing"} Potion`,type,amount:type==="mana"?24+state.floor*3:0,quantity:1,rarity}};
 }
 
 function grantLoot(loot){
@@ -1147,7 +1248,9 @@ function showModal(){
   } else if(modal==="skills"){
     content=`<section class="modal skills-modal" role="dialog" aria-modal="true" aria-labelledby="skills-title"><div class="modal-heading"><div><p class="section-kicker">Character development</p><h2 id="skills-title">Skills &amp; advanced stats</h2></div><button class="icon-close" data-close-modal aria-label="Close skills">×</button></div><p class="skill-points">Unspent skill points: <strong>${state.skillPoints}</strong></p><div class="skill-list">${DUNGEON_RULES.STAT_DEFINITIONS.map(stat=>`<article class="skill-row"><div><strong>${stat.label}: ${statValueLabel(stat)}</strong><p>${statDescription(stat)}${stat.key==="dex"&&state.class==="archer"&&state.equippedArmor?.shield?" Equipped shield penalty applied.":""}</p></div><button class="small-button" data-spend-stat="${stat.key}" ${state.skillPoints===0 || (stat.key === "critChance" && state.critChance>=1) ? "disabled" : ""}>Improve</button></article>`).join("")}</div><button class="secondary-button skill-inventory-link" data-open-inventory type="button">Return to inventory</button></section>`;
   } else if(modal==="shop"){
-    content=`<section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title"><div class="modal-heading"><div><p class="section-kicker">Floor ${state.floor} merchant · ${DIFFICULTIES[state.difficulty]?.label||"Normal"}</p><h2 id="shop-title">Shop</h2></div><button class="icon-close" data-close-modal aria-label="Close shop">×</button></div><div class="shop-upgrade"><div><strong>Stock quality · Level ${state.shopLootUpgradeLevel||0}/5</strong><p>Upgrade shop rarity odds for this run; current stock refreshes. Next upgrade: ${shopUpgradeCost()} gold.</p></div><button class="small-button" data-upgrade-shop ${(state.shopLootUpgradeLevel||0)>=5||state.gold<shopUpgradeCost()?"disabled":""}>Upgrade</button></div><div class="shop-list">${state.shopStock.map((item,index)=>`<article class="shop-item">${item.kind==="weapon"?weaponArt(item.value):item.kind==="armor"?itemArt(`Images/Armor/${item.value.file}`,item.value.name):potionArt(item.value)}<div><span class="item-meta">${escapeHtml(item.value.rarity)} ${escapeHtml(item.kind)}</span><strong>${escapeHtml(item.value.name)}</strong><p>${item.price} gold</p></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`).join("")}</div><div class="shop-footer"><span>${state.gold} gold</span><button class="small-button" data-reroll ${state.gold<shopRerollCost()?"disabled":""}>Reroll · ${shopRerollCost()} gold</button></div><details class="sell-inventory"><summary>Sell from inventory</summary>${renderSellList()}</details></section>`;
+    const upgradeWeapons=state.weapons.map((weapon,index)=>({weapon,index})).filter(({weapon})=>weaponFamily(weapon)===(state.chosenClass||state.class));
+    if(!upgradeWeapons.some(entry=>entry.index===state.upgradeWeaponIndex))state.upgradeWeaponIndex=upgradeWeapons.find(entry=>entry.weapon===state.weapon)?.index??upgradeWeapons[0]?.index??-1;
+    content=`<section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title"><div class="modal-heading"><div><p class="section-kicker">Floor ${state.floor} merchant · ${DIFFICULTIES[state.difficulty]?.label||"Normal"}</p><h2 id="shop-title">Shop</h2></div><button class="icon-close" data-close-modal aria-label="Close shop">×</button></div><div class="shop-upgrade"><div><strong>Stock quality · Level ${state.shopLootUpgradeLevel||0}/5</strong><p>Upgrade shop rarity odds for this run; current stock refreshes. Next upgrade: ${shopUpgradeCost()} gold.</p></div><button class="small-button" data-upgrade-shop ${(state.shopLootUpgradeLevel||0)>=5||state.gold<shopUpgradeCost()?"disabled":""}>Upgrade</button></div><h3 class="shop-section-title">Weapon forge</h3><p class="shop-forge-note">Only ${escapeHtml(CLASS_NAMES[state.chosenClass||state.class]||"your class")} weapons can be upgraded. Upgrades reset their limit each floor.</p>${upgradeWeapons.length?`<label class="forge-select-label">Weapon <select data-forge-weapon>${upgradeWeapons.map(({weapon,index})=>`<option value="${index}" ${index===state.upgradeWeaponIndex?"selected":""}>${escapeHtml(weapon.name)} · ${escapeHtml(weapon.rarity)} ${escapeHtml(weapon.type)} · Lv ${weapon.level||1}</option>`).join("")}</select></label>${renderWeaponForge(upgradeWeapons.find(entry=>entry.index===state.upgradeWeaponIndex)?.weapon)}`:`<p class="empty-list">No class weapons available to upgrade.</p>`}<h3 class="shop-section-title">Weapons &amp; armor</h3><div class="shop-list">${state.shopStock.map((item,index)=>`<article class="shop-item">${item.kind==="weapon"?weaponArt(item.value):itemArt(`Images/Armor/${item.value.file}`,item.value.name)}<div><span class="item-meta">${escapeHtml(item.value.rarity)} ${escapeHtml(item.kind)}</span><strong>${escapeHtml(item.value.name)}</strong><p>${item.price} gold</p></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`).join("")}</div><h3 class="shop-section-title">Potions</h3><div class="shop-list shop-potions">${state.shopPotions.map((item,index)=>`<article class="shop-item">${potionArt(item.value)}<div><span class="item-meta">${escapeHtml(item.value.rarity)} potion</span><strong>${escapeHtml(item.value.name)}</strong><p>${item.price} gold</p></div><button class="small-button" data-buy-potion="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`).join("")}</div><div class="shop-footer"><span>${state.gold} gold</span><button class="small-button" data-reroll ${state.gold<shopRerollCost()?"disabled":""}>Reroll · ${shopRerollCost()} gold</button></div><details class="sell-inventory"><summary>Sell from inventory</summary>${renderSellList()}</details></section>`;
   } else if(modal==="death"){
     content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-title"><p class="section-kicker">Run ended</p><h2 id="death-title">You have fallen.</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:""}<div class="action-grid"><button class="action-button" data-restart>Restart run</button><button class="action-button secondary" data-title>Return to title</button></div></section>`;
   } else if(modal==="recap"){
@@ -1169,6 +1272,7 @@ function showModal(){
   bindUseItem();
   bindInventoryControls();
   screen.querySelectorAll("[data-buy]").forEach(button=>button.addEventListener("click",()=>buyItem(Number(button.dataset.buy))));
+  screen.querySelectorAll("[data-buy-potion]").forEach(button=>button.addEventListener("click",()=>buyPotion(Number(button.dataset.buyPotion))));
   screen.querySelectorAll("[data-sell-type]").forEach(button=>button.addEventListener("click",()=>sellItem(button.dataset.sellType,Number(button.dataset.sellIndex))));
   screen.querySelectorAll("[data-index-category]").forEach(button=>button.addEventListener("click",()=>{indexCategory=button.dataset.indexCategory;selectedIndexItem=null;screen.querySelectorAll("[data-index-category]").forEach(category=>category.classList.toggle("active",category===button));screen.querySelector("#index-content").innerHTML=renderIndexCategory();bindIndexItems();}));
   screen.querySelectorAll("[data-leaderboard-difficulty]").forEach(button=>button.addEventListener("click",()=>refreshGlobalLeaderboard(button.dataset.leaderboardDifficulty)));
@@ -1177,6 +1281,8 @@ function showModal(){
   bindIndexItems();
   screen.querySelector("[data-reroll]")?.addEventListener("click",rerollShop);
   screen.querySelector("[data-upgrade-shop]")?.addEventListener("click",upgradeShopLoot);
+  screen.querySelector("[data-forge-weapon]")?.addEventListener("change",event=>{state.upgradeWeaponIndex=Number(event.target.value);modal="shop";render();});
+  screen.querySelectorAll("[data-weapon-upgrade]").forEach(button=>button.addEventListener("click",()=>upgradeWeapon(button.dataset.weaponUpgrade)));
   screen.querySelector("[data-restart]")?.addEventListener("click",()=>newRun(state.name,state.devMode,state.saveSlot,state.difficulty));
   screen.querySelector("[data-title]")?.addEventListener("click",()=>{modal=null;state=null;titleButton.hidden=true;startScreen();});
 }
@@ -1279,23 +1385,52 @@ function refreshInventoryList(tab){
   bindInventoryListActions();bindUseItem();bindInventoryControls();
 }
 
-function bindUseItem(){screen.querySelectorAll("[data-use-item]").forEach(button=>button.addEventListener("click",()=>{const item=state.items[Number(button.dataset.useItem)];if(!item)return;if(item.type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+item.amount+Math.max(0,effectiveStat("wis")-10));item.quantity--;if(item.quantity<=0)state.items.splice(state.items.indexOf(item),1);message(`Used ${item.name}.${state.combat?" Your turn passes.":""}`);modal="inventory";if(state.combat)enemyTurn();else render();}));}
+function bindUseItem(){screen.querySelectorAll("[data-use-item]").forEach(button=>button.addEventListener("click",()=>{if(state.combat?.bonusAttackPending){message("Take your extra attack before using an item.");render();return;}const item=state.items[Number(button.dataset.useItem)];if(!item)return;if(item.type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+item.amount+Math.max(0,effectiveStat("wis")-10));item.quantity--;if(item.quantity<=0)state.items.splice(state.items.indexOf(item),1);message(`Used ${item.name}.${state.combat?" Your turn passes.":""}`);modal="inventory";if(state.combat)enemyTurn();else render();}));}
 
 function openShop(){
-  const room=currentRoom();if(!state.shopStock)state.shopStock=Array.from({length:6},()=>shopItem());modal="shop";render();
+  const room=currentRoom();if(!Array.isArray(state.shopStock)||state.shopStock.some(item=>item.kind==="item")){state.shopStock=Array.from({length:6},()=>shopItem());}if(!Array.isArray(state.shopPotions)||state.shopPotions.length!==2)state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();
 }
 function shopItem(){
-  let rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const kind=DUNGEON_RULES.rollShopOfferKind();
+  let rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const kind=Math.random()<0.6?"weapon":"armor";
   if(kind==="weapon"){const value=makeLootWeapon(rarity);rarity=value.rarity;return{kind:"weapon",value,price:priceFor(value.goldValue||value.damage*5,rarity)};}
-  if(kind==="armor"){let entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);if(rarity==="Divine")entries=entries.filter(entry=>![...state.armor,...state.weapons,...state.items].some(item=>item.name===entry.name));if(!entries.length)entries=ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");const value=DUNGEON_RULES.createCatalogArmor(choice(entries),state.floor);return{kind:"armor",value,price:priceFor(value.goldValue,rarity)};}
-  const type=DUNGEON_RULES.rollPotionType(Math.random,state.chosenClass||state.class);rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===type));const value={name:`${rarity} ${type==="health"?"Health":"Mana"} Potion`,type,amount:30+state.floor*4,quantity:1,rarity};return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};
+  let entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);if(rarity==="Divine")entries=entries.filter(entry=>![...state.armor,...state.weapons,...state.items].some(item=>item.name===entry.name));if(!entries.length)entries=ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");const value=DUNGEON_RULES.createCatalogArmor(choice(entries),state.floor);return{kind:"armor",value,price:priceFor(value.goldValue,rarity)};
 }
+function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const value=makePotionLoot(rarity).value;value.amount=value.type==="mana"?30+state.floor*4:0;return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};}
 function priceFor(base,rarity="Common"){const rarityScale=[1,1.35,1.9,2.8,4.5,8,15][Math.max(0,RARITIES.indexOf(rarity))];return Math.max(1,Math.round(base*rarityScale*(DIFFICULTIES[state.difficulty]?.shopCost||1)*(1-Math.max(0,effectiveStat("cha")-10)*0.02)));}
 function shopRerollCost(){return Math.round(30*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function shopUpgradeCost(){return Math.round(125*Math.pow(2,state.shopLootUpgradeLevel||0)*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
-function buyItem(index){const item=state.shopStock[index];if(!item||state.gold<item.price)return;state.gold-=item.price;if(item.kind==="weapon"){state.weapons.push(item.value);state.inventoryNotice=true;}else if(item.kind==="armor"){state.armor.push(item.value);state.inventoryNotice=true;equipCollectedArmor(item.value);}else state.items.push(item.value);state.shopStock.splice(index,1);if(item.value.rarity==="Divine"){state.shopStock=state.shopStock.filter(offer=>offer.kind!==item.kind||(item.kind==="weapon"?offer.value.name!==item.value.name:item.kind==="armor"?offer.value.name!==item.value.name:offer.value.type!==item.value.type||offer.value.rarity!=="Divine"));}message(`Purchased ${item.value.name}.`);modal="shop";render();}
-function rerollShop(){const cost=shopRerollCost();if(state.gold<cost){message(`Rerolling costs ${cost} gold.`);modal="shop";render();return;}state.gold-=cost;state.shopStock=Array.from({length:6},()=>shopItem());modal="shop";render();}
-function upgradeShopLoot(){if((state.shopLootUpgradeLevel||0)>=5)return;const cost=shopUpgradeCost();if(state.gold<cost)return;state.gold-=cost;state.shopLootUpgradeLevel=(state.shopLootUpgradeLevel||0)+1;state.shopStock=Array.from({length:6},()=>shopItem());message(`Permanent shop stock upgrade increased to level ${state.shopLootUpgradeLevel} for this run.`);modal="shop";render();}
+function weaponUpgradeCost(weapon){return Math.round((30+10*state.floor)*Math.pow(1.12,Math.max(0,(weapon.level||1)-1))*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
+function weaponUpgradeCount(weapon){return (weapon.upgradeFloor||state.floor)===state.floor?(weapon.upgradesThisFloor||0):0;}
+function renderWeaponForge(weapon){
+  if(!weapon)return "";
+  const count=weaponUpgradeCount(weapon),cost=weaponUpgradeCost(weapon),disabled=count>=3||state.gold<cost;
+  const choices=[
+    ["damage",`Damage +${state.floor} (locked to this floor)`],
+    ["crit","Crit +1 percentage point"],
+    ["speed","Weapon Speed +2 (improves evasion)"],
+    ...(weapon.attacks?.some(attack=>attack.effect)?[["effect","Special-attack effect chance +4 points"]]:[])
+  ];
+  return `<div class="weapon-forge-status"><span>Level ${weapon.level||1}</span><span>${count}/3 upgrades this floor</span><span>${weapon.damage+(weapon.damageUpgrade||0)} damage · ${Math.round(((weapon.crit||0)+(weapon.critUpgrade||0))*100)}% weapon crit · ${Math.round((weapon.effectChance??0.2)*100)}% special-effect chance</span></div><div class="forge-upgrades">${choices.map(([key,label])=>`<button class="small-button" data-weapon-upgrade="${key}" ${disabled?"disabled":""}>${escapeHtml(label)} · ${cost}g</button>`).join("")}</div><p class="forge-cost-note">Next upgrade costs ${cost} gold. ${count>=3?"This weapon has reached its three-upgrade limit for this floor.":"Limit: three upgrades per weapon per floor."}</p>`;
+}
+function upgradeWeapon(upgrade){
+  const weapon=state.weapons[Number(state.upgradeWeaponIndex)];
+  if(!weapon||weaponFamily(weapon)!==(state.chosenClass||state.class))return;
+  const count=weaponUpgradeCount(weapon),cost=weaponUpgradeCost(weapon);
+  if(count>=3||state.gold<cost)return;
+  if(weapon.upgradeFloor!==state.floor){weapon.upgradeFloor=state.floor;weapon.upgradesThisFloor=0;}
+  state.gold-=cost;
+  if(upgrade==="damage")weapon.damageUpgrade=(weapon.damageUpgrade||0)+state.floor;
+  else if(upgrade==="crit")weapon.critUpgrade=(weapon.critUpgrade||0)+0.01;
+  else if(upgrade==="speed"){weapon.speed=(weapon.speed||10)+2;weapon.speedUpgrade=(weapon.speedUpgrade||0)+2;}
+  else if(upgrade==="effect"&&weapon.attacks?.some(attack=>attack.effect))weapon.effectChance=Math.min(1,(weapon.effectChance??0.2)+0.04);
+  else {state.gold+=cost;return;}
+  weapon.level=(weapon.level||1)+1;weapon.upgradesThisFloor=(weapon.upgradesThisFloor||0)+1;
+  message(`${weapon.name} upgraded: ${upgrade}.` ,"reward");modal="shop";render();
+}
+function buyItem(index){const item=state.shopStock[index];if(!item||state.gold<item.price)return;state.gold-=item.price;if(item.kind==="weapon"){state.weapons.push(item.value);state.inventoryNotice=true;}else{state.armor.push(item.value);state.inventoryNotice=true;equipCollectedArmor(item.value);}state.shopStock.splice(index,1);if(item.value.rarity==="Divine"){state.shopStock=state.shopStock.filter(offer=>offer.kind!==item.kind||offer.value.name!==item.value.name);}message(`Purchased ${item.value.name}.`);modal="shop";render();}
+function buyPotion(index){const item=state.shopPotions?.[index];if(!item||state.gold<item.price)return;state.gold-=item.price;state.items.push(item.value);state.shopPotions.splice(index,1);message(`Purchased ${item.value.name}.`);modal="shop";render();}
+function rerollShop(){const cost=shopRerollCost();if(state.gold<cost){message(`Rerolling costs ${cost} gold.`);modal="shop";render();return;}state.gold-=cost;state.shopStock=Array.from({length:6},()=>shopItem());state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();}
+function upgradeShopLoot(){if((state.shopLootUpgradeLevel||0)>=5)return;const cost=shopUpgradeCost();if(state.gold<cost)return;state.gold-=cost;state.shopLootUpgradeLevel=(state.shopLootUpgradeLevel||0)+1;state.shopStock=Array.from({length:6},()=>shopItem());state.shopPotions=Array.from({length:2},()=>shopPotion());message(`Permanent shop stock upgrade increased to level ${state.shopLootUpgradeLevel} for this run.`);modal="shop";render();}
 
 function sellValue(item,kind){
   const rarityIndex=Math.max(0,RARITIES.indexOf(item.rarity||"Common"));
@@ -1321,7 +1456,7 @@ function sellItem(kind,index,returnModal="shop"){
   modal=returnModal;render();
 }
 
-function advanceFloor(){state.floor++;state.maxHp+=Math.floor(state.maxHp*0.08);state.hp=Math.min(state.maxHp,state.hp+Math.round(state.maxHp*0.2));state.mana=state.maxMana;state.shopStock=null;state.currentFloor=makeFloor(state.floor);state.currentFloor.rooms[0].visited=true;state.items=state.items.filter(item=>item.quantity>0);message(`Floor ${state.floor}. A new passage opens into the dungeon.`,"story");render();}
+function advanceFloor(){state.floor++;state.maxHp+=Math.floor(state.maxHp*0.08);state.hp=Math.min(state.maxHp,state.hp+Math.round(state.maxHp*0.2));state.mana=state.maxMana;state.shopStock=null;state.shopPotions=null;state.currentFloor=makeFloor(state.floor);state.currentFloor.rooms[0].visited=true;state.items=state.items.filter(item=>item.quantity>0);message(`Floor ${state.floor}. A new passage opens into the dungeon.`,"story");render();}
 
 titleButton.addEventListener("click",()=>{if(state&&!confirm("Return to the title? Your run is saved in this browser."))return;modal=null;state=null;titleButton.hidden=true;startScreen();});
 screen.addEventListener("click",event=>{
@@ -1339,7 +1474,7 @@ function renderPatchNotes(version){
 }
 
 document.querySelectorAll?.("[data-patch]").forEach(button=>button.addEventListener("click",()=>renderPatchNotes(button.dataset.patch)));
-renderPatchNotes("v0-patch-2");
+renderPatchNotes("v0-patch-3");
 if(typeof fetch==="function")fetch("about.txt").then(response=>{if(!response.ok)throw new Error("About text unavailable");return response.text();}).then(text=>{
   const target=document.querySelector("#about-copy");
   if(!target)return;

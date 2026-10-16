@@ -303,10 +303,11 @@
     const stat = effectiveStat(player[statKey] || 0, statKey, playerClass);
     const effect = weapon.effect;
     const attackEffect = attack.effect;
-    const critChance = Math.min(1, Math.max(0, (player.critChance || 0) + (weapon.crit || 0) + (attack.critBonus || 0) + (charged?.critBonus || 0) + (effect === "Focus" ? 0.1 : 0) + (["Headshot", "Snipe"].includes(effect) || ["Headshot", "Snipe"].includes(attackEffect) ? 0.2 : 0)));
+    const critChance = Math.min(1, Math.max(0, (player.critChance || 0) + (weapon.crit || 0) + (weapon.critUpgrade || 0) + (attack.critBonus || 0) + (charged?.critBonus || 0) + (effect === "Focus" ? 0.1 : 0) + (["Headshot", "Snipe"].includes(effect) || ["Headshot", "Snipe"].includes(attackEffect) ? 0.2 : 0)));
     const passiveMultiplier = ({ Penetration: 1.15, Pierce: 1.1, PiercingShot: 1.12, Void: 1.12, SpellPower: 1.12, SpellEcho: 1.08, Focus: 1.08, Draw: 1.12, DelayedCast: 1.15, Overcast: 1.25, RangeScaling: 1.12, Overdraw: 1.25, Momentum: 1 + Math.min(5, player.momentum || 0) * 0.04, ArcaneCharge: 1 + Math.min(5, player.arcaneCharge || 0) * 0.04 })[effect] || 1;
     const matchup = elementMatchup(weapon.element, targetElement);
-    const primaryDamage = Math.max(1, Math.round((((stat + (weapon.damage || 0)) * (attack.multiplier || 1) * (charged?.multiplier || 1) * passiveMultiplier) - (attack.targetDamageReduction || 0)) * matchup.multiplier));
+    const playerDamageScale = player.playerEffects?.Cripple ? 0.85 : 1;
+    const primaryDamage = Math.max(1, Math.round((((stat + (weapon.damage || 0) + (weapon.damageUpgrade || 0)) * (attack.multiplier || 1) * (charged?.multiplier || 1) * passiveMultiplier * playerDamageScale) - (attack.targetDamageReduction || 0)) * matchup.multiplier));
     return {
       primaryDamage,
       secondaryDamage: attack.aoe ? Math.max(1, Math.round(primaryDamage * (attack.secondaryMultiplier || 0.5))) : 0,

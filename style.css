@@ -182,6 +182,8 @@ button.compass-control:hover { border-color:var(--green); background:#e9eee3; }
 .enemy-information { min-width:0; }
 .enemy-name { display:flex; justify-content:space-between; gap:.5rem; color:var(--red); }
 .boss-enemy .enemy-name { font-weight:700; }
+.elite-enemy { border-left:3px solid #7b3f8c; }
+.elite-tag { display:inline-block; color:#71377f; font-weight:700; font-size:.82rem; margin:.15rem 0 .35rem; }
 .enemy-name strong { overflow-wrap:anywhere; font-size:.83rem; }
 .enemy-name span,.enemy-information p { color:var(--muted); font-size:.65rem; }
 .enemy-health { display:grid; gap:.25rem; margin-top:.35rem; color:var(--muted); font-size:.62rem; }
@@ -254,6 +256,13 @@ button.index-entry:hover { background:#e2e5d9; }
 .subtab-button.active,.sort-button.active { border-color:var(--green); color:var(--ink); background:#e5e9df; }
 .sort-button span { margin-left:.25rem; color:var(--green); font-weight:700; }
 .inventory-list,.shop-list { display:grid; gap:.55rem; }
+.shop-section-title { margin:1rem 0 .45rem; padding-bottom:.35rem; border-bottom:1px solid var(--line); font:1rem var(--display); }
+.shop-forge-note,.forge-cost-note { color:var(--muted); font-size:.86rem; margin:.35rem 0 .7rem; }
+.forge-select-label { display:flex; align-items:center; gap:.65rem; margin:.6rem 0; }
+.forge-select-label select { min-width:0; max-width:100%; padding:.5rem; color:var(--text); background:var(--panel); border:1px solid var(--line); }
+.weapon-forge-status { display:flex; flex-wrap:wrap; gap:.4rem 1rem; padding:.6rem 0; font-size:.9rem; }
+.forge-upgrades { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:.45rem; }
+.bonus-action-prompt { padding:.6rem .8rem; border-left:3px solid var(--reward); color:var(--reward); background:var(--panel); }
 .inventory-item,.shop-item { display:grid; grid-template-columns:4.6rem minmax(0,1fr) auto; align-items:center; gap:.75rem; padding:.5rem; border-left:3px solid var(--line-dark); background:#ebe7dc; }
 .inventory-item-actions { display:flex; flex-direction:column; align-items:stretch; gap:.35rem; }
 .inventory-item .item-art,.shop-item .item-art { height:4.5rem; }
