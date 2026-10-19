@@ -15,7 +15,7 @@ function loadBrowserGame(leaderboardApi = "") {
     Math: Object.assign(Object.create(Math), { random: () => 0.5 })
   };
   vm.createContext(context);
-  for (const file of ["game-index-data.js", "game-rules.js", "script.js"]) {
+  for (const file of ["game-index-data.js", "weapon-attack-data.js", "game-rules.js", "script.js"]) {
     vm.runInContext(fs.readFileSync(file, "utf8"), context);
   }
   vm.runInContext("render = () => {}; save = () => {};", context);
@@ -49,6 +49,17 @@ test("completed runs populate the local leaderboard when no global API is config
   vm.runInContext("newRun('Local Tester'); state.floor=20; state.floorsCleared=20; state.milestonePending=true; finishMilestoneRun();", context);
   assert.equal(vm.runInContext("loadLeaderboard('normal')[0].name", context), "Local Tester");
   assert.equal(vm.runInContext("loadLeaderboard('normal')[0].floors", context), 20);
+});
+
+test("players can end a run early and submit its cleared floors", () => {
+  const context = loadBrowserGame();
+  vm.runInContext("newRun('Easy Finisher', false, 'slot1', 'easy'); state.floorsCleared=7; state.floor=8; state.combat={boss:false,enemies:[]}; endRunEarly();", context);
+  assert.equal(vm.runInContext("state.runEnded", context), true);
+  assert.equal(vm.runInContext("state.runEndReason", context), "manual");
+  assert.equal(vm.runInContext("state.combat", context), null);
+  assert.equal(vm.runInContext("loadPersonalBests().easy.floors", context), 7);
+  assert.equal(vm.runInContext("loadLeaderboard('easy')[0].floors", context), 7);
+  assert.equal(vm.runInContext("modal", context), "run-end");
 });
 
 test("a failed global score submission can be retried", async () => {
@@ -85,4 +96,27 @@ test("V1.2 bug-fix notes include every audit correction", () => {
   for (const correction of ["Maximum health gained", "Reopening a shop", "Local leaderboard records", "Failed global score submissions", "event log"]) {
     assert.match(bugs, new RegExp(correction));
   }
+});
+
+test("V1.3 patch notes cover the weapon, fountain, and chest updates", () => {
+  const context = { window: {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync("patch-notes.js", "utf8"), context);
+  const notes = context.window.GAME_PATCH_NOTES;
+  const v12 = notes["v1.2"].sections.flatMap(section => section.items).join(" ");
+  const v13 = notes["v1.3"].sections.flatMap(section => section.items).join(" ");
+  assert.match(v13, /weapon-themed special attack progressions/);
+  assert.match(v13, /Fountains now offer a choice/);
+  assert.match(v13, /trapped chest now tests your Speed/);
+  assert.match(v13, /Potion names now use rarity instead of size/);
+  assert.match(v13, /40% chance/);
+  assert.match(v13, /End Run lets you finish an expedition early/);
+  assert.doesNotMatch(v12, /weapon-themed special attack progressions|Fountains now offer a choice|trapped chest now tests your Speed/);
+});
+
+test("patch notes are ordered newest to oldest", () => {
+  const context = { window: {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync("patch-notes.js", "utf8"), context);
+  assert.deepEqual(Object.keys(context.window.GAME_PATCH_NOTES), ["v1.3", "v1.2", "v1.1", "v1"]);
 });

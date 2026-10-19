@@ -17,6 +17,7 @@ function loadBrowserGame(leaderboardApi = "") {
   };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync("game-index-data.js", "utf8"), context);
+  vm.runInContext(fs.readFileSync("weapon-attack-data.js", "utf8"), context);
   vm.runInContext(fs.readFileSync("game-rules.js", "utf8"), context);
   vm.runInContext(fs.readFileSync("script.js", "utf8"), context);
   vm.runInContext("render = () => {}; save = () => {};", context);
@@ -70,6 +71,13 @@ test("difficulty scales enemy pressure, XP requirements, and shop prices", () =>
   const hardPrice = vm.runInContext("priceFor(100, 'Rare')", context);
   vm.runInContext("state.difficulty='normal'", context);
   assert.ok(hardPrice > vm.runInContext("priceFor(100, 'Rare')", context));
+});
+
+test("Easy difficulty bosses deal about ten damage on floor eleven", () => {
+  const context = loadBrowserGame();
+  vm.runInContext("newRun('Tester', false, 'slot1', 'easy');", context);
+  const floorElevenBoss = vm.runInContext("makeEnemy(11, true).damage", context);
+  assert.ok(floorElevenBoss >= 9 && floorElevenBoss <= 11, `Expected about 10 damage, got ${floorElevenBoss}`);
 });
 
 test("enemy floor scaling stays flat through floor two and begins on floor three", () => {
@@ -630,6 +638,31 @@ test("shop odds keep divine rare with a small capped upgrade and prices rise ste
   assert.deepEqual(Array.from(prices), [100,135,190,280,450,800,1500]);
 });
 
+test("shop armor prices scale with both rarity and floor-scaled defense", () => {
+  const context = loadBrowserGame();
+  vm.runInContext("newRun('Tester'); state.floor=8;", context);
+  const prices = vm.runInContext(`Object.fromEntries(["Common","Epic","Legendary","Mythic","Divine"].map(rarity=>{const entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);const value=DUNGEON_RULES.createCatalogArmor(entries[0],state.floor);const base=Math.max(value.goldValue||0,Math.round((value.defense*4+value.damageReduction*6+(value.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return [rarity,priceFor(base,rarity)]}))`, context);
+  assert.ok(prices.Legendary > 500, `Expected floor-eight Legendary armor to cost more than 500 gold; got ${prices.Legendary}`);
+  assert.ok(prices.Epic < prices.Legendary);
+  assert.ok(prices.Mythic > prices.Legendary);
+  assert.ok(prices.Divine > prices.Mythic);
+});
+
+test("shop reroll prices rise modestly with floor and stock upgrades, not reroll count", () => {
+  const context = loadBrowserGame();
+  vm.runInContext("newRun('Tester');", context);
+  const startingCost = vm.runInContext("shopRerollCost()", context);
+  vm.runInContext("state.floor=8;", context);
+  const floorCost = vm.runInContext("shopRerollCost()", context);
+  vm.runInContext("state.shopLootUpgradeLevel=3;", context);
+  const upgradedCost = vm.runInContext("shopRerollCost()", context);
+  assert.equal(startingCost, 30);
+  assert.ok(floorCost > startingCost);
+  assert.ok(upgradedCost > floorCost);
+  vm.runInContext("state.gold=100000; rerollShop();", context);
+  assert.equal(vm.runInContext("shopRerollCost()", context), upgradedCost);
+});
+
 test("shop stock upgrade persists for the run and costs increase exponentially", () => {
   const context = loadBrowserGame();
   vm.runInContext(`newRun("Tester"); state.gold=10000; state.shopStock=Array.from({length:6},()=>shopItem());`, context);
@@ -700,18 +733,18 @@ test("matching potions stack from drops and existing saves without merging diffe
   const context = loadBrowserGame();
   vm.runInContext(`
     newRun("Tester"); state.items=[];
-    grantLoot({kind:"item",value:{name:"Rare Healing Potion",type:"health",rarity:"Rare",amount:0,quantity:1}});
-    grantLoot({kind:"item",value:{name:"Rare Healing Potion",type:"health",rarity:"Rare",amount:0,quantity:2}});
+    grantLoot({kind:"item",value:{name:"Rare Health Potion",type:"health",rarity:"Rare",amount:0,quantity:1}});
+    grantLoot({kind:"item",value:{name:"Rare Health Potion",type:"health",rarity:"Rare",amount:0,quantity:2}});
     grantLoot({kind:"item",value:{name:"Rare Mana Potion",type:"mana",rarity:"Rare",amount:30,quantity:1}});
     var stackedBeforeMigration=state.items.map(item=>item.quantity);
-    state.items.push({name:"Rare Healing Potion",type:"health",rarity:"Rare",amount:0,quantity:3});
+    state.items.push({name:"Rare Health Potion",type:"health",rarity:"Rare",amount:0,quantity:3});
     migrateBrowserSave();
     var stackedAfterMigration=state.items.map(item=>item.quantity);
     var potionMarkup=renderInventoryItems("items");
   `, context);
   assert.deepEqual(Array.from(vm.runInContext("stackedBeforeMigration", context)), [3, 1]);
   assert.deepEqual(Array.from(vm.runInContext("stackedAfterMigration", context)), [6, 1]);
-  assert.match(vm.runInContext("potionMarkup", context), /Rare Healing Potion/);
+  assert.match(vm.runInContext("potionMarkup", context), /Rare Health Potion/);
   assert.match(vm.runInContext("potionMarkup", context), /x6/);
 });
 
@@ -738,6 +771,82 @@ test("cleared enemy rooms use the same map tile as empty rooms", () => {
   const context = loadBrowserGame();
   assert.equal(vm.runInContext("mapRoomImage({type:'enemy', cleared:true})", context), "Images/Rooms/empty-room.png");
   assert.equal(vm.runInContext("mapRoomImage({type:'enemy', cleared:false})", context), "Images/Rooms/enemy-room.png");
+});
+
+test("fountains offer drink or save-for-later choices and dry up after use", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`newRun("Tester"); const fountain=currentRoom(); fountain.type="fountain"; state.hp=40;`, context);
+  let actions = vm.runInContext("getActions()", context);
+  assert.match(actions, /Drink from fountain/);
+  assert.match(actions, /Save for later/);
+  assert.doesNotMatch(actions, /Inspect fountain/);
+
+  vm.runInContext("act('save-fountain')", context);
+  assert.equal(vm.runInContext("state.hp", context), 40);
+  assert.equal(vm.runInContext("currentRoom().fountainSaved", context), true);
+  assert.equal(vm.runInContext("currentRoom().fountainUsed", context), false);
+  assert.match(vm.runInContext("getActions()", context), /still here when you need it/);
+
+  vm.runInContext("act('drink-fountain')", context);
+  assert.equal(vm.runInContext("state.hp", context), vm.runInContext("state.maxHp", context));
+  assert.equal(vm.runInContext("currentRoom().fountainUsed", context), true);
+  assert.match(vm.runInContext("getActions()", context), /dried up\. Keep moving/);
+  vm.runInContext("act('drink-fountain')", context);
+  assert.equal(vm.runInContext("currentRoom().fountainUsed", context), true);
+});
+
+test("a trapped chest uses Speed to evade its blade or deals nonlethal damage equal to fifteen percent of HP", () => {
+  const slow = loadBrowserGame();
+  vm.runInContext(`newRun("Slow"); currentRoom().type="trap"; state.speed=0; state.weapon={speed:10}; state.hp=80; state.maxHp=120; state.equippedArmor={chest:{damageReduction:99}}; Math.random=()=>0.1;`, slow);
+  const hpBefore = vm.runInContext("state.hp", slow);
+  vm.runInContext("inspectChest(currentRoom())", slow);
+  assert.equal(vm.runInContext("state.hp", slow), 62);
+  vm.runInContext("state.hp=5; currentRoom().searched=false; Math.random=()=>0; inspectChest(currentRoom())", slow);
+  assert.equal(vm.runInContext("state.hp", slow), 1);
+  assert.equal(vm.runInContext("currentRoom().searched", slow), true);
+
+  const fast = loadBrowserGame();
+  vm.runInContext(`newRun("Fast"); currentRoom().type="trap"; state.speed=50; state.weapon={speed:10}; Math.random=()=>0.1;`, fast);
+  const fastHp = vm.runInContext("state.hp", fast);
+  vm.runInContext("inspectChest(currentRoom())", fast);
+  assert.equal(vm.runInContext("state.hp", fast), fastHp);
+  assert.equal(vm.runInContext("currentRoom().searched", fast), true);
+});
+
+test("fleeing ordinary fights succeeds forty percent of the time and failure spends a turn", () => {
+  const failed = loadBrowserGame();
+  vm.runInContext(`newRun("Runner"); state.hp=100; state.combat={boss:false,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[{name:"Pathblocker",hp:100,maxHp:100,damage:8,dodge:0,intent:{key:"attack",label:"Strike"}}]}; Math.random=()=>0.9; combatAction("flee");`, failed);
+  assert.notEqual(vm.runInContext("state.combat", failed), null);
+  assert.ok(vm.runInContext("state.hp", failed) < 100);
+  assert.match(vm.runInContext("state.log.map(entry=>entry.text).join(' ')", failed), /blocks your path/);
+
+  const escaped = loadBrowserGame();
+  vm.runInContext(`newRun("Runner"); state.hp=100; state.combat={boss:false,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[{name:"Pathblocker",hp:100,maxHp:100,damage:8,dodge:0,intent:{key:"attack",label:"Strike"}}]}; Math.random=()=>0.1; combatAction("flee");`, escaped);
+  assert.equal(vm.runInContext("state.combat", escaped), null);
+  assert.equal(vm.runInContext("state.hp", escaped), 100);
+});
+
+test("potion art uses the common health and mana art through Legendary and distinct Mythic and Divine styling", () => {
+  const context = loadBrowserGame();
+  const entries = ["Common","Epic","Legendary","Mythic","Divine"].map(rarity => ({
+    health: vm.runInContext(`potionArt({name:"${rarity} Health Potion",type:"health",rarity:"${rarity}"})`, context),
+    mana: vm.runInContext(`potionArt({name:"${rarity} Mana Potion",type:"mana",rarity:"${rarity}"})`, context)
+  }));
+  for (const entry of entries) {
+    assert.match(entry.health, /small-health-potion\.png/);
+    assert.match(entry.mana, /mana-potion\.png/);
+  }
+  for (const rarity of ["Mythic","Divine"]) {
+    assert.match(entries.find(entry=>entry.health.includes(`potion-${rarity.toLowerCase()}`)).health, /potion-(mythic|divine)/);
+  }
+  assert.doesNotMatch(entries[2].health, /potion-(mythic|divine)/);
+});
+
+test("older saved potion names migrate to rarity-based names without losing quantity", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`state={name:"Legacy",difficulty:"normal",items:[{name:"Small Health Potion",type:"health",rarity:"Common",amount:0,quantity:2},{name:"Large Health Potion",type:"health",rarity:"Rare",amount:0,quantity:1},{name:"Mana Potion",type:"mana",rarity:"Epic",amount:40,quantity:1}],weapons:[],armor:[],equippedArmor:{},runStats:{}}; migrateBrowserSave();`, context);
+  const potions = vm.runInContext("state.items.map(item=>[item.name,item.quantity])", context);
+  assert.deepEqual(Array.from(potions, row=>Array.from(row)), [["Common Health Potion",2],["Rare Health Potion",1],["Epic Mana Potion",1]]);
 });
 
 test("generated floors retain one boss and place the guaranteed shop outside its path cell", () => {

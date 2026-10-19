@@ -93,10 +93,7 @@ const ARMOR_INDEX = [...GAME_INDEX_DATA.armor, {
   name: "Iron Chestplate", rarity: "Common", type: "Chest Armor", set: "Iron",
   description: "A starter iron chestplate found in the first room.", file: "iron-chestplate.png"
 }];
-const ITEM_INDEX = [...GAME_INDEX_DATA.items, {
-  name: "Small Healing Potion", rarity: "Common", type: "Potion",
-  description: "A small potion found in the starting room that restores health.", file: "small-health-potion.png"
-}];
+const ITEM_INDEX = [...GAME_INDEX_DATA.items];
 const ROOM_LABELS = {
   start: "Starting Room", enemy: "Enemy Room", empty: "Empty Room", treasure: "Treasure Room",
   weapon: "Weapon Cache", fountain: "Fountain Room", shop: "Shop Room", trap: "Treasure Room", boss: "Boss Room"
@@ -334,7 +331,7 @@ function createWeapon(entry, rarity = entry[2], floor = 1) {
   };
   weapon.attacks = DUNGEON_RULES.createWeaponAttacks(
     entry[1] === "Bow" || entry[1] === "Crossbow" ? "archer" : entry[1] === "Staff" || entry[1] === "Wand" ? "mage" : "warrior",
-    rarity, weapon.type, weapon.element, weapon.manaCost || 0
+    rarity, weapon.type, weapon.element, weapon.manaCost || 0, weapon.name
   );
   return weapon;
 }
@@ -387,7 +384,13 @@ function migrateBrowserSave() {
   state.armor ||= [];
   const savedItems = state.items || [];
   state.items = [];
-  for (const item of savedItems) addInventoryItem(item);
+  for (const item of savedItems) {
+    if(item&&["health","mana"].includes(item.type)){
+      item.rarity=RARITIES.includes(item.rarity)?item.rarity:"Common";
+      item.name=`${item.rarity} ${item.type==="mana"?"Mana":"Health"} Potion`;
+    }
+    addInventoryItem(item);
+  }
   const misplacedArmor = state.weapons.filter(item => item && (item.slot || item.defense !== undefined || item.damageReduction !== undefined));
   state.weapons = state.weapons.filter(item => !misplacedArmor.includes(item));
   for (const armor of misplacedArmor) {
@@ -418,15 +421,17 @@ function migrateBrowserSave() {
     weapon.critUpgrade ??= 0;
     weapon.effectChance ??= 0.2;
     weapon.speedUpgrade ??= 0;
-    if (!weapon.attacks) weapon.attacks = DUNGEON_RULES.createWeaponAttacks(
-      ["Bow", "Crossbow"].includes(weapon.type) ? "archer" : ["Wand", "Staff"].includes(weapon.type) ? "mage" : "warrior",
-      weapon.rarity || "Common", weapon.type, weapon.element || "Physical", weapon.manaCost || 0
+    const family = DUNGEON_RULES.weaponFamilyForType(weapon.type) || "warrior";
+    const profileKey = `${family}|${weapon.name}|${weapon.type}|${weapon.rarity || "Common"}`;
+    if (window.GAME_WEAPON_ATTACK_DATA?.[profileKey] || !weapon.attacks) weapon.attacks = DUNGEON_RULES.createWeaponAttacks(
+      family, weapon.rarity || "Common", weapon.type, weapon.element || "Physical", weapon.manaCost || 0, weapon.name
     );
   }
-  if (state.weapon && !state.weapon.attacks) {
-    state.weapon.attacks = DUNGEON_RULES.createWeaponAttacks(
-      ["Bow", "Crossbow"].includes(state.weapon.type) ? "archer" : ["Wand", "Staff"].includes(state.weapon.type) ? "mage" : "warrior",
-      state.weapon.rarity || "Common", state.weapon.type, state.weapon.element || "Physical", state.weapon.manaCost || 0
+  if (state.weapon) {
+    const family = DUNGEON_RULES.weaponFamilyForType(state.weapon.type) || "warrior";
+    const profileKey = `${family}|${state.weapon.name}|${state.weapon.type}|${state.weapon.rarity || "Common"}`;
+    if (window.GAME_WEAPON_ATTACK_DATA?.[profileKey] || !state.weapon.attacks) state.weapon.attacks = DUNGEON_RULES.createWeaponAttacks(
+      family, state.weapon.rarity || "Common", state.weapon.type, state.weapon.element || "Physical", state.weapon.manaCost || 0, state.weapon.name
     );
   }
   if (state.weapon) {
@@ -458,7 +463,8 @@ function makeEnemy(floor, boss = false, index = 0) {
   const dex = Math.max(1, 8 + ({goblin:2,specter:2,vampire:1,werewolf:2,golem:-1,zombie:-1})[race] + ({Archer:2,Mage:1})[klass] + (boss?2:0));
   const regionDamageBonus=region.id==="undead"&&race==="skeleton"&&["Archer","Mage"].includes(klass)?1.15:1;
   const regionDexBonus=0;
-  return { name:enemyName, race, klass, element, dex:dex+regionDexBonus, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * rangedScale * damageScale * regionDamageBonus * (boss ? 1.5 * (milestoneBoss?1.25:1) : 1) * floorEnemyScale(floor, 1.1) * difficulty.enemyDamage)), damageReduction:race==="golem"?Math.max(1,Math.round((1+floor*0.35)*difficulty.enemyHealth)):0, dodge: race === "specter" ? 0.12 : klass === "Archer" ? 0.05 : 0.02, critChance:race==="werewolf"?0.1:0, lifeSteal:race==="vampire"?0.12:0, boss, milestoneBoss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)) };
+  const easyBossDamageScale=state?.difficulty==="easy"&&boss?0.55:1;
+  return { name:enemyName, race, klass, element, dex:dex+regionDexBonus, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * rangedScale * damageScale * regionDamageBonus * (boss ? 1.5 * (milestoneBoss?1.25:1) : 1) * floorEnemyScale(floor, 1.1) * difficulty.enemyDamage * easyBossDamageScale)), damageReduction:race==="golem"?Math.max(1,Math.round((1+floor*0.35)*difficulty.enemyHealth)):0, dodge: race === "specter" ? 0.12 : klass === "Archer" ? 0.05 : 0.02, critChance:race==="werewolf"?0.1:0, lifeSteal:race==="vampire"?0.12:0, boss, milestoneBoss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)) };
 }
 
 function assignRunChoice(floor,rooms,random=Math.random){
@@ -513,7 +519,7 @@ function compensateEliteCrowd(enemies, floor, random = Math.random) {
 }
 
 function makeRoom(type, x, y, id) {
-  return { id, type, x, y, visited: false, cleared: false, searched: false, trapRevealed: false, fountainUsed: false, connections: [] };
+  return { id, type, x, y, visited: false, cleared: false, searched: false, trapRevealed: false, fountainUsed: false, fountainSaved: false, connections: [] };
 }
 
 function makeFloor(floor) {
@@ -659,8 +665,10 @@ function enemyArt(enemy) {
 }
 
 function potionArt(item) {
-  const file = item.name.toLowerCase().includes("mana") ? "mana-potion.png" : item.name.toLowerCase().includes("large") ? "large-health-potion.png" : item.name.toLowerCase().includes("small") ? "small-health-potion.png" : "healing-potion.png";
-  return itemArt(`Images/Items/Potions/${file}`, item.name);
+  const mana=item.type==="mana"||/mana/i.test(item.name);
+  const file = mana ? "mana-potion.png" : "small-health-potion.png";
+  const rarity=(item.rarity||"common").toLowerCase();
+  return `<div class="item-art potion-art potion-${rarity}"><img src="Images/Items/Potions/${file}" alt="${escapeHtml(item.name)}"><span>${escapeHtml(item.name)}</span></div>`;
 }
 
 function bindArtFallbacks(root = screen) {
@@ -743,7 +751,10 @@ function getActions() {
       const chargeLabel=attack.chargesNextAttack?`Next hit: ~${preview.primaryDamage} dmg / ${preview.criticalDamage} crit · ${Math.round(preview.critChance*100)}% crit${aoePreview}`:`~${preview.primaryDamage} dmg / ${preview.criticalDamage} crit · ${Math.round(preview.critChance*100)}% crit${aoePreview}`;
       const matchup=` · elemental ${preview.elementRelation}${previewModifiers(preview)}`;
       const classPenalty=preview.offClass?" · off-class ×0.75":"";
-      return `<button class="action-button special-action" data-attack="${escapeHtml(attack.command)}" ${disabled?"disabled":""}>${escapeHtml(attack.name)}<small>${cooldown?`Cooldown ${cooldown}`:`${chargeLabel}${classPenalty}${matchup}${attack.effect?` · ${effectIcon(attack.effect)}`:""}${attack.aoe?` · ${preview.targetCount} targets`:""}${preview.manaCost?` · ${preview.manaCost} mana`:""}${preview.ammoCost?` · ${preview.ammoCost} arrow${preview.ammoCost===1?"":"s"} · ${state.arrows||0} shared remaining`:""}${preview.manaGain?` · +${preview.manaGain} mana on hit`:""}`}</small></button>`;
+      const targetLabel=attack.aoe?` · ${preview.targetCount} targets`:` · single target`;
+      const resources=`${preview.manaCost?` · ${preview.manaCost} mana`:""}${preview.ammoCost?` · ${preview.ammoCost} arrow${preview.ammoCost===1?"":"s"} · ${state.arrows||0} shared remaining`:""}${preview.manaGain?` · +${preview.manaGain} mana on hit`:""}${attack.healOnHit?` · heals ${Math.round(attack.healOnHit*100)}% of damage`:""}`;
+      const cooldownLabel=` · ${preview.cooldown?`${preview.cooldown} turn cooldown`:"no cooldown"}`;
+      return `<button class="action-button special-action" data-attack="${escapeHtml(attack.command)}" ${disabled?"disabled":""}>${escapeHtml(attack.name)}<small>${cooldown?`Cooldown ${cooldown}`:`${chargeLabel}${classPenalty}${matchup}${targetLabel}${attack.effect?` · ${effectIcon(attack.effect)}`:""}${resources}${cooldownLabel}`}</small></button>`;
     }).join("");
     const selectedEnemy=state.combat.enemies[state.target];
     const disruptable=DUNGEON_RULES.hasDisruptibleIntent(selectedEnemy);
@@ -766,7 +777,9 @@ function getActions() {
   if(room.type==="enemy"&&room.routeChoice&&!room.routeChoiceMade)return `<p class="prompt-note">Two routes split through this chamber. One is quiet with a small reward; the other leads to a tougher fight with better loot.</p><div class="action-grid"><button class="action-button" data-action="route-safe">Take the safe route<small>Leave without a fight · small gold reward</small></button><button class="action-button" data-action="route-risky">Take the challenge<small>More enemies · tougher fight · guaranteed loot</small></button></div>`;
   if (room.type === "start") return `<div class="action-grid"><button class="action-button" data-action="inspect-desk">Inspect the desk</button><button class="action-button" data-action="inspect-closet">Inspect the closet</button></div>${state.starter.classOffer && !state.class ? `<div class="class-choice"><p>The desk holds three forgotten weapons. Choose one.</p><div class="action-grid"><button class="action-button" data-class="warrior">Warrior · Sword</button><button class="action-button" data-class="archer">Archer · Bow</button><button class="action-button" data-class="mage">Mage · Staff</button></div></div>` : ""}`;
   if (room.type === "treasure" || room.type === "trap" || room.type === "weapon") return `<div class="action-grid"><button class="action-button" data-action="inspect-chest">Inspect chest</button><button class="action-button secondary" data-action="inspect-floor">Inspect floor</button></div>`;
-  if (room.type === "fountain") return `<div class="action-grid"><button class="action-button" data-action="inspect-fountain">Inspect fountain</button><button class="action-button" data-action="drink-fountain" ${room.fountainUsed ? "disabled" : ""}>Drink from fountain</button></div>`;
+  if (room.type === "fountain") return room.fountainUsed
+    ? `<p class="prompt-note">The fountain has dried up. Keep moving.</p><div class="action-grid"><button class="action-button" disabled>Fountain dried up</button></div>`
+    : `<p class="prompt-note">${room.fountainSaved ? "The untouched fountain is still here when you need it." : "A clear fountain offers a chance to recover."}</p><div class="action-grid"><button class="action-button" data-action="drink-fountain">Drink from fountain</button><button class="action-button secondary" data-action="save-fountain">Save for later</button></div>`;
   if (room.type === "shop") return `<div class="action-grid"><button class="action-button" data-action="shop">Browse shop</button></div>`;
   if (room.type === "boss") return `<p class="prompt-note">A heavy presence presses from beyond the sealed doorway.</p><div class="action-grid"><button class="action-button boss-action" data-action="enter-boss">Enter boss chamber</button></div>`;
   return `<p class="prompt-note">Nothing here asks for your attention.</p>`;
@@ -879,7 +892,7 @@ function render() {
   indexButton.hidden = modal === "death";
   const room = currentRoom();
   const aliveEnemies = state.combat?.enemies.map((enemy, index) => ({ enemy, index })).filter(item => item.enemy.hp > 0) || [];
-  screen.innerHTML = `<div class="run-topline"><span>Floor ${state.floor} · ${escapeHtml(region.name)}</span><span>${escapeHtml(state.name)}</span><span>${DIFFICULTIES[state.difficulty]?.label||"Normal"} · Level ${state.level}${state.skillPoints ? ` · ${state.skillPoints} skill point${state.skillPoints === 1 ? "" : "s"}` : ""}</span><div class="run-shortcuts"><button class="small-button" data-open-recap>Run record</button><button class="small-button" data-open-leaderboard>Leaderboard</button></div></div>
+  screen.innerHTML = `<div class="run-topline"><span>Floor ${state.floor} · ${escapeHtml(region.name)}</span><span>${escapeHtml(state.name)}</span><span>${DIFFICULTIES[state.difficulty]?.label||"Normal"} · Level ${state.level}${state.skillPoints ? ` · ${state.skillPoints} skill point${state.skillPoints === 1 ? "" : "s"}` : ""}</span><div class="run-shortcuts"><button class="small-button" data-open-recap>Run record</button><button class="small-button" data-open-leaderboard>Leaderboard</button><button class="small-button" data-end-run ${state.floorsCleared<1||state.runEnded?"disabled":""}>End run</button></div></div>
     <div class="game-layout">
       <aside class="player-panel">
         <div class="player-stats">
@@ -923,7 +936,7 @@ function renderCombat(enemies) {
   const attackInfo = state.showWeaponInfo ? `<div class="weapon-attack-info">${listedAttacks.map(attack => {
     const preview = attackPreview(attack, targetCount);
     const matchup = ` · elemental ${preview.elementRelation}${previewModifiers(preview)}`;
-    return `<article><strong>${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${preview.primaryDamage} damage / ${preview.criticalDamage} crit${attack.aoe ? ` / ${preview.secondaryDamage} secondary · ${preview.targetCount} targets` : ""} · ${Math.round(preview.critChance * 100)}% crit${preview.offClass?" · off-class ×0.75":""}${matchup} · ${preview.cooldown ? `${preview.cooldown} turn cooldown` : "No cooldown"}${preview.effect ? ` · ${escapeHtml(preview.effect)}` : ""}${preview.manaCost ? ` · ${preview.manaCost} mana` : ""}${preview.ammoCost ? ` · ${preview.ammoCost} arrow${preview.ammoCost === 1 ? "" : "s"}` : ""}${preview.manaGain ? ` · restores ${preview.manaGain} mana on hit` : ""}</small></article>`;
+    return `<article><strong>${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${preview.primaryDamage} damage / ${preview.criticalDamage} crit${attack.aoe ? ` / ${preview.secondaryDamage} secondary · ${preview.targetCount} targets` : " · single target"} · ${Math.round(preview.critChance * 100)}% crit${preview.offClass?" · off-class ×0.75":""}${matchup} · ${preview.cooldown ? `${preview.cooldown} turn cooldown` : "No cooldown"}${preview.effect ? ` · ${escapeHtml(preview.effect)}` : ""}${preview.manaCost ? ` · ${preview.manaCost} mana` : ""}${preview.ammoCost ? ` · ${preview.ammoCost} arrow${preview.ammoCost === 1 ? "" : "s"}` : ""}${preview.manaGain ? ` · restores ${preview.manaGain} mana on hit` : ""}${attack.healOnHit ? ` · heals ${Math.round(attack.healOnHit * 100)}% of damage` : ""}</small></article>`;
   }).join("")}</div>` : "";
   return `<div class="combat-header"><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><div class="enemy-list">${enemyCards}</div>${renderPlayerCombatStatuses()}<div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}${state.combat?.bonusAttackPending?`<p class="bonus-action-prompt">You’re too fast! Choose one attack before the enemies act.</p>`:""}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>Your turn</h3>${getActions()}</div>`;
 }
@@ -1038,12 +1051,12 @@ function act(action) {
   if(state.runEnded)return;
   const room=currentRoom();
   if (action==="inspect-desk") { state.starter.desk=true; state.starter.classOffer=true; message("Inside the desk is no single weapon, but three possibilities: a sword, a bow, and a staff. Choose your class before leaving.","story"); render(); return; }
-  if (action==="inspect-closet") { if(state.starter.closet){message("The closet is empty now.");} else {state.starter.closet=true;const chest=ARMOR_INDEX.find(item=>item.name==="Common Iron Chest");const armor=DUNGEON_RULES.createCatalogArmor(chest,1);armor.name="Iron Chestplate";state.armor.push(armor);state.inventoryNotice=true;equipCollectedArmor(armor);addInventoryItem({name:"Small Healing Potion",rarity:"Common",type:"health",amount:25,quantity:1});message("Behind a moth-eaten cloak, you find an iron chestplate and a small healing potion.");} render();return; }
+  if (action==="inspect-closet") { if(state.starter.closet){message("The closet is empty now.");} else {state.starter.closet=true;const chest=ARMOR_INDEX.find(item=>item.name==="Common Iron Chest");const armor=DUNGEON_RULES.createCatalogArmor(chest,1);armor.name="Iron Chestplate";state.armor.push(armor);state.inventoryNotice=true;equipCollectedArmor(armor);addInventoryItem({name:"Common Health Potion",rarity:"Common",type:"health",amount:25,quantity:1});message("Behind a moth-eaten cloak, you find an iron chestplate and a Common Health Potion.");} render();return; }
   if (action==="inventory") { openInventory(); return; }
   if (action==="inspect-chest") { inspectChest(room); render(); return; }
   if (action==="inspect-floor") { room.trapRevealed=true; message(room.type==="trap"?"A fine seam in the floor gives away the hidden mechanism.":"You check the floor. Dust, stone, and old scratches.");render();return; }
-  if (action==="inspect-fountain") { message("Clear water moves beneath the stone surface. Drink when you need it.");render();return; }
-  if (action==="drink-fountain") { const healed=state.maxHp-state.hp;state.hp=state.maxHp;room.fountainUsed=true;message(healed?`The fountain restores ${healed} health.`:"You were already at full health.");render();return; }
+  if (action==="save-fountain") { if(room.fountainUsed){message("The fountain has dried up. Keep moving.");render();return;}room.fountainSaved=true;message("You leave the fountain untouched. It will be here if you need it later.");render();return; }
+  if (action==="drink-fountain") { if(room.fountainUsed){message("The fountain has dried up. Keep moving.");render();return;}const healed=state.maxHp-state.hp;state.hp=state.maxHp;room.fountainUsed=true;room.fountainSaved=false;message(healed?`You drink from the fountain and restore ${healed} health. It dries up; keep moving.`:"You drink from the fountain, but you were already at full health. It dries up; keep moving.");render();return; }
   if (action==="shop") { openShop(); return; }
   if (action==="enter-boss") { startCombat(true); return; }
   if (action==="route-safe"||action==="route-risky") { chooseRoute(action==="route-safe"); return; }
@@ -1071,11 +1084,11 @@ function inspectChest(room) {
   if(room.type==="trap") {
     room.trapRevealed=true;
     const outcome=randomInt(3);
-    if(outcome===0){const damage=Math.min(state.hp-1,15+state.floor*2);state.hp-=Math.max(0,damage);message("The chest snaps open like a jaw. It was a mimic; you scramble back, losing health.","danger");}
+    if(outcome===0){const speed=effectiveStat("speed")+Math.max(0,(state.weapon?.speed||10)-10)+DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).speed;const difficulty=24+Math.floor(Math.max(0,state.floor-1)/4);const check=randomInt(20)+1+speed;if(check>=difficulty)message("You move quickly and slip past the chest’s hidden blade. It snaps shut against the stone.","story");else{const damage=Math.min(Math.max(0,state.hp-1),Math.max(1,Math.round(state.maxHp*0.15)));state.hp-=damage;state.runStats.damageTaken+=damage;message(`You are too slow to avoid the chest’s hidden blade. It cuts away ${damage} health, but leaves you standing.`,"danger");}}
     else if(outcome===1){const stolen=Math.min(state.gold,Math.ceil(state.gold/2));state.gold-=stolen;message(`The trapped chest springs. A hidden mechanism steals ${stolen} gold.`,"danger");}
     else {const loot=makeLoot();grantLoot(loot);message(`You avoid the mechanism and find ${loot.kind==="weapon"?`${loot.value.rarity} ${loot.value.name}`:loot.kind==="armor"?`${loot.value.rarity} ${loot.value.name}`:itemNameWithRarity(loot.value)}.`);}
-  } else if(room.type==="weapon") { const weapon=makeLootWeapon(null,"Rare");state.weapons.push(weapon);state.inventoryNotice=true;addInventoryItem({name:"Large Health Potion",type:"health",amount:60,quantity:1,rarity:"Rare"});message(`Inside: ${weapon.rarity} ${weapon.name} (${weapon.type}) and a Rare Large Health Potion.`); }
-  else {state.gold+=15;const foundPotion=Math.random()<0.35;if(foundPotion)addInventoryItem({name:"Small Health Potion",type:"health",amount:25,quantity:1,rarity:"Common"});message(foundPotion?"Inside the chest, beneath a layer of velvet, you find a small healing potion and 15 gold coins.":"The chest holds 15 gold coins; its healing supplies have long since been taken.");}
+  } else if(room.type==="weapon") { const weapon=makeLootWeapon(null,"Rare");state.weapons.push(weapon);state.inventoryNotice=true;addInventoryItem({name:"Rare Health Potion",type:"health",amount:60,quantity:1,rarity:"Rare"});message(`Inside: ${weapon.rarity} ${weapon.name} (${weapon.type}) and a Rare Health Potion.`); }
+  else {state.gold+=15;const foundPotion=Math.random()<0.35;if(foundPotion)addInventoryItem({name:"Common Health Potion",type:"health",amount:25,quantity:1,rarity:"Common"});message(foundPotion?"Inside the chest, beneath a layer of velvet, you find a Common Health Potion and 15 gold coins.":"The chest holds 15 gold coins; its healing supplies have long since been taken.");}
 }
 
 function roomTypeForFloor(room) {
@@ -1158,7 +1171,7 @@ function combatAction(action) {
     message(`You disrupt ${enemy.name}'s ${enemy.intent.label.toLowerCase()}. Your turn passes.`,"story");
     enemyTurn();return;
   }
-  if(action==="flee") { if(fight.boss){message("The boss chamber seals behind you. You cannot flee this fight.","danger");render();return;} state.combat=null;state.braced=false;message("You break away and retreat to the previous room.");render();return; }
+  if(action==="flee") { if(fight.boss){message("The boss chamber seals behind you. You cannot flee this fight.","danger");render();return;} if(Math.random()<0.4){state.combat=null;state.braced=false;message("You slip past the enemy and retreat to the previous room.","story");render();return;} message(`${enemy.name} blocks your path and stops you from escaping!` ,"danger");enemyTurn();return; }
   if(action==="heal"||action==="mana") { const type=action==="heal"?"health":"mana";const item=state.items.find(it=>it.type===type && it.quantity>0);if(!item){message(`No ${type} potion in your inventory.`);render();return;}item.quantity--;if(type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+item.amount+Math.max(0,effectiveStat("wis")-10));message(`You use a ${item.name}. Your turn passes.`);enemyTurn();return; }
   const weapon=state.weapon; if(!weapon){message("You need a weapon before you can attack.");render();return;}
   const special=DUNGEON_RULES.getSpecialAttack(weapon,action);
@@ -1190,6 +1203,7 @@ function combatAction(action) {
   const crit=Math.min(1,state.critChance+armorBonuses.critChance+(weapon.crit||0)+(weapon.critUpgrade||0)+(attack.critBonus||0)+charged.critBonus+(weapon.effect==="Focus"?0.1:0)+(["Headshot","Snipe"].includes(weapon.effect)||["Headshot","Snipe"].includes(attack.effect)?0.2:0));
   const targets=special?.aoe?fight.enemies.filter(candidate=>candidate.hp>0):[enemy];
   let landed=false;
+  let attackDamageDealt=0;
   for(const target of targets){
     if(state.playerEffects?.Blind&&Math.random()<0.2){message(`Blindness makes your ${attack.name.toLowerCase()} miss.` ,"danger");continue;}
     const tracksTarget=["Homing","Snipe","Headshot"].includes(weapon.effect)||["Homing","Snipe","Headshot"].includes(attack.effect);
@@ -1220,10 +1234,11 @@ function combatAction(action) {
     if(classPenalty<1)reasons.push("off-class damage penalty");
     const detail=reasons.length?` (${reasons.join("; ")})`:"";
     const dealt=applyEnemyDamage(target,damage,`${attack.name} hits ${target.name}${isCrit?" critically":""}${detail}`);
+    attackDamageDealt+=dealt;
     let applied=weapon.effect||null;
     if(weapon.effect==="Thorns")state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Thorns",damage);
     else if(weapon.effect)applyWeaponEffect(target,weapon.effect,damage,!special?.aoe);
-    if(special?.effect&&special.effect!==weapon.effect){if(Math.random()<(weapon.effectChance??0.2)){applyWeaponEffect(target,special.effect,damage,!special.aoe);applied=special.effect;}else message(`${special.effect} did not trigger.`);}
+    if(special?.effect&&special.effect!==weapon.effect){const upgradeBonus=Math.max(0,(weapon.effectChance??0.2)-0.2);const chance=Math.min(1,(special.effectChance??0.2)+upgradeBonus);if(Math.random()<chance){applyWeaponEffect(target,special.effect,damage,!special.aoe);applied=special.effect;}else message(`${special.effect} did not trigger.`);}
     if(weapon.effect==="LifeSteal"||special?.effect==="LifeSteal")state.hp=Math.min(state.maxHp,state.hp+Math.max(1,Math.round(damage*0.05)));
     if(weapon.effect==="ManaSteal"||special?.effect==="ManaSteal")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.05)));
     if(weapon.effect==="ManaSurge")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.08)));
@@ -1233,6 +1248,7 @@ function combatAction(action) {
     if(["SpellEcho","Conjure"].includes(weapon.effect)&&target.hp>0){const echo=Math.max(1,Math.round(damage*(weapon.effect==="Conjure"?0.2:0.3)));applyEnemyDamage(target,echo,`${weapon.effect==="Conjure"?"Conjured wisp":"Spell Echo"} adds damage to ${target.name}`);}
     if(applied)message(`Effect applied: ${applied}${matchup.relation!=="neutral"?` · elemental ${matchup.relation}`:""}.`);
   }
+  if(landed&&special?.healOnHit&&attackDamageDealt){const restored=Math.min(state.maxHp-state.hp,Math.max(1,Math.round(attackDamageDealt*special.healOnHit)));if(restored){state.hp+=restored;message(`${attack.name} restores ${restored} health.`,"reward");}}
   const manaGain=basicFallback?0:Math.max(0,Math.floor(Number(attack.manaGain)||(state.class==="archer"&&weaponFamily(weapon)==="archer"&&isBasic?1:0)));
   if(arrowCost)message(`You spend ${arrowCost} arrow${arrowCost===1?"":"s"}. ${state.arrows} shared arrow${state.arrows===1?" remains":"s remain"}.`);
   if(landed&&manaGain){const restored=Math.min(manaGain,state.maxMana-state.mana);state.mana+=restored;if(restored)message(`Your attack restores ${restored} mana.`,"reward");}
@@ -1438,7 +1454,7 @@ function makeLoot(rarity=null){
 function makePotionLoot(rarity="Common"){
   const type=DUNGEON_RULES.rollPotionType(Math.random,state.chosenClass||state.class);
   rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===type));
-  return{kind:"item",value:{name:`${rarity} ${type==="mana"?"Mana":"Healing"} Potion`,type,amount:type==="mana"?24+state.floor*3:0,quantity:1,rarity}};
+  return{kind:"item",value:{name:`${rarity} ${type==="mana"?"Mana":"Health"} Potion`,type,amount:type==="mana"?24+state.floor*3:0,quantity:1,rarity}};
 }
 
 function grantLoot(loot){
@@ -1513,7 +1529,8 @@ function showModal(){
     const region=regionForFloor(state.floor);
     content=`<section class="modal milestone-modal" role="dialog" aria-modal="true" aria-labelledby="milestone-title"><p class="section-kicker">Milestone boss defeated · Floor ${state.floor}</p><h2 id="milestone-title">The threshold is yours.</h2><p>You have cleared ${state.floorsCleared} floors and reached the end of ${escapeHtml(region.name)}.</p><p>End the run to record this result, or continue into the next region. You can reach another milestone boss after 20 more floors.</p><div class="action-grid"><button class="action-button" data-milestone-end>End run · record score</button><button class="action-button secondary" data-milestone-continue>Continue to floor ${state.floor+1}</button></div></section>`;
   } else if(modal==="run-end"){
-    content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="run-end-title"><p class="section-kicker">Run complete · milestone clear</p><h2 id="run-end-title">${escapeHtml(state.name)} has conquered the threshold.</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:"<p class=\"run-submission-result\">Personal best recorded. Global score submission is pending or unavailable.</p>"}${!state.devMode&&state.runSubmissionStatus?.includes("Global submission failed:")?'<button class="small-button" data-retry-score>Retry global submission</button>':""}<div class="action-grid"><button class="action-button" data-title>Return to title</button></div></section>`;
+    const endedAtMilestone=state.runEndReason==="milestone";
+    content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="run-end-title"><p class="section-kicker">Run complete${endedAtMilestone?" · milestone clear":""}</p><h2 id="run-end-title">${endedAtMilestone?`${escapeHtml(state.name)} has conquered the threshold.`:`${escapeHtml(state.name)} ends the expedition.`}</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:"<p class=\"run-submission-result\">Personal best recorded. Global score submission is pending or unavailable.</p>"}${!state.devMode&&state.runSubmissionStatus?.includes("Global submission failed:")?'<button class="small-button" data-retry-score>Retry global submission</button>':""}<div class="action-grid"><button class="action-button" data-title>Return to title</button></div></section>`;
   } else if(modal==="inventory"){
     content=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="inventory-title"><div class="modal-heading"><div><p class="section-kicker">Pack &amp; equipment</p><h2 id="inventory-title">Inventory</h2></div><button class="icon-close" data-close-modal aria-label="Close inventory">×</button></div><div class="inventory-tabs"><button class="tab-button active" data-tab="weapons">Weapons</button><button class="tab-button" data-tab="armor">Armor</button><button class="tab-button" data-tab="items">Items</button><button class="tab-button" data-open-skills>Skills${state.skillPoints ? ` (${state.skillPoints} unspent)` : ""}</button></div><div class="equipped-slots">${["head","chest","legs","feet","shield"].map(slot=>`<div><span>${slot}</span><strong>${escapeHtml(state.equippedArmor?.[slot]?.name||"Empty")}</strong></div>`).join("")}</div><p class="armor-set-summary">${escapeHtml(armorSummaryText())}</p><div class="inventory-list" id="inventory-list">${renderInventoryItems("weapons")}</div><p class="inventory-gold">${state.gold} gold · ${state.class?escapeHtml(CLASS_NAMES[state.class]):"Class unchosen"}</p></section>`;
   } else if(modal==="skills"){
@@ -1556,6 +1573,7 @@ function showModal(){
   screen.querySelectorAll("[data-weapon-upgrade]").forEach(button=>button.addEventListener("click",()=>upgradeWeapon(button.dataset.weaponUpgrade)));
   screen.querySelector("[data-restart]")?.addEventListener("click",()=>newRun(state.name,state.devMode,state.saveSlot,state.difficulty));
   screen.querySelector("[data-retry-score]")?.addEventListener("click",()=>submitCompletedRun(state));
+  screen.querySelector("[data-end-run]")?.addEventListener("click",endRunEarly);
   screen.querySelector("[data-title]")?.addEventListener("click",()=>{modal=null;state=null;titleButton.hidden=true;startScreen();});
   screen.querySelector("[data-milestone-end]")?.addEventListener("click",finishMilestoneRun);
   screen.querySelector("[data-milestone-continue]")?.addEventListener("click",()=>{if(!state?.milestonePending)return;state.milestonePending=false;modal=null;advanceFloor();});
@@ -1609,7 +1627,7 @@ function getIndexEntries(category) {
     return getIndexWeaponEntries(category).map(item=>({...item,categoryLabel:`${CLASS_NAMES[category]} Weapons`,art:weaponArt(item)}));
   }
   const entries=category==="armor"?ARMOR_INDEX:ITEM_INDEX;
-  return entries.map(item=>({...item,categoryLabel:category==="armor"?"Armor":"Items",art:item.file?itemArt(category==="armor"?`Images/Armor/${item.file}`:`Images/Items/Potions/${item.file}`,item.name):`<div class="item-art"><span>${escapeHtml(item.name)}</span></div>`}));
+  return entries.map(item=>({...item,categoryLabel:category==="armor"?"Armor":"Items",art:item.file?(category==="armor"?itemArt(`Images/Armor/${item.file}`,item.name):potionArt({...item,type:/mana/i.test(item.name)?"mana":"health"})): `<div class="item-art"><span>${escapeHtml(item.name)}</span></div>`}));
 }
 
 function renderInventoryItems(tab){
@@ -1675,11 +1693,11 @@ function openShop(){
 function shopItem(){
   let rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const kind=Math.random()<0.6?"weapon":"armor";
   if(kind==="weapon"){const value=makeLootWeapon(rarity);rarity=value.rarity;return{kind:"weapon",value,price:priceFor(value.goldValue||value.damage*5,rarity)};}
-  let entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);if(rarity==="Divine")entries=entries.filter(entry=>![...state.armor,...state.weapons,...state.items].some(item=>item.name===entry.name));if(!entries.length)entries=ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");const value=DUNGEON_RULES.createCatalogArmor(choice(entries),state.floor);return{kind:"armor",value,price:priceFor(value.goldValue,rarity)};
+  let entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);if(rarity==="Divine")entries=entries.filter(entry=>![...state.armor,...state.weapons,...state.items].some(item=>item.name===entry.name));if(!entries.length)entries=ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");const value=DUNGEON_RULES.createCatalogArmor(choice(entries),state.floor);const armorBaseValue=Math.max(value.goldValue||0,Math.round((value.defense*4+value.damageReduction*6+(value.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return{kind:"armor",value,price:priceFor(armorBaseValue,rarity)};
 }
 function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const value=makePotionLoot(rarity).value;value.amount=value.type==="mana"?30+state.floor*4:0;return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};}
 function priceFor(base,rarity="Common"){const rarityScale=[1,1.35,1.9,2.8,4.5,8,15][Math.max(0,RARITIES.indexOf(rarity))];return Math.max(1,Math.round(base*rarityScale*(DIFFICULTIES[state.difficulty]?.shopCost||1)*(1-Math.max(0,effectiveStat("cha")-10)*0.02)));}
-function shopRerollCost(){return Math.round(30*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
+function shopRerollCost(){const floorScale=1+Math.max(0,(state.floor||1)-1)*0.08;const upgradeScale=1+Math.max(0,state.shopLootUpgradeLevel||0)*0.12;return Math.round(30*floorScale*upgradeScale*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function shopUpgradeCost(){return Math.round(125*Math.pow(2,state.shopLootUpgradeLevel||0)*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function weaponUpgradeCost(weapon){return Math.round((30+10*state.floor)*Math.pow(1.12,Math.max(0,(weapon.level||1)-1))*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function weaponUpgradeCount(weapon){return (weapon.upgradeFloor||state.floor)===state.floor?(weapon.upgradesThisFloor||0):0;}
@@ -1740,7 +1758,14 @@ function sellItem(kind,index,returnModal="shop"){
 
 function finishMilestoneRun(){
   if(!state?.milestonePending||state.floor%REGION_CYCLE_FLOORS!==0||state.runEnded)return;
-  state.milestonePending=false;state.runEnded=true;updatePersonalBest(state);submitCompletedRun(state);modal="run-end";message(`Run complete. ${state.floorsCleared} floors cleared.`,"reward");render();
+  state.milestonePending=false;state.runEnded=true;state.runEndReason="milestone";updatePersonalBest(state);submitCompletedRun(state);modal="run-end";message(`Run complete. ${state.floorsCleared} floors cleared.`,"reward");render();
+}
+
+function endRunEarly(){
+  if(!state||state.runEnded||state.floorsCleared<1||!confirm(`End this run and submit your score for ${state.floorsCleared} floors cleared?`))return;
+  state.combat=null;state.milestonePending=false;state.runEnded=true;state.runEndReason="manual";state.activeDefense=null;state.braced=false;
+  updatePersonalBest(state);submitCompletedRun(state);modal="run-end";
+  message(`You end the run after clearing ${state.floorsCleared} floors. Your score has been recorded.`,"reward");render();
 }
 
 function advanceFloor(){

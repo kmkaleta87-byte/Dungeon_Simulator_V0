@@ -16,7 +16,9 @@ test("browser index includes every defined weapon with catalog descriptions", ()
   assert.ok(weapons.archer.some(item => item.type === "Bow"));
   assert.ok(weapons.mage.some(item => item.type === "Staff"));
   assert.equal(context.window.GAME_INDEX_DATA.armor.length, 35);
-  assert.equal(context.window.GAME_INDEX_DATA.items.length, 19);
+  assert.equal(context.window.GAME_INDEX_DATA.items.length, 15);
   assert.ok(context.window.GAME_INDEX_DATA.armor.every(item => item.name && item.description));
   assert.ok(context.window.GAME_INDEX_DATA.items.every(item => item.name && item.description));
+  assert.ok(context.window.GAME_INDEX_DATA.items.filter(item => item.type === "Potion").every(item => /^(Common|Uncommon|Rare|Epic|Legendary|Mythic|Divine) (Health|Mana) Potion$/.test(item.name)));
+  assert.ok(context.window.GAME_INDEX_DATA.items.filter(item => item.type === "Potion" && !["Mythic", "Divine"].includes(item.rarity)).every(item => item.file === (item.name.includes("Mana") ? "mana-potion.png" : "small-health-potion.png")));
 });

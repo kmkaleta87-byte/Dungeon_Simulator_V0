@@ -111,6 +111,8 @@ main { max-width:1500px; margin:0 auto; }
 .equipped-weapon { display:grid; grid-template-columns:6.2rem 1fr; align-items:center; gap:.85rem; padding:1rem 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .item-art { position:relative; display:grid; min-height:5rem; place-items:center; overflow:hidden; background:#e7e3d8; }
 .item-art img { width:100%; height:100%; max-height:8rem; object-fit:contain; padding:.45rem; }
+.potion-mythic img { filter:hue-rotate(235deg) saturate(1.45) drop-shadow(0 0 .45rem #9d70ff); }
+.potion-divine img { filter:hue-rotate(35deg) saturate(1.6) drop-shadow(0 0 .5rem #ffe28a); }
 .item-art span { padding:.35rem; color:var(--quiet); font-size:.62rem; line-height:1.4; text-align:center; }
 .item-art.has-art span { display:none; }
 .equipped-weapon .item-art { height:6.3rem; }

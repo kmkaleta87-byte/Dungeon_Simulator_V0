@@ -168,13 +168,20 @@
       arrows: ranged ? (entry.type === "Bow" ? 14 : 18) : 0,
       manaCost: family === "mage" ? Math.max(1, 3 + Math.floor((floor - 1) / 3)) : 0
     };
-    weapon.attacks = createWeaponAttacks(family, entry.rarity, entry.type, entry.element, weapon.manaCost);
+    weapon.attacks = createWeaponAttacks(family, entry.rarity, entry.type, entry.element, weapon.manaCost, entry.name);
     return weapon;
   }
 
-  function createWeaponAttacks(family, rarity, type, element, baseManaCost = 0) {
+  function createWeaponAttacks(family, rarity, type, element, baseManaCost = 0, weaponName = null) {
     const tier = RARITIES.indexOf(rarity);
     if (tier <= 0) return [];
+    const profileKey = `${family}|${weaponName}|${type}|${rarity}`;
+    const weaponProfile = weaponName && root.GAME_WEAPON_ATTACK_DATA?.[profileKey];
+    if (weaponProfile) return weaponProfile.map(attack => {
+      const manaCost = attack.manaCost && family === "mage" ? Math.max(1, baseManaCost || 5) + Math.max(0, attack.manaCost - 5) : attack.manaCost;
+      const description = attack.manaCost && manaCost !== attack.manaCost ? attack.description.replace(`${attack.manaCost} mana`, `${manaCost} mana`) : attack.description;
+      return { ...attack, manaCost, description };
+    });
     const attack = (name, command, description, multiplier, critBonus, cooldown, effect, options = {}) => ({
       name, command, description, multiplier, critBonus, cooldown, effect,
       manaCost: options.manaCost || 0, manaGain: options.manaGain || 0, chargesNextAttack: Boolean(options.chargesNextAttack),
@@ -346,7 +353,8 @@
       elementRelation: matchup.relation,
       damageMultiplier,
       offClass: damageMultiplier < 1,
-      effect: attackEffect || effect || null
+      effect: attackEffect || effect || null,
+      healOnHit: Math.max(0, Number(attack.healOnHit) || 0)
     };
   }
 
