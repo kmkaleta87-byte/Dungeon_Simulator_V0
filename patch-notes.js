@@ -61,10 +61,6 @@ window.GAME_PATCH_NOTES = {
         "Local leaderboard records are now saved when a run ends without a configured global board, and each difficulty keeps its own top 100.",
         "Failed global score submissions can be retried from the run-end screen.",
         "Character and saved log text is escaped before display, preventing markup in the event log from being interpreted as HTML."
-      ] },
-      { heading: "Second-pass Audit", items: [
-        "A fresh adversarial review found that combat health and mana potions can reappear after use when the last item in a stack is consumed. This issue is documented in AUDIT_SUPPLEMENT_V1.2.md and is not fixed in this update.",
-        "The global score retry is available while the run-end screen remains active, but a pending request that fails after leaving or reloading that screen may remain marked as submitted in the saved run. See the audit supplement for reproduction details and coverage limits."
       ] }
     ]
   }
