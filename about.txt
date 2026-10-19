@@ -2,5 +2,6 @@ This game started as a basic coding project to get a basic combat system where a
 
 It is fully open source on GitHub if anybody ever sees this or knows what that means
 
-Full disclosure: There is AI art, and my good friend codex did ALL of the front end, and a lot of file management/debugging for me, but I did do like 80-95% of the backend, depending how you look at it. I will be learning HTML and probably some CSS in the future, but I currently only know Java (from APCSA, so barely anything) and C#, which I am solidly confident in. Any feedback would be appreciated @ kmkaleta87@gmail.com, and please don't hack my game >:(
-thanks! I hope you enjoy
+Full disclosure: There is AI art, and my good friend codex did ALL of the front end, and a lot of file management/debugging for me, but I did do like 80-95% of the backend in C#, depending how you look at it. I will be learning HTML and probably some CSS in the future, but I currently only know Java (from APCSA, so barely anything) and C#, which I am solidly confident in. To be fair, a lot of the game runs in CSS now because of its efficiency, and I coded the C# version which is not what you are playing, but this game has surpassed my capabilities. I do enjoy building systems and thinking like a game developer even if I'm not doing much of the coding, and I'm learning some CSS just from looking through the code. 
+Any feedback would be appreciated @ kmkaleta87@gmail.com, and please don't hack/cheat in my game >:(
+Thanks! I hope you enjoy
