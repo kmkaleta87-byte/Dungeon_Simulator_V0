@@ -123,11 +123,24 @@ main { max-width:1500px; margin:0 auto; }
 .no-weapon { color:var(--quiet); font-size:.8rem; }
 
 .play-panel { min-width:0; padding-left:2rem; border-left:1px solid var(--line); }
+.region-briefing { position:relative; display:flex; min-height:5.8rem; align-items:center; overflow:hidden; margin:0 0 1rem; padding:.7rem 1rem; border-bottom:2px solid var(--line-dark); background:#d8d5c9; }
+.region-background-art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.22; }
+.region-details-overlay { position:absolute; z-index:1; inset:0; width:100%; height:100%; object-fit:cover; opacity:.22; pointer-events:none; }
+.region-emblem { position:relative; z-index:2; width:3.3rem; height:3.3rem; flex:0 0 auto; margin-right:.9rem; object-fit:contain; }
+.region-briefing-copy { position:relative; z-index:2; }
+.region-briefing-copy .section-kicker { margin:0 0 .15rem; }
+.region-briefing-copy h3 { margin:0; font:1.2rem var(--display); }
+.region-briefing-copy p:not(.section-kicker) { margin:.2rem 0 0; color:#3e4139; font-size:.67rem; }
+.region-undead { background-color:#d1cec3; }
+.region-warrens { background-color:#cbd2bf; }
+.region-haunted { background-color:#cac9c2; }
+.region-feral-stone { background-color:#d2c8b8; }
 .room-heading,.modal-heading { display:flex; align-items:end; justify-content:space-between; gap:1rem; }
 .room-heading h2,.combat-header h2,.modal-heading h2 { margin:0; font:2rem var(--display); }
 .room-index { color:var(--quiet); font-size:.68rem; }
-.map-area { display:grid; min-height:13.6rem; grid-template-rows:1fr auto; justify-items:center; align-items:center; margin:.45rem auto .3rem; }
-.map-grid { display:grid; grid-template-columns:repeat(7,1.65rem); grid-template-rows:repeat(7,1.65rem); gap:.13rem; place-content:center; }
+.map-area { position:relative; display:grid; min-height:13.6rem; grid-template-rows:1fr auto; justify-items:center; align-items:center; margin:.45rem auto .3rem; }
+.region-map-overlay { position:absolute; z-index:0; inset:0; width:100%; height:100%; object-fit:cover; opacity:.13; pointer-events:none; }
+.map-grid { position:relative; z-index:1; display:grid; grid-template-columns:repeat(7,1.65rem); grid-template-rows:repeat(7,1.65rem); gap:.13rem; place-content:center; }
 .map-cell { position:relative; display:grid; width:100%; aspect-ratio:1; place-items:center; overflow:hidden; padding:0; border:1px solid var(--line-dark); background:#d0cdc2; color:var(--muted); }
 button.map-cell { cursor:pointer; }
 .map-cell.unvisited { border-style:dashed; background:#d9d6cc; }
@@ -214,6 +227,12 @@ button.compass-control:hover { border-color:var(--green); background:#e9eee3; }
 .index-category { padding:.65rem .55rem; border:0; border-left:2px solid transparent; background:transparent; color:var(--muted); cursor:pointer; text-align:left; font-size:.75rem; }
 .index-category:hover,.index-category.active { border-left-color:var(--green); background:#e6e4d9; color:var(--ink); }
 .index-content { min-width:0; }
+.region-index-list { display:grid; max-height:58vh; gap:0; overflow:auto; border-top:1px solid var(--line); }
+.region-index-entry { padding:.8rem .65rem; border-bottom:1px solid var(--line); }
+.region-index-entry.active { border-left:3px solid var(--green); background:#e8e6dc; }
+.region-index-entry h3 { margin:.15rem 0 .4rem; font:1.1rem var(--display); }
+.region-index-entry p:not(.section-kicker) { margin:.25rem 0; color:var(--muted); font-size:.72rem; line-height:1.45; }
+.milestone-modal { width:min(36rem,100%); border-top:4px solid #a54e3b; }
 .index-intro { margin:0 0 .7rem; color:var(--muted); font-size:.74rem; }
 .index-list { display:grid; max-height:58vh; gap:.4rem; overflow:auto; padding:.1rem .35rem .2rem 0; }
 .index-entry { display:flex; min-width:0; flex-direction:column; align-items:flex-start; gap:.18rem; padding:.55rem .65rem; border:0; border-left:3px solid var(--line-dark); background:#ebe7dc; cursor:pointer; text-align:left; }

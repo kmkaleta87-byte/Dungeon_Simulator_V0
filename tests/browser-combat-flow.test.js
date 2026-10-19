@@ -877,16 +877,16 @@ test("archer special mana recovery requires a successful hit", () => {
   assert.equal(vm.runInContext("state.mana", context), 0);
 });
 
-test("Update V0.1 consolidates features and bug fixes into separate sections", () => {
+test("Update V1.1 consolidates features and bug fixes into separate sections", () => {
   const source = fs.readFileSync("patch-notes.js", "utf8");
-  assert.match(source, /"v0\.1"[\s\S]*?heading: "New Features"[\s\S]*?Mage mana costs and drop rates[\s\S]*?heading: "Bugs"[\s\S]*?boss path[\s\S]*?Staff strike/i);
+  assert.match(source, /"v1\.1"[\s\S]*?heading: "New Features"[\s\S]*?Mage mana costs and drop rates[\s\S]*?heading: "Bugs"[\s\S]*?boss path[\s\S]*?Staff strike/i);
   assert.match(source, /Matching potions stack[\s\S]*?Equip Best[\s\S]*?full effectiveness above 20[\s\S]*?every five stat levels/i);
-  assert.doesNotMatch(source, /v0-patch-[123]/);
+  assert.doesNotMatch(source, /V0(?:\.\d+)?/i);
 });
 
-test("Update V0.2 separates verified bug fixes from strategy and gear features", () => {
+test("Update V1.2 separates verified bug fixes from strategy and gear features", () => {
   const source = fs.readFileSync("patch-notes.js", "utf8");
-  assert.match(source, /"v0\.2"[\s\S]*?subtitle: "Tactical combat, meaningful choices, and bug fixes"[\s\S]*?heading: "New Features"[\s\S]*?off-class weapon attacks deal 25% less damage[\s\S]*?shield Block[\s\S]*?Quick Guide[\s\S]*?heading: "Bugs"[\s\S]*?Boss rooms remain[\s\S]*?shared count[\s\S]*?connection failures[\s\S]*?Retry/);
+  assert.match(source, /"v1\.2"[\s\S]*?subtitle: "Regions, tactical combat, meaningful choices, and bug fixes"[\s\S]*?heading: "New Features"[\s\S]*?off-class weapon attacks deal 25% less damage[\s\S]*?shield Block[\s\S]*?Quick Guide[\s\S]*?four five-floor regions[\s\S]*?heading: "Bugs"[\s\S]*?Boss rooms remain[\s\S]*?shared count[\s\S]*?connection failures[\s\S]*?Retry/);
 });
 
 test("enemy formations assign a vanguard to a ranged ally and boss patterns rotate", () => {
@@ -922,8 +922,48 @@ test("risky route choice promises better rewards and the trait guide covers enem
   assert.match(String(traits[6]), /reduces incoming damage/);
 });
 
-test("Update V0.2 notes document the tactical additions without campaign story", () => {
+test("Update V1.2 notes document the tactical additions without campaign story", () => {
   const source = fs.readFileSync("patch-notes.js", "utf8");
   assert.match(source, /guarded line[\s\S]*?Enemy races now have readable[\s\S]*?forked enemy encounter[\s\S]*?Bosses follow recognizable, repeating combat patterns/);
   assert.doesNotMatch(source, /campaign story|new lore/i);
+});
+
+test("regions rotate every five floors, use bounded race pools, and repeat after twenty", () => {
+  const context = loadBrowserGame();
+  const boundaries = vm.runInContext(`[1,5,6,10,11,15,16,20,21].map(floor=>{const region=regionForFloor(floor);return [floor,region.id,region.cycle,region.regionStart,region.regionEnd]})`, context);
+  assert.deepEqual(Array.from(boundaries, row=>Array.from(row)), [
+    [1,"undead",1,1,5],[5,"undead",1,1,5],[6,"warrens",1,6,10],[10,"warrens",1,6,10],
+    [11,"haunted",1,11,15],[15,"haunted",1,11,15],[16,"feral-stone",1,16,20],[20,"feral-stone",1,16,20],[21,"undead",2,21,25]
+  ]);
+  const pools = vm.runInContext(`Array.from({length:40},(_,i)=>{const floor=i+1;const enemy=makeEnemy(floor);return regionForFloor(floor).races.includes(enemy.race)})`, context);
+  assert.ok(Array.from(pools).every(Boolean));
+  assert.equal(vm.runInContext("makeEnemy(20,true).name", context), "The Threshold Warden");
+  assert.equal(vm.runInContext("makeEnemy(20,true).milestoneBoss", context), true);
+  assert.equal(vm.runInContext("makeEnemy(21,true).milestoneBoss", context), false);
+  const regionIndex = vm.runInContext("indexCategory='regions';renderIndexCategory()", context);
+  assert.match(regionIndex, /Undead Catacombs/);
+  assert.match(regionIndex, /Threshold Warden/);
+});
+
+test("milestone boss victory offers a resumable end-or-continue decision and records on end", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Milestone Tester"); state.floor=20; state.floorsCleared=20; state.milestonePending=true;
+    const beforeFloor=state.floor; advanceFloor(); var blockedAtMilestone=state.floor===beforeFloor;
+    finishMilestoneRun();
+  `, context);
+  assert.equal(vm.runInContext("blockedAtMilestone", context), true);
+  assert.equal(vm.runInContext("state.runEnded", context), true);
+  assert.equal(vm.runInContext("state.milestonePending", context), false);
+  assert.equal(vm.runInContext("modal", context), "run-end");
+  assert.equal(vm.runInContext("loadPersonalBests().normal.floors", context), 20);
+  assert.equal(vm.runInContext("state.leaderboardSubmitted", context), true);
+});
+
+test("V1.2 patch notes include regions and milestone bosses", () => {
+  const notes = fs.readFileSync("patch-notes.js", "utf8");
+  const page = fs.readFileSync("index.html", "utf8");
+  assert.match(notes, /"v1\.2"[\s\S]*?four five-floor regions[\s\S]*?own regular-enemy and boss pool[\s\S]*?Threshold Warden[\s\S]*?global leaderboard/);
+  assert.match(page, /data-patch="v1\.2"[^>]*>Update V1\.2 <span>Current<\/span>/);
+  assert.match(fs.readFileSync("Images/ART_ASSET_CHECKLIST.txt", "utf8"), /Floors\/HauntedHollows\/environment-background\.png[\s\S]*?floor-20-milestone-boss\.png - The Threshold Warden/);
 });
