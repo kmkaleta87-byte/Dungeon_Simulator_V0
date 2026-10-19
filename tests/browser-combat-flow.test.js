@@ -1073,6 +1073,7 @@ test("V1.2 patch notes include regions and milestone bosses", () => {
   const notes = fs.readFileSync("patch-notes.js", "utf8");
   const page = fs.readFileSync("index.html", "utf8");
   assert.match(notes, /"v1\.2"[\s\S]*?four five-floor regions[\s\S]*?own regular-enemy and boss pool[\s\S]*?Threshold Warden[\s\S]*?global leaderboard/);
-  assert.match(page, /data-patch="v1\.2"[^>]*>Update V1\.2 <span>Current<\/span>/);
+  assert.match(page, /data-patch="v1\.3"[^>]*>Update V1\.3 <span>Current<\/span>/);
+  assert.match(page, /data-patch="v1\.3"[\s\S]*data-patch="v1\.2"[\s\S]*data-patch="v1\.1"[\s\S]*data-patch="v1"/);
   assert.match(fs.readFileSync("Images/ART_ASSET_CHECKLIST.txt", "utf8"), /Floors\/HauntedHollows\/environment-background\.png[\s\S]*?floor-20-milestone-boss\.png - The Threshold Warden/);
 });

@@ -1794,7 +1794,7 @@ function renderPatchNotes(version){
 }
 
 document.querySelectorAll?.("[data-patch]").forEach(button=>button.addEventListener("click",()=>renderPatchNotes(button.dataset.patch)));
-renderPatchNotes("v1.2");
+renderPatchNotes("v1.3");
 if(typeof fetch==="function")fetch("about.txt").then(response=>{if(!response.ok)throw new Error("About text unavailable");return response.text();}).then(text=>{
   const target=document.querySelector("#about-copy");
   if(!target)return;
