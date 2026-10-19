@@ -175,7 +175,10 @@ button.compass-control:hover { border-color:var(--green); background:#e9eee3; }
 .combat-header { margin-bottom:1rem; }
 .enemy-list { display:grid; gap:.65rem; }
 .enemy-card { display:grid; grid-template-columns:5.2rem minmax(0,1fr) auto; align-items:center; gap:.8rem; padding:.55rem; border:1px solid var(--line); background:#ebe7dc; }
-.enemy-intent { margin:.3rem 0; color:var(--red); font-size:.69rem; }
+  .enemy-trait { color:#394944!important; font-weight:600; }
+  .formation-note { margin:.25rem 0; color:#8a5b17!important; font-weight:700; }
+  .boss-pattern { margin:.25rem 0; padding-left:.4rem; border-left:2px solid var(--red); color:#65352e!important; font-size:.62rem!important; }
+  .enemy-intent { margin:.3rem 0; color:var(--red); font-size:.69rem; }
 .enemy-intent strong { color:var(--red); }
 .incoming-damage { display:inline-block; margin-left:.35rem; padding:.12rem .3rem; border:1px solid var(--red); color:var(--red); font-weight:700; white-space:nowrap; }
 .enemy-art { display:grid; min-height:4.2rem; place-items:center; background:#dfdbcf; color:var(--quiet); font-size:.58rem; text-align:center; }
@@ -256,6 +259,7 @@ button.index-entry:hover { background:#e2e5d9; }
 .subtab-button.active,.sort-button.active { border-color:var(--green); color:var(--ink); background:#e5e9df; }
 .sort-button span { margin-left:.25rem; color:var(--green); font-weight:700; }
 .inventory-list,.shop-list { display:grid; gap:.55rem; }
+.inventory-toolbar { display:flex; justify-content:flex-end; margin:.1rem 0 .35rem; }
 .shop-section-title { margin:1rem 0 .45rem; padding-bottom:.35rem; border-bottom:1px solid var(--line); font:1rem var(--display); }
 .shop-forge-note,.forge-cost-note { color:var(--muted); font-size:.86rem; margin:.35rem 0 .7rem; }
 .forge-select-label { display:flex; align-items:center; gap:.65rem; margin:.6rem 0; }
@@ -283,6 +287,12 @@ button.index-entry:hover { background:#e2e5d9; }
 .special-action small { line-height:1.35; }
 .action-button:disabled { cursor:not-allowed; opacity:.48; }
 .shop-item { grid-template-columns:4rem minmax(0,1fr) auto; }
+.shop-comparison { display:grid; gap:.2rem; margin-top:.25rem; padding-top:.25rem; border-top:1px solid var(--line); color:var(--muted); font-size:.62rem; line-height:1.35; overflow-wrap:anywhere; }
+.shop-comparison b { color:var(--text); }
+.quick-guide { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.55rem; }
+.quick-guide section { padding:.65rem; border-left:2px solid var(--green); background:#ebe7dc; }
+.quick-guide h3 { margin:0 0 .25rem; font: .9rem var(--display); }
+.quick-guide p { margin:0; color:var(--muted); font-size:.72rem; line-height:1.45; }
 .shop-footer { align-items:center; }
 .shop-upgrade { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin:.8rem 0; padding:.75rem; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .shop-upgrade p { margin:.25rem 0 0; color:var(--muted); font-size:.68rem; }
@@ -354,7 +364,7 @@ button.index-entry:hover { background:#e2e5d9; }
   .compass-grid { grid-template-columns:repeat(3,2.65rem); grid-template-rows:repeat(3,2.1rem); }
   .action-grid { gap:.4rem; }.action-button { min-height:2.9rem; padding:.5rem; font-size:.7rem; }
   .enemy-card { grid-template-columns:3.5rem minmax(0,1fr) auto; gap:.45rem; padding:.4rem; }.enemy-art { min-height:3.5rem; font-size:.5rem; }.enemy-name strong { font-size:.72rem; }.target-button { padding:.35rem; font-size:.59rem; }
-  .modal { padding:1rem; }.recap-totals { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-item { grid-template-columns:3.4rem minmax(0,1fr) auto; gap:.5rem; }.inventory-item .item-art { height:3.5rem; }.inventory-item-actions .small-button { padding:.35rem; font-size:.58rem; }.item-copy strong { font-size:.85rem; }.item-meta,.item-stats { font-size:.56rem; }.tab-button { padding:.6rem .35rem; font-size:.65rem; }.equipped-slots { grid-template-columns:repeat(2,minmax(0,1fr)); }.weapon-attack-info { grid-template-columns:1fr; }
+  .modal { padding:1rem; }.recap-totals { grid-template-columns:repeat(2,minmax(0,1fr)); }.inventory-item { grid-template-columns:3.4rem minmax(0,1fr) auto; gap:.5rem; }.inventory-item .item-art { height:3.5rem; }.inventory-item-actions .small-button { padding:.35rem; font-size:.58rem; }.item-copy strong { font-size:.85rem; }.item-meta,.item-stats { font-size:.56rem; }.tab-button { padding:.6rem .35rem; font-size:.65rem; }.equipped-slots { grid-template-columns:repeat(2,minmax(0,1fr)); }.weapon-attack-info { grid-template-columns:1fr; }.quick-guide { grid-template-columns:1fr; }
   .index-layout { grid-template-columns:1fr; gap:.7rem; }
   .index-categories { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); padding:0 0 .65rem; border-right:0; border-bottom:1px solid var(--line); }
   .index-category { padding:.55rem .4rem; font-size:.66rem; }

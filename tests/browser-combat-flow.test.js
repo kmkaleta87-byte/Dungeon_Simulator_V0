@@ -241,15 +241,79 @@ test("malformed or injected local leaderboard data cannot inject markup", () => 
   assert.doesNotMatch(weaponMarkup, /onerror="alert/);
 });
 
-test("class choice stays locked and off-class weapons remain sellable but unequippable", () => {
+test("off-class weapons equip without changing class and clearly show the penalty", () => {
   const context = loadBrowserGame();
   vm.runInContext(`newRun("Tester"); chooseClass("warrior"); state.weapons.push({name:"Test Bow",type:"Bow",rarity:"Rare",damage:20,crit:0});`, context);
   const markup = vm.runInContext(`inventoryWeaponFamily="archer"; renderInventoryItems("weapons")`, context);
-  assert.match(markup, /Archer weapon/);
+  assert.match(markup, /Off-class damage: 75%/);
   assert.match(markup, /data-inventory-sell="weapon"/);
   vm.runInContext("equipWeapon(1)", context);
   assert.equal(vm.runInContext("state.class", context), "warrior");
-  assert.notEqual(vm.runInContext("state.weapon.type", context), "Bow");
+  assert.equal(vm.runInContext("state.weapon.type", context), "Bow");
+  assert.match(vm.runInContext("state.log.map(entry=>entry.text).join(' ')", context), /25% less damage/);
+});
+
+test("off-class damage penalty appears in actual basic attack damage and preview", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior");
+    const bow=DUNGEON_RULES.createCatalogWeapon(GAME_INDEX_DATA.weapons.archer.find(item=>item.rarity==="Common"),1);
+    state.weapons.push(bow); state.weapon=bow; state.str=10; state.critChance=0; state.arrows=10;
+    const enemy={name:"Target",hp:500,maxHp:500,damage:1,dodge:0,damageReduction:0,element:"Neutral",intent:{key:"attack",label:"Attacking"},effects:{}};
+    state.target=0; state.combat={enemies:[enemy],boss:false,damageDealt:0,damageTaken:0,summonedCount:0};
+    Math.random=()=>0.99; var expected=attackPreview({multiplier:1,critBonus:0}).primaryDamage;
+    combatAction("basic"); var enemyAfter=state.combat.enemies[0].hp;
+  `, context);
+  assert.equal(vm.runInContext("enemyAfter", context), 500-vm.runInContext("expected", context));
+  assert.match(vm.runInContext("state.log.map(entry=>entry.text).join(' ')", context), /off-class damage penalty/);
+  assert.equal(vm.runInContext("state.arrows", context), 9);
+});
+
+test("off-class staffs use mana and off-class bows use shared arrows", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior");
+    const staff=DUNGEON_RULES.createCatalogWeapon(GAME_INDEX_DATA.weapons.mage.find(item=>item.rarity==="Common"),1);
+    const bow=DUNGEON_RULES.createCatalogWeapon(GAME_INDEX_DATA.weapons.archer.find(item=>item.rarity==="Common"),1);
+    var staffUsesMana=DUNGEON_RULES.weaponUsesMana(staff,state.class);
+    var bowUsesMana=DUNGEON_RULES.weaponUsesMana(bow,state.class);
+    state.weapon=bow; state.arrows=4; var bowConsumesArrow=attackPreview({multiplier:1,critBonus:0}).ammoCost;
+  `, context);
+  assert.equal(vm.runInContext("staffUsesMana", context), true);
+  assert.equal(vm.runInContext("bowUsesMana", context), false);
+  assert.equal(vm.runInContext("bowConsumesArrow", context), 1);
+  vm.runInContext(`state.weapon=bow; state.arrows=0; var fallback=DUNGEON_RULES.basicAttackFallback(state.class,bow.type,state.mana,state.arrows);`, context);
+  assert.equal(vm.runInContext("fallback", context), "arrows");
+  vm.runInContext(`(()=>{
+    const mageStaff=state.weapons.find(item=>item.type==="Staff")||DUNGEON_RULES.createCatalogWeapon(GAME_INDEX_DATA.weapons.mage.find(item=>item.rarity==="Common"),1);
+    state.weapon=mageStaff; state.mana=40; state.hp=100; state.arrows=0;
+    const target={name:"Guard",hp:500,maxHp:500,damage:1,dodge:0,damageReduction:0,element:"Neutral",intent:{key:"guard",label:"Guard"},effects:{}};
+    state.target=0; state.combat={enemies:[target],boss:false,damageDealt:0,damageTaken:0,summonedCount:0};
+    Math.random=()=>0.99; combatAction("basic");
+  })()`,context);
+  assert.equal(vm.runInContext("state.mana",context),40-vm.runInContext("state.weapon.manaCost",context));
+});
+
+test("every off-class family keeps the chosen class, and off-class AoE matches both damage previews", () => {
+  const context=loadBrowserGame();
+  for(const [klass,family,type] of [["warrior","archer","Bow"],["archer","mage","Staff"],["mage","warrior","Sword"]]){
+    vm.runInContext(`(()=>{newRun("Tester"); chooseClass("${klass}"); const item=GAME_INDEX_DATA.weapons.${family}.find(entry=>entry.type==="${type}"&&entry.rarity==="Rare"); const weapon=DUNGEON_RULES.createCatalogWeapon(item,2); state.weapons.push(weapon); equipWeapon(state.weapons.length-1);})()`,context);
+    assert.equal(vm.runInContext("state.class",context),klass);
+    assert.equal(vm.runInContext(`weaponFamily(state.weapon)`,context),family);
+    assert.equal(vm.runInContext("DUNGEON_RULES.weaponDamageMultiplier(state.class,state.weapon)",context),0.75);
+  }
+  vm.runInContext(`
+    var aoeResults=(()=>{newRun("Tester"); chooseClass("warrior");
+    const entry=GAME_INDEX_DATA.weapons.archer.find(item=>item.type==="Bow"&&item.rarity==="Epic");
+    const bow=DUNGEON_RULES.createCatalogWeapon(entry,2); state.weapon=bow; state.weapons.push(bow); state.arrows=10; state.critChance=0;
+    const first={name:"First",hp:500,maxHp:500,damage:1,dodge:0,damageReduction:0,element:"Neutral",intent:{key:"attack",label:"Strike"},effects:{}};
+    const second={name:"Second",hp:500,maxHp:500,damage:1,dodge:0,damageReduction:0,element:"Neutral",intent:{key:"attack",label:"Strike"},effects:{}};
+    state.target=0; state.combat={enemies:[first,second],boss:false,damageDealt:0,damageTaken:0,summonedCount:0};
+    Math.random=()=>0.99; const aoe=bow.attacks.find(attack=>attack.aoe); const expected=attackPreview(aoe,2,first);
+    combatAction(aoe.command); return {primaryLoss:500-first.hp,secondaryLoss:500-second.hp,expected};})();
+  `,context);
+  assert.equal(vm.runInContext("aoeResults.primaryLoss",context),vm.runInContext("aoeResults.expected.primaryDamage",context));
+  assert.equal(vm.runInContext("aoeResults.secondaryLoss",context),vm.runInContext("aoeResults.expected.secondaryDamage",context));
 });
 
 test("the three class defenses mitigate actual incoming damage and consume their capacity", () => {
@@ -304,6 +368,8 @@ test("Mage retains a basic strike after Aegis and while a shield blocks spellcas
     state.target=0; state.combat={boss:false,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[enemy]};
     combatAction("aegis");
     var actionsAfterAegis=getActions();
+    state.mana=0;
+    var actionsAtZeroMana=getActions();
     state.equippedArmor.shield={defense:2};
     state.weapon.attacks=[{name:"Magic Bolt",command:"magicbolt",multiplier:1,manaCost:3}];
     enemy.intent={key:"guard",label:"Guard"};
@@ -313,6 +379,7 @@ test("Mage retains a basic strike after Aegis and while a shield blocks spellcas
     var manaAfterShieldStrike=state.mana, hpAfterShieldStrike=enemy.hp;
   `, context);
   assert.match(vm.runInContext("actionsAfterAegis", context), /data-attack="basic"(?! disabled)/);
+  assert.match(vm.runInContext("actionsAtZeroMana", context), /data-attack="basic"(?! disabled)[^>]*>Staff strike/);
   assert.match(vm.runInContext("actionsWithShield", context), /data-attack="basic"(?! disabled)[^>]*>Staff strike/);
   assert.match(vm.runInContext("actionsWithShield", context), /data-attack="magicbolt" disabled/);
   assert.equal(vm.runInContext("manaAfterShieldStrike", context), vm.runInContext("manaBeforeShieldStrike", context));
@@ -343,7 +410,7 @@ test("a floor-two Legendary Warrior charge does not one-shot a normal floor-five
   assert.ok(vm.runInContext("attackPreviewResult.primaryDamage < enemyMaxHp", context), `charge damage ${vm.runInContext("attackPreviewResult.primaryDamage", context)} vs ${vm.runInContext("enemyMaxHp", context)} HP`);
 });
 
-test("weapon forge applies per-weapon upgrades, limits, floor resets, and class restrictions", () => {
+test("weapon forge applies per-weapon upgrades, limits, floor resets, and permits off-class weapons", () => {
   const context = loadBrowserGame();
   vm.runInContext(`
     newRun("Tester"); chooseClass("warrior"); state.gold=10000;
@@ -364,7 +431,59 @@ test("weapon forge applies per-weapon upgrades, limits, floor resets, and class 
   assert.equal(vm.runInContext("state.weapon.damageUpgrade", context), 3);
   assert.equal(vm.runInContext("state.weapon.upgradesThisFloor", context), 1);
   vm.runInContext(`state.weapons.push(DUNGEON_RULES.createCatalogWeapon(GAME_INDEX_DATA.weapons.archer.find(item=>item.rarity==="Rare"),2)); state.upgradeWeaponIndex=1; const goldBeforeOffClass=state.gold; upgradeWeapon("damage");`, context);
-  assert.equal(vm.runInContext("state.gold", context), vm.runInContext("goldBeforeOffClass", context));
+  assert.equal(vm.runInContext("state.weapons[1].damageUpgrade", context), 2);
+  assert.ok(vm.runInContext("state.gold", context)<vm.runInContext("goldBeforeOffClass", context));
+});
+
+test("a fully absorbed shield Block counters once for a non-critical half basic hit", () => {
+  const context=loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior"); state.critChance=1;
+    const enemy={name:"Attacker",hp:500,maxHp:500,damage:1,dodge:0,damageReduction:0,effects:{}};
+    state.target=0; state.combat={enemies:[enemy],damageDealt:0,damageTaken:0};
+    state.equippedArmor={}; state.activeDefense={type:"block",capacity:5};
+    var counterExpected=attackPreview({multiplier:0.5,critBonus:0,manaCost:0,ammoCost:0},1,enemy).primaryDamage;
+    takePlayerDamage(5,enemy); var afterFirst=enemy.hp;
+    takePlayerDamage(1,enemy); var afterSecond=enemy.hp;
+  `,context);
+  assert.equal(vm.runInContext("500-afterFirst",context),vm.runInContext("counterExpected",context));
+  assert.equal(vm.runInContext("afterSecond",context),vm.runInContext("afterFirst",context));
+  assert.equal(vm.runInContext("state.activeDefense.counterUsed",context),true);
+});
+
+test("partial Block absorption does not counter, and combat resolves a lethal counter", () => {
+  const context=loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior");
+    const partial={name:"Partial",hp:500,maxHp:500,damage:1,dodge:0,damageReduction:0};
+    state.combat={enemies:[partial],damageDealt:0,damageTaken:0}; state.target=0;
+    state.activeDefense={type:"block",capacity:1}; takePlayerDamage(5,partial); var partialHp=partial.hp;
+    const victim={name:"Last Attacker",hp:1,maxHp:1,damage:1,dodge:0,damageReduction:0,intent:{key:"attack",label:"Strike"},effects:{}};
+    state.combat={enemies:[victim],boss:false,damageDealt:0,damageTaken:0,summonedCount:0}; state.target=0;
+    state.equippedArmor={}; state.activeDefense={type:"block",capacity:20}; state.hp=100; state.armor=[];
+    Math.random=()=>0.99; enemyTurn(); var combatResolved=!state.combat;
+  `,context);
+  assert.equal(vm.runInContext("partialHp",context),500);
+  assert.equal(vm.runInContext("combatResolved",context),true);
+});
+
+test("Index Guide and shop gear comparisons expose planned information", () => {
+  const context=loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior");
+    indexCategory="guide"; var guide=renderIndexCategory();
+    const offer={kind:"weapon",value:{name:"Test Bow",type:"Bow",rarity:"Rare",damage:20,crit:0.1,element:"Fire",attacks:[{name:"Volley"}]},price:40};
+    var comparison=renderShopGearItem(offer,0);
+  `,context);
+  assert.match(vm.runInContext("guide",context),/Mana and arrows/);
+  assert.match(vm.runInContext("guide",context),/Off-class weapons/);
+  assert.match(vm.runInContext("comparison",context),/off-class ×0\.75/);
+  assert.match(vm.runInContext("comparison",context),/Equipped:/);
+  assert.match(vm.runInContext("comparison",context),/Volley/);
+  vm.runInContext(`const pieces=ARMOR_INDEX.slice(0,5).map(entry=>DUNGEON_RULES.createCatalogArmor(entry,2)); state.equippedArmor=Object.fromEntries(pieces.map(piece=>[piece.slot,piece])); var armorComparison=pieces.map((piece,index)=>renderShopGearItem({kind:"armor",value:{...piece,name:"New " + piece.slot}},index)).join(" ");`,context);
+  assert.match(vm.runInContext("armorComparison",context),/defense/);
+  assert.match(vm.runInContext("armorComparison",context),/damage reduction/);
+  assert.match(vm.runInContext("armorComparison",context),/Equipped:/);
 });
 
 test("high DEX grants one optional attack before enemy actions and never chains", () => {
@@ -577,6 +696,44 @@ test("inventory groups weapons by class and clears the new-gear marker when open
   assert.equal(vm.runInContext("state.inventoryNotice", context), false);
 });
 
+test("matching potions stack from drops and existing saves without merging different variants", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); state.items=[];
+    grantLoot({kind:"item",value:{name:"Rare Healing Potion",type:"health",rarity:"Rare",amount:0,quantity:1}});
+    grantLoot({kind:"item",value:{name:"Rare Healing Potion",type:"health",rarity:"Rare",amount:0,quantity:2}});
+    grantLoot({kind:"item",value:{name:"Rare Mana Potion",type:"mana",rarity:"Rare",amount:30,quantity:1}});
+    var stackedBeforeMigration=state.items.map(item=>item.quantity);
+    state.items.push({name:"Rare Healing Potion",type:"health",rarity:"Rare",amount:0,quantity:3});
+    migrateBrowserSave();
+    var stackedAfterMigration=state.items.map(item=>item.quantity);
+    var potionMarkup=renderInventoryItems("items");
+  `, context);
+  assert.deepEqual(Array.from(vm.runInContext("stackedBeforeMigration", context)), [3, 1]);
+  assert.deepEqual(Array.from(vm.runInContext("stackedAfterMigration", context)), [6, 1]);
+  assert.match(vm.runInContext("potionMarkup", context), /Rare Healing Potion/);
+  assert.match(vm.runInContext("potionMarkup", context), /x6/);
+});
+
+test("armor inventory equips the highest-defense piece independently for each slot", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior"); render=()=>{}; save=()=>{};
+    const lowHead={name:"Light Hood",slot:"head",defense:2,damageReduction:5,healthBonus:0,set:"Light",rarity:"Common"};
+    const highHead={name:"Iron Helm",slot:"head",defense:8,damageReduction:1,healthBonus:0,set:"Iron",rarity:"Rare"};
+    const chest={name:"Iron Chest",slot:"chest",defense:6,damageReduction:4,healthBonus:5,set:"Iron",rarity:"Rare"};
+    state.armor=[lowHead,highHead,chest]; state.equippedArmor={head:lowHead};
+    var armorMarkup=renderInventoryItems("armor");
+    var equipBestHandler;
+    screen.querySelector=selector=>selector==="#inventory-list [data-equip-best]"?{addEventListener:(_type,handler)=>{equipBestHandler=handler;}}:null;
+    bindInventoryListActions(); equipBestHandler();
+    var bestHead=state.equippedArmor.head.name, bestChest=state.equippedArmor.chest.name;
+  `, context);
+  assert.match(vm.runInContext("armorMarkup", context), /data-equip-best/);
+  assert.equal(vm.runInContext("bestHead", context), "Iron Helm");
+  assert.equal(vm.runInContext("bestChest", context), "Iron Chest");
+});
+
 test("cleared enemy rooms use the same map tile as empty rooms", () => {
   const context = loadBrowserGame();
   assert.equal(vm.runInContext("mapRoomImage({type:'enemy', cleared:true})", context), "Images/Rooms/empty-room.png");
@@ -586,11 +743,70 @@ test("cleared enemy rooms use the same map tile as empty rooms", () => {
 test("generated floors retain one boss and place the guaranteed shop outside its path cell", () => {
   const context = loadBrowserGame();
   for (let floor = 1; floor <= 30; floor++) {
-    vm.runInContext(`state={floor:${floor},difficulty:'normal'}; var generatedFloor=makeFloor(${floor});`, context);
+    vm.runInContext(`
+      state={floor:${floor},difficulty:'normal'}; var generatedFloor=makeFloor(${floor});
+      var reachable=new Set([generatedFloor.currentId]), frontier=[generatedFloor.currentId];
+      while(frontier.length){const id=frontier.shift();const room=generatedFloor.rooms.find(item=>item.id===id);for(const edge of room.connections)if(!reachable.has(edge.id)){reachable.add(edge.id);frontier.push(edge.id);}}
+      var bossRoom=generatedFloor.rooms.find(room=>room.type==='boss');
+    `, context);
     assert.equal(vm.runInContext("generatedFloor.rooms.filter(room=>room.type==='boss').length", context), 1, `floor ${floor}`);
     assert.equal(vm.runInContext("generatedFloor.rooms.filter(room=>room.type==='shop').length", context), 1, `floor ${floor}`);
-    assert.ok(vm.runInContext("generatedFloor.rooms.find(room=>room.type==='boss').connections.length", context));
+    assert.ok(vm.runInContext("reachable.has(bossRoom.id)", context), `boss is reachable on floor ${floor}`);
   }
+});
+
+test("boss fights expose usable combat and inventory choices while disabling flee", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun('Tester');chooseClass('warrior');
+    state.combat={boss:true,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[{name:'Boss',hp:500,maxHp:500,damage:10,dodge:0,intent:{key:'attack',label:'Strike'}}]};
+    var bossActions=getActions();var combatInventoryButton=inventoryButtonMarkup();
+  `, context);
+  const actions = vm.runInContext("bossActions", context);
+  assert.match(actions, /data-attack="basic"(?! disabled)/);
+  assert.match(vm.runInContext("combatInventoryButton", context), /data-open-inventory/);
+  assert.match(actions, /Use health potion/);
+  assert.match(actions, /data-action="flee" disabled/);
+});
+
+test("XP rewards crossing multiple thresholds award one skill point per level", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`newRun('Tester');state.level=8;state.skillPoints=0;state.xp=0;var gained=gainXp(5000);`, context);
+  assert.ok(vm.runInContext("gained", context) > 1);
+  assert.equal(vm.runInContext("state.skillPoints", context), vm.runInContext("gained", context));
+  assert.ok(vm.runInContext("state.xp", context) >= 0);
+  assert.ok(vm.runInContext("state.xp", context) < vm.runInContext("xpToNext()", context));
+});
+
+test("archer arrows are one visible shared resource with explicit costs and safe bounds", () => {
+  const context = loadBrowserGame();
+  context.Math.random = () => 0.99;
+  vm.runInContext(`
+    newRun('Tester');chooseClass('archer');state.arrows=2;
+    state.combat={boss:false,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[{name:'Target',race:'slime',klass:'Warrior',hp:500,maxHp:500,damage:1,dodge:0,intent:{key:'guard',label:'Guard'}}]};state.target=0;
+    combatAction('basic');var afterShot=state.arrows;var arrowLog=state.log.map(entry=>entry.text).join(' ');
+    state.arrows=0;var zeroArrowInventory=renderInventoryItems('items');var exhaustedActions=getActions();
+    changeArrowCount(-5);var lowerBound=state.arrows;changeArrowCount(40);var upperBound=state.arrows;
+  `, context);
+  assert.equal(vm.runInContext("afterShot", context), 1);
+  assert.match(vm.runInContext("arrowLog", context), /spend 1 arrow\. 1 shared arrow remains/);
+  assert.match(vm.runInContext("zeroArrowInventory", context), /0 shared arrows/);
+  assert.match(vm.runInContext("exhaustedActions", context), /data-attack="basic"(?! disabled)[^>]*>Unarmed jab/);
+  assert.equal(vm.runInContext("lowerBound", context), 0);
+  assert.equal(vm.runInContext("upperBound", context), 30);
+});
+
+test("leaderboard shows a retryable network error separately from a genuinely empty board", async () => {
+  const context = loadBrowserGame("https://leaderboard.example");
+  context.fetch = async () => { throw new Error("offline"); };
+  await vm.runInContext("refreshGlobalLeaderboard('normal')", context);
+  assert.equal(vm.runInContext("leaderboardStatus", context), "error");
+  assert.match(vm.runInContext("renderLeaderboard()", context), /could not be reached[\s\S]*Retry/);
+  context.fetch = async () => ({ ok: true, json: async () => ({ scores: [] }) });
+  await vm.runInContext("refreshGlobalLeaderboard('normal')", context);
+  assert.equal(vm.runInContext("leaderboardStatus", context), "ready");
+  assert.match(vm.runInContext("renderLeaderboard()", context), /No Normal records yet/);
+  assert.doesNotMatch(vm.runInContext("renderLeaderboard()", context), /could not be reached/);
 });
 
 test("all combat damage sources clamp and remove a target killed by an elemental Sundering effect", () => {
@@ -664,5 +880,50 @@ test("archer special mana recovery requires a successful hit", () => {
 test("Update V0.1 consolidates features and bug fixes into separate sections", () => {
   const source = fs.readFileSync("patch-notes.js", "utf8");
   assert.match(source, /"v0\.1"[\s\S]*?heading: "New Features"[\s\S]*?Mage mana costs and drop rates[\s\S]*?heading: "Bugs"[\s\S]*?boss path[\s\S]*?Staff strike/i);
+  assert.match(source, /Matching potions stack[\s\S]*?Equip Best[\s\S]*?full effectiveness above 20[\s\S]*?every five stat levels/i);
   assert.doesNotMatch(source, /v0-patch-[123]/);
+});
+
+test("Update V0.2 separates verified bug fixes from strategy and gear features", () => {
+  const source = fs.readFileSync("patch-notes.js", "utf8");
+  assert.match(source, /"v0\.2"[\s\S]*?subtitle: "Tactical combat, meaningful choices, and bug fixes"[\s\S]*?heading: "New Features"[\s\S]*?off-class weapon attacks deal 25% less damage[\s\S]*?shield Block[\s\S]*?Quick Guide[\s\S]*?heading: "Bugs"[\s\S]*?Boss rooms remain[\s\S]*?shared count[\s\S]*?connection failures[\s\S]*?Retry/);
+});
+
+test("enemy formations assign a vanguard to a ranged ally and boss patterns rotate", () => {
+  const context = loadBrowserGame();
+  const formation = vm.runInContext(`(() => {
+    const enemies=[{klass:"Warrior",hp:10},{klass:"Archer",hp:10}];
+    const assigned=assignEnemyFormation(enemies,()=>0);
+    return {assigned,role:enemies[0].formationRole,protector:enemies[1].protectedByIndex};
+  })()`, context);
+  assert.deepEqual({ ...formation }, { assigned: true, role: "Vanguard", protector: 0 });
+  assert.equal(vm.runInContext(`assignEnemyFormation([{klass:"Warrior"},{klass:"Warrior"}],()=>0)`, context), false);
+  const pattern = vm.runInContext(`(() => { const boss={name:"The Moonfang Alpha",bossTurn:0}; return [nextBossIntent(boss).label,nextBossIntent(boss).label,nextBossIntent(boss).label,nextBossIntent(boss).label]; })()`, context);
+  assert.deepEqual(Array.from(pattern), ["Alpha Pounce", "Circle the Prey", "Moonfang Rend", "Alpha Pounce"]);
+});
+
+test("risky route choice promises better rewards and the trait guide covers enemy races", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    state={floor:2,xp:0,level:1,skillPoints:0,gold:0,difficulty:"normal",weapons:[],armor:[],items:[],equippedArmor:{},
+      currentFloor:{rooms:[{id:"r0",type:"enemy",enemyCount:2,cleared:false,riskyChoice:true}],currentId:"r0"},
+      runStats:{enemiesDefeated:0,damageDealt:0,damageTaken:0,fights:[]},log:[],
+      combat:{boss:false,enemies:[{name:"Test",gold:10,xp:100,summoned:false}],damageDealt:0,damageTaken:0,log:[]}};
+    makeLoot=()=>({kind:"item",value:{rarity:"Common",name:"Test drop"}}); grantLoot=()=>{}; Math.random=()=>0.99;
+    winFight();
+  `, context);
+  assert.equal(vm.runInContext("state.gold", context), 15);
+  assert.match(vm.runInContext("state.runStats.fights[0].rewards", context), /\+203 XP/);
+  assert.match(vm.runInContext("state.runStats.fights[0].rewards", context), /Test drop/);
+  const traits = vm.runInContext(`["slime","skeleton","goblin","specter","vampire","werewolf","golem"].map(race=>enemyTrait({race}))`, context);
+  assert.equal(Array.from(traits).length, 7);
+  assert.match(String(traits[1]), /ranged attacks hit harder/);
+  assert.match(String(traits[4]), /heals on landed hits/);
+  assert.match(String(traits[6]), /reduces incoming damage/);
+});
+
+test("Update V0.2 notes document the tactical additions without campaign story", () => {
+  const source = fs.readFileSync("patch-notes.js", "utf8");
+  assert.match(source, /guarded line[\s\S]*?Enemy races now have readable[\s\S]*?forked enemy encounter[\s\S]*?Bosses follow recognizable, repeating combat patterns/);
+  assert.doesNotMatch(source, /campaign story|new lore/i);
 });

@@ -2,7 +2,7 @@
   const RARITIES = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Divine"];
   const RARITY_MULTIPLIERS = [1, 1.25, 1.6, 2.1, 2.8, 3.7, 5];
   const STAT_DEFINITIONS = [
-    { key: "str", label: "STR", description: "Increases Warrior damage; returns diminish above 20." },
+    { key: "str", label: "STR", description: "Increases physical attack damage." },
     { key: "dex", label: "DEX", description: "Improves evasion; especially effective for Archers." },
     { key: "con", label: "CON", description: "Adds maximum health and strengthens Mage Aegis." },
     { key: "int", label: "INT", description: "Adds maximum mana and increases Mage damage." },
@@ -77,10 +77,24 @@
   function effectiveStat(value, key, playerClass) {
     const stat = Number(value) || 0;
     if (stat <= 10) return stat;
-    const firstBand = Math.min(10, stat - 10);
-    const diminishingBand = Math.max(0, stat - 20) * 0.5;
     const synergy = CLASS_STAT_SYNERGIES[playerClass]?.[key] || 1;
-    return 10 + (firstBand + diminishingBand) * synergy;
+    return 10 + (stat - 10) * synergy;
+  }
+
+  function weaponFamilyForType(type) {
+    if (["Bow", "Crossbow"].includes(type)) return "archer";
+    if (["Staff", "Wand"].includes(type)) return "mage";
+    if (["Sword", "Dagger", "Axe", "Scythe"].includes(type)) return "warrior";
+    return null;
+  }
+
+  function weaponDamageMultiplier(playerClass, weapon) {
+    const family = weaponFamilyForType(weapon?.type);
+    return family && playerClass && family !== playerClass ? 0.75 : 1;
+  }
+
+  function weaponUsesMana(weapon, playerClass) {
+    return ["Staff", "Wand"].includes(weapon?.type) || (!weapon?.type && playerClass === "mage");
   }
 
   function statSynergy(key, playerClass) {
@@ -94,6 +108,11 @@
     return after - before;
   }
 
+  function skillPointCost(player, key) {
+    const value = key === "critChance" ? Math.round((Number(player.critChance) || 0) * 100) : Number(player[key]) || 0;
+    return value <= 20 ? 1 : 2 + Math.floor((value - 21) / 5);
+  }
+
   function entryRoomType(floor) {
     return floor === 1 ? "start" : "empty";
   }
@@ -101,15 +120,16 @@
   function spendSkillPoint(player, stat) {
     const definition = STAT_DEFINITIONS.find(item => item.key.toLowerCase() === String(stat).toLowerCase());
     if (!definition) return { success: false, message: "Choose STR, DEX, CON, INT, WIS, CHA, Speed, or Crit." };
-    if (player.skillPoints <= 0) return { success: false, message: "You have no skill points to spend." };
+    const cost = skillPointCost(player, definition.key);
+    if (player.skillPoints < cost) return { success: false, message: `This upgrade costs ${cost} skill points; you have ${player.skillPoints}.`, cost };
     if (definition.key === "critChance" && player.critChance >= 1) {
       return { success: false, message: "Critical chance is already at its 100% limit." };
     }
 
-    const gain = definition.key === "critChance" ? (player.critChance < 0.2 ? 0.01 : 0.005) : statPointGain(player, definition.key);
+    const gain = definition.key === "critChance" ? 0.01 : statPointGain(player, definition.key);
     if (definition.key === "critChance") player.critChance = Math.min(1, player.critChance + gain);
     else player[definition.key] += 1;
-    player.skillPoints--;
+    player.skillPoints -= cost;
 
     if (definition.key === "con") {
       const resourceGain = Math.max(1, Math.round(10 * gain));
@@ -121,7 +141,7 @@
       player.maxMana += resourceGain;
       player.mana = Math.min(player.maxMana, player.mana + resourceGain);
     }
-    return { success: true, message: `You improved ${definition.label}. ${player.skillPoints} skill point(s) remain.` };
+    return { success: true, cost, message: `You improved ${definition.label} for ${cost} skill point(s). ${player.skillPoints} skill point(s) remain.` };
   }
 
   function chooseCatalogWeapon(family, rarity, catalog = root.GAME_INDEX_DATA.weapons, random = Math.random, excludedNames = []) {
@@ -307,19 +327,25 @@
     const passiveMultiplier = ({ Penetration: 1.15, Pierce: 1.1, PiercingShot: 1.12, Void: 1.12, SpellPower: 1.12, SpellEcho: 1.08, Focus: 1.08, Draw: 1.12, DelayedCast: 1.15, Overcast: 1.25, RangeScaling: 1.12, Overdraw: 1.25, Momentum: 1 + Math.min(5, player.momentum || 0) * 0.04, ArcaneCharge: 1 + Math.min(5, player.arcaneCharge || 0) * 0.04 })[effect] || 1;
     const matchup = elementMatchup(weapon.element, targetElement);
     const playerDamageScale = player.playerEffects?.Cripple ? 0.85 : 1;
-    const primaryDamage = Math.max(1, Math.round((((stat + (weapon.damage || 0) + (weapon.damageUpgrade || 0)) * (attack.multiplier || 1) * (charged?.multiplier || 1) * passiveMultiplier * playerDamageScale) - (attack.targetDamageReduction || 0)) * matchup.multiplier));
+    const damageMultiplier = weaponDamageMultiplier(playerClass, weapon);
+    const rawPrimaryDamage = (stat + (weapon.damage || 0) + (weapon.damageUpgrade || 0)) * (attack.multiplier || 1) * (charged?.multiplier || 1) * passiveMultiplier * playerDamageScale * damageMultiplier;
+    const primaryDamage = Math.max(1, Math.round(rawPrimaryDamage * matchup.multiplier - (attack.targetDamageReduction || 0)));
+    const usesMana = weaponUsesMana(weapon, playerClass);
     return {
       primaryDamage,
+      rawPrimaryDamage,
       secondaryDamage: attack.aoe ? Math.max(1, Math.round(primaryDamage * (attack.secondaryMultiplier || 0.5))) : 0,
       criticalDamage: primaryDamage * 2,
       critChance,
-      manaCost: (attack.manaCost || (playerClass === "mage" ? weapon.manaCost || 5 : 0)) + (effect === "Overcast" && playerClass === "mage" ? 2 : 0),
+      manaCost: (attack.manaCost || (usesMana ? weapon.manaCost || 5 : 0)) + (effect === "Overcast" && usesMana ? 2 : 0),
       manaGain: Math.max(0, Number(attack.manaGain) || 0),
       ammoCost: ["Bow", "Crossbow"].includes(weapon.type) && !attack.chargesNextAttack ? (effect === "Overdraw" || attack.overdraw ? 2 : 1) : 0,
       cooldown: Math.max(0, (attack.cooldown || 0) - (effect === "CooldownReduction" && attack.cooldown ? 1 : 0)),
       targetCount: attack.aoe ? Math.max(1, targetCount) : 1,
       elementMultiplier: matchup.multiplier,
       elementRelation: matchup.relation,
+      damageMultiplier,
+      offClass: damageMultiplier < 1,
       effect: attackEffect || effect || null
     };
   }
@@ -401,8 +427,8 @@
   }
 
   function basicAttackFallback(playerClass, weaponType, mana, arrows, manaCost = 5) {
-    if (playerClass === "mage" && (Number(mana) || 0) < Math.max(1, Number(manaCost) || 5)) return "mana";
-    if (playerClass === "archer" && ["Bow", "Crossbow"].includes(weaponType) && (Number(arrows) || 0) <= 0) return "arrows";
+    if ((["Staff", "Wand"].includes(weaponType) || (!weaponType && playerClass === "mage")) && (Number(mana) || 0) < Math.max(1, Number(manaCost) || 5)) return "mana";
+    if (["Bow", "Crossbow"].includes(weaponType) && (Number(arrows) || 0) <= 0) return "arrows";
     return null;
   }
 
@@ -501,5 +527,5 @@
     return save ? `${save.name || "Adventurer"} · Floor ${save.floor || 1} · Level ${save.level || 1}` : "Empty";
   }
 
-  root.DungeonRules = { STAT_DEFINITIONS, effectiveStat, statSynergy, entryRoomType, spendSkillPoint, chooseCatalogWeapon, createCatalogWeapon, createWeaponAttacks, createCatalogArmor, equipArmor, armorSetBonus, armorDamageReduction, armorBonuses, getEffectDefinition, applyCombatEffect, tickCombatEffects, createAttackPreview, rollLootRarity, rollShopRarity, rollWeaponFamily, rollLootKind, rollPotionType, rollShopOfferKind, getSpecialAttack, isAttackOnCooldown, basicAttackFallback, allEnemiesDefeated, avoidDuplicateDivine, elementMatchup, chooseEnemyIntent, hasDisruptibleIntent, canDisrupt, disruptEnemy, consumeDisruptedIntent, tickDisruptCooldown, guardDamage, brace, applyBraceToDamage, createSaveSlots, writeSaveSlot, describeSaveSlot };
+  root.DungeonRules = { STAT_DEFINITIONS, effectiveStat, statSynergy, skillPointCost, entryRoomType, spendSkillPoint, chooseCatalogWeapon, createCatalogWeapon, createWeaponAttacks, createCatalogArmor, equipArmor, armorSetBonus, armorDamageReduction, armorBonuses, getEffectDefinition, applyCombatEffect, tickCombatEffects, createAttackPreview, rollLootRarity, rollShopRarity, rollWeaponFamily, rollLootKind, rollPotionType, rollShopOfferKind, getSpecialAttack, isAttackOnCooldown, basicAttackFallback, weaponFamilyForType, weaponDamageMultiplier, weaponUsesMana, allEnemiesDefeated, avoidDuplicateDivine, elementMatchup, chooseEnemyIntent, hasDisruptibleIntent, canDisrupt, disruptEnemy, consumeDisruptedIntent, tickDisruptCooldown, guardDamage, brace, applyBraceToDamage, createSaveSlots, writeSaveSlot, describeSaveSlot };
 })(window);

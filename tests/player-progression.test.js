@@ -31,12 +31,25 @@ test("spending skill points improves the selected stat and derived resources", (
   assert.equal(player.skillPoints, 0);
 });
 
-test("class synergies strengthen relevant stats while returns diminish above twenty", () => {
+test("class synergies stay effective above twenty and upgrade costs rise in five-level steps", () => {
   const rules = loadRules();
   assert.equal(rules.effectiveStat(12, "str", "warrior"), 12.5);
   assert.equal(rules.effectiveStat(12, "dex", "warrior"), 12);
   assert.equal(rules.effectiveStat(12, "dex", "archer"), 12.5);
-  assert.equal(rules.effectiveStat(22, "str", "warrior") - rules.effectiveStat(21, "str", "warrior"), 0.625);
+  assert.equal(rules.effectiveStat(22, "str", "warrior") - rules.effectiveStat(21, "str", "warrior"), 1.25);
+  assert.equal(rules.skillPointCost({str:20}, "str"), 1);
+  assert.equal(rules.skillPointCost({str:21}, "str"), 2);
+  assert.equal(rules.skillPointCost({str:25}, "str"), 2);
+  assert.equal(rules.skillPointCost({str:26}, "str"), 3);
+
+  const strong = { class:"warrior", skillPoints:1, str:20 };
+  assert.equal(rules.spendSkillPoint(strong, "str").success, true);
+  assert.equal(strong.str, 21);
+  assert.equal(rules.spendSkillPoint(strong, "str").success, false);
+  strong.skillPoints = 2;
+  assert.equal(rules.spendSkillPoint(strong, "str").success, true);
+  assert.equal(strong.str, 22);
+  assert.equal(strong.skillPoints, 0);
 
   const mage = { class: "mage", skillPoints: 1, con: 10, maxHp: 100, baseMaxHp: 100, hp: 50, int: 10, maxMana: 50, mana: 20 };
   rules.spendSkillPoint(mage, "con");
@@ -45,14 +58,28 @@ test("class synergies strengthen relevant stats while returns diminish above twe
   assert.equal(mage.baseMaxHp, 112);
 });
 
-test("critical chance skill investments diminish after twenty percent", () => {
+test("critical chance keeps full one-percent gains and costs more after twenty percent", () => {
   const rules = loadRules();
-  const player = { skillPoints: 2, critChance: 0.19 };
+  const player = { skillPoints: 5, critChance: 0.19 };
   rules.spendSkillPoint(player, "critChance");
   assert.equal(player.critChance, 0.2);
-  player.skillPoints = 1;
   rules.spendSkillPoint(player, "critChance");
-  assert.ok(Math.abs(player.critChance - 0.205) < 1e-12);
+  assert.ok(Math.abs(player.critChance - 0.21) < 1e-12);
+  assert.equal(player.skillPoints, 3);
+  assert.equal(rules.skillPointCost(player, "critChance"), 2);
+  rules.spendSkillPoint(player, "critChance");
+  assert.ok(Math.abs(player.critChance - 0.22) < 1e-12);
+  assert.equal(player.skillPoints, 1);
+});
+
+test("an upgrade above twenty requires the full increased skill-point cost", () => {
+  const rules = loadRules();
+  const player = { skillPoints:1, str:21 };
+  const result = rules.spendSkillPoint(player, "str");
+  assert.equal(result.success, false);
+  assert.equal(result.cost, 2);
+  assert.equal(player.str, 21);
+  assert.equal(player.skillPoints, 1);
 });
 
 test("invalid stat choices and unspent-point exhaustion do not change player stats", () => {

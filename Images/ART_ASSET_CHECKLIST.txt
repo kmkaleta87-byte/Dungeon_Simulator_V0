@@ -359,6 +359,27 @@ Elite versions can reuse these with the elite overlay below.
 [ ] Enemies/Races/golem-warrior.png
 [ ] Enemies/Races/summoned-skeleton.png
 
+PLANNED REGION CONTENT - FIRST EXAMPLE: UNDEAD
+-----------------------------------------------
+Planned for the region-based floor direction; these assets are not all used by
+the current build yet. Undead is the only named theme so far, based on the
+current example of a floor featuring Skeletons and Zombies. Keep theme art as
+separate overlays so shared room and map layouts can be reused.
+
+[ ] Floors/Undead/environment-background.png - wide art for the active region
+[ ] Floors/Undead/environment-overlay.png - transparent texture/details layer
+[ ] Floors/Undead/map-overlay.png - transparent theme details for map tiles
+[ ] UI/Regions/undead-emblem.png - small region icon for floor/region display
+[ ] UI/Regions/region-title-frame.png - reusable frame for any region title
+[ ] Enemies/Races/zombie-warrior.png
+[ ] Enemies/Races/zombie-archer.png
+[ ] Enemies/Races/zombie-mage.png
+
+Future themes are not named yet. For each additional region, plan a matching
+environment-background.png, environment-overlay.png, map-overlay.png, and
+one region emblem under Floors/<Theme>/ and UI/Regions/<theme>-emblem.png.
+Add themed enemy sprites only when those enemies are chosen for the roster.
+
 ENEMIES - BOSSES
 ----------------
 [ ] Enemies/Bosses/slime-sovereign.png
@@ -371,6 +392,16 @@ ENEMIES - BOSSES
 [ ] Enemies/Bosses/bone-necromancer.png
 [ ] Enemies/Bosses/ashen-twin.png
 [ ] Enemies/Bosses/hollow-twin.png
+[ ] Enemies/Bosses/floor-20-milestone-boss.png - identity/design to be decided
+[ ] Enemies/Bosses/floor-20-milestone-boss-defeated.png - optional defeated pose
+
+ENDLESS RUN MILESTONE UI
+------------------------
+Floor 20 is a planned major boss milestone. After victory the player should be
+able to end the run or continue; these are UI assets, not story illustrations.
+
+[ ] UI/Floors/floor-transition-frame.png - reusable region/floor transition frame
+[ ] UI/Floors/milestone-clear-stamp.png - optional floor-20 victory marker
 
 ENEMY OVERLAYS
 --------------
@@ -597,3 +628,5 @@ NOTES
 - Bosses use their own named art; glass-cannon bosses may reuse the matching boss
   art with the glass-cannon overlay.
 - More items/rooms may be added later; this is the current game's asset inventory.
+- Region themes, Zombie sprites, and the floor-20 milestone boss are planned;
+  only the Undead example is named, and the boss identity remains undecided.
