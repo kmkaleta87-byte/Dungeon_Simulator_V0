@@ -21,24 +21,45 @@ const DIFFICULTIES = {
 };
 const ELITE_AFFINITIES = ["Fire", "Water", "Earth", "Wind"];
 const ELITE_EFFECTS = { Fire: "Burn", Water: "Freeze", Earth: "Cripple", Wind: "Blind" };
-const REGION_CYCLE_FLOORS = 20;
+const BIOME_FLOORS = 5;
+const MILESTONE_BOSS_INTERVAL = 20;
 const REGION_DEFINITIONS = [
-  { id:"undead", name:"Undead Catacombs", folder:"Undead", races:["skeleton","zombie"], bosses:["The Bone Regent","The Bone Necromancer"], rule:"Skeleton Archers and Mages deal 15% more damage.", briefing:"Skeletons and Zombies stalk these halls. Watch for the Skeletons' stronger ranged attacks." },
+  { id:"undead", name:"Undead Catacombs", folder:"Undead", races:["skeleton","zombie"], bosses:["The Bone Regent","The Bone Necromancer"], rule:"Skeleton Mages, Quick Casters, and Sharpshooters deal 15% more damage.", briefing:"Skeletons and Zombies stalk these halls. Watch for the Skeletons' stronger ranged and magical attacks." },
   { id:"warrens", name:"Goblin Warrens", folder:"GoblinWarrens", races:["goblin","slime"], bosses:["The Goblin King","The Slime Sovereign"], rule:"Goblin enemies gain 2 DEX.", briefing:"Quick Goblins and stubborn Slimes control the narrow paths. Goblins have higher DEX." },
   { id:"haunted", name:"Haunted Hollows", folder:"HauntedHollows", races:["specter","vampire"], bosses:["The Veiled Haunt","The Crimson Count"], rule:"Specter enemies have a 12% dodge chance.", briefing:"Specters evade attacks while Vampires recover health when their strikes land." },
-  { id:"feral-stone", name:"Feral Stone Depths", folder:"FeralStone", races:["werewolf","golem"], bosses:["The Moonfang Alpha","The Mountain Heart"], rule:"Golems reduce incoming damage.", briefing:"Werewolves threaten critical hits, while Golems rely on their natural defense." }
+  { id:"feral-stone", name:"Feral Stone Depths", folder:"FeralStone", races:["werewolf","golem"], bosses:["The Moonfang Alpha","The Mountain Heart"], rule:"Golems reduce incoming damage.", briefing:"Werewolves threaten critical hits, while Golems rely on their natural defense." },
+  { id:"ironfang", name:"Ironfang Highlands", folder:"Ironfang", races:["orc","lizardfolk"], bosses:["The Orc Warchief","The Lizard Matriarch"], rule:"Orcs hit harder and Lizardfolk adapt with balanced defenses.", briefing:"Orc warbands and disciplined Lizardfolk patrol the highland passes." },
+  { id:"skyfang", name:"Skyfang Aeries", folder:"Skyfang", races:["kobold","harpy"], bosses:["The Kobold Skyking","The Harpy Tempest"], rule:"Kobolds favor ambushes while Harpies strike from the air.", briefing:"Kobold hunters and swift Harpies control the high, narrow ledges." },
+  { id:"verdant-veil", name:"Verdant Veil", folder:"VerdantVeil", races:["fae","myconid"], bosses:["The Fae Queen","The Mycelium Heart"], rule:"Fae favor magic; Myconids endure and retaliate.", briefing:"Fae spellcasters and sprawling Myconid colonies guard the living deep." }
 ];
+const REGION_CYCLE_FLOORS = REGION_DEFINITIONS.length * BIOME_FLOORS;
 const MILESTONE_BOSS_NAME = "The Threshold Warden";
 const ENEMY_TRAITS = {
-  slime: "Unclassed · no special trait",
+  slime: "Gelatinous · heavy Brute body",
   skeleton: "Fragile · ranged attacks hit harder",
   goblin: "Quick · high DEX",
   specter: "Evasive · high dodge",
   vampire: "Siphon · heals on landed hits",
   werewolf: "Critical · occasional double damage",
   golem: "Armored · reduces incoming damage",
-  zombie: "Sturdy · high health, low speed"
+  zombie: "Sturdy · high health, low speed",
+  orc: "Warband · forceful, direct attacks",
+  kobold: "Ambusher · quick and evasive",
+  harpy: "Aerial · swift ranged pressure",
+  fae: "Enchanted · potent magic, fragile body",
+  myconid: "Sporebound · resilient with lingering toxins",
+  lizardfolk: "Adaptable · balanced offense and defense"
 };
+const ENEMY_TYPE_PROFILES = [
+  { name:"Warrior", family:"Melee", strengths:"Balanced melee damage and durability.", weakness:"No standout specialty; can be outpaced or out-ranged.", status:"Active type" },
+  { name:"Archer", family:"Ranged", strengths:"Reliable ranged pressure and some evasion.", weakness:"Less durable than frontline fighters.", status:"Active type" },
+  { name:"Mage", family:"Caster", strengths:"Powerful spells and status effects.", weakness:"Low durability and dependence on casting opportunities.", status:"Active type" },
+  { name:"Assassin", family:"Melee", strengths:"Very high speed and evasive, disruptive turns.", weakness:"Low health and lower damage per hit.", status:"Active type" },
+  { name:"Paladin", family:"Melee", strengths:"High defense with steady, medium damage.", weakness:"Low speed makes its actions easier to anticipate.", status:"Active type" },
+  { name:"Quick Caster", family:"Caster", strengths:"Fast, frequent spells with control effects.", weakness:"Lower spell damage and limited durability.", status:"Active type" },
+  { name:"Brute", family:"Melee", strengths:"High health and heavy hits.", weakness:"Very low speed and easier to evade.", status:"Active type" },
+  { name:"Sharpshooter", family:"Archer variant", strengths:"Accurate, hard-hitting shots with a higher critical-hit rate.", weakness:"Telegraphs shots and has low close-range durability.", status:"Active variant" }
+];
 const BOSS_PATTERNS = {
   "The Slime Sovereign": [{key:"guard",label:"Gather mass"},{key:"attack",label:"Sovereign Slam",damageMultiplier:1.5},{key:"ward",label:"Gelatinous Guard"}],
   "The Bone Regent": [{key:"guard",label:"Bone Guard"},{key:"cast",label:"Bone Lance",damageMultiplier:1.25},{key:"summon",label:"Raise the Fallen"}],
@@ -63,11 +84,11 @@ function floorEnemyScale(floor, growth) { return Math.pow(growth, Math.max(0, fl
 function regionForFloor(floor) {
   const safeFloor=Math.max(1,Math.floor(Number(floor)||1));
   const cycleFloor=(safeFloor-1)%REGION_CYCLE_FLOORS;
-  const regionIndex=Math.floor(cycleFloor/5);
+  const regionIndex=Math.floor(cycleFloor/BIOME_FLOORS);
   const region=REGION_DEFINITIONS[regionIndex];
   const cycle=Math.floor((safeFloor-1)/REGION_CYCLE_FLOORS)+1;
-  const regionStart=safeFloor-cycleFloor%5;
-  return {...region,cycle,regionStart,regionEnd:regionStart+4,cycleFloor:cycleFloor+1};
+  const regionStart=safeFloor-cycleFloor%BIOME_FLOORS;
+  return {...region,cycle,regionStart,regionEnd:regionStart+BIOME_FLOORS-1,cycleFloor:cycleFloor+1};
 }
 const WEAPONS = {
   warrior: [["Cinder Knife", "Dagger", "Common", "cinder-knife.png", 7, "Fire"]],
@@ -201,16 +222,22 @@ const ROOM_LABELS = {
   weapon: "Weapon Cache", fountain: "Fountain Room", shop: "Shop Room", trap: "Treasure Room", boss: "Boss Room"
 };
 const roomNames = {
-  slime: ["Slime", "Basic"],
-  skeleton: [["Skeleton Warrior", "Warrior"], ["Skeleton Archer", "Archer"], ["Skeleton Mage", "Mage"]],
-  goblin: [["Goblin Warrior", "Warrior"], ["Goblin Archer", "Archer"], ["Goblin Mage", "Mage"]],
-  zombie: [["Zombie Warrior", "Warrior"], ["Zombie Archer", "Archer"], ["Zombie Mage", "Mage"]],
-  specter: [["Specter Warrior", "Warrior"], ["Specter Mage", "Mage"]],
-  vampire: [["Vampire Warrior", "Warrior"], ["Vampire Mage", "Mage"]],
-  werewolf: [["Werewolf Warrior", "Warrior"], ["Werewolf Archer", "Archer"]],
-  golem: ["Golem Warrior", "Warrior"]
+  slime: [["Slime Brute", "Brute"]],
+  skeleton: [["Skeleton Warrior", "Warrior"], ["Skeleton Paladin", "Paladin"], ["Skeleton Sharpshooter", "Sharpshooter"], ["Skeleton Quick Caster", "Quick Caster"], ["Skeleton Mage", "Mage"]],
+  goblin: [["Goblin Warrior", "Warrior"], ["Goblin Archer", "Archer"], ["Goblin Sharpshooter", "Sharpshooter"], ["Goblin Mage", "Mage"], ["Goblin Assassin", "Assassin"], ["Goblin Paladin", "Paladin"], ["Goblin Quick Caster", "Quick Caster"], ["Goblin Brute", "Brute"]],
+  zombie: [["Zombie Brute", "Brute"], ["Zombie Warrior", "Warrior"]],
+  specter: [["Specter Assassin", "Assassin"], ["Specter Mage", "Mage"], ["Specter Quick Caster", "Quick Caster"]],
+  vampire: [["Vampire Assassin", "Assassin"], ["Vampire Paladin", "Paladin"], ["Vampire Mage", "Mage"]],
+  werewolf: [["Werewolf Brute", "Brute"], ["Werewolf Assassin", "Assassin"], ["Werewolf Warrior", "Warrior"]],
+  golem: [["Golem Brute", "Brute"], ["Golem Paladin", "Paladin"]],
+  orc: [["Orc Warrior", "Warrior"], ["Orc Brute", "Brute"], ["Orc Paladin", "Paladin"]],
+  kobold: [["Kobold Assassin", "Assassin"], ["Kobold Sharpshooter", "Sharpshooter"]],
+  harpy: [["Harpy Archer", "Archer"], ["Harpy Sharpshooter", "Sharpshooter"], ["Harpy Assassin", "Assassin"]],
+  fae: [["Fae Assassin", "Assassin"], ["Fae Quick Caster", "Quick Caster"], ["Fae Mage", "Mage"]],
+  myconid: [["Myconid Brute", "Brute"], ["Myconid Mage", "Mage"]],
+  lizardfolk: [["Lizardfolk Warrior", "Warrior"], ["Lizardfolk Archer", "Archer"], ["Lizardfolk Paladin", "Paladin"]]
 };
-const BOSS_RACES = {"The Slime Sovereign":"slime","The Bone Regent":"skeleton","The Goblin King":"goblin","The Veiled Haunt":"specter","The Crimson Count":"vampire","The Moonfang Alpha":"werewolf","The Mountain Heart":"golem","The Bone Necromancer":"skeleton"};
+const BOSS_RACES = {"The Slime Sovereign":"slime","The Bone Regent":"skeleton","The Goblin King":"goblin","The Veiled Haunt":"specter","The Crimson Count":"vampire","The Moonfang Alpha":"werewolf","The Mountain Heart":"golem","The Bone Necromancer":"skeleton","The Orc Warchief":"orc","The Lizard Matriarch":"lizardfolk","The Kobold Skyking":"kobold","The Harpy Tempest":"harpy","The Fae Queen":"fae","The Mycelium Heart":"myconid"};
 
 let state = null;
 let modal = null;
@@ -562,26 +589,29 @@ function migrateBrowserSave() {
 
 function makeEnemy(floor, boss = false, index = 0) {
   const region=regionForFloor(floor);
-  const milestoneBoss=boss&&floor%REGION_CYCLE_FLOORS===0;
+  const milestoneBoss=boss&&floor%MILESTONE_BOSS_INTERVAL===0;
   const name = boss ? (milestoneBoss?MILESTONE_BOSS_NAME:index === 1 ? "The Hollow Twin" : choice(region.bosses)) : null;
   const race = boss ? (BOSS_RACES[name]||choice(region.races)) : choice(region.races);
   const template = roomNames[race];
   const variant = Array.isArray(template[0]) ? choice(template) : template;
   const enemyName=boss?name:variant[0];
   const klass = boss ? "Boss" : variant[1];
-  const baseHp = race === "golem" ? 95 : race === "werewolf" ? 58 : race === "slime" ? 42 : 32;
+  const baseHp = race === "golem" ? 95 : race === "werewolf" ? 58 : race === "slime" ? 42 : ["orc","myconid"].includes(race) ? 48 : 32;
   const difficulty=DIFFICULTIES[state?.difficulty]||DIFFICULTIES.normal;
-  const raceHealthScale=race==="skeleton"?0.8:race==="specter"?0.92:race==="zombie"?1.25:1;
-  const hp = Math.round((boss ? baseHp * (floor * 0.5 + 2) * 1.5 * (milestoneBoss?1.5:1) : baseHp*raceHealthScale) * floorEnemyScale(floor, 1.35) * difficulty.enemyHealth);
-  const baseDamage = race === "golem" ? 9 : race === "werewolf" ? 10 : 7;
-  const rangedScale=1;
-  const damageScale=race==="werewolf"?1.1:1;
-  const element = ({ slime: "Water", skeleton: "Earth", goblin: "Wind", vampire: "Fire", werewolf: "Earth", golem: "Earth" })[race] || "None";
-  const dex = Math.max(1, 8 + ({goblin:2,specter:2,vampire:1,werewolf:2,golem:-1,zombie:-1})[race] + ({Archer:2,Mage:1})[klass] + (boss?2:0));
-  const regionDamageBonus=region.id==="undead"&&race==="skeleton"&&["Archer","Mage"].includes(klass)?1.15:1;
-  const regionDexBonus=0;
+  const raceHealthScale=race==="skeleton"?0.8:race==="specter"?0.92:race==="zombie"?1.25:race==="fae"?0.85:race==="myconid"?1.2:1;
+  const typeHealthScale=({Assassin:0.78,Paladin:1.18,"Quick Caster":0.82,Brute:1.45,Sharpshooter:0.82})[klass]||1;
+  const hp = Math.round((boss ? baseHp * (floor * 0.5 + 2) * 1.5 * (milestoneBoss?1.5:1) : baseHp*raceHealthScale*typeHealthScale) * floorEnemyScale(floor, 1.35) * difficulty.enemyHealth);
+  const baseDamage = race === "golem" ? 9 : race === "werewolf" ? 10 : ["orc","harpy"].includes(race) ? 8 : 7;
+  const damageScale=({Assassin:0.78,Paladin:0.95,"Quick Caster":0.78,Brute:1.35,Sharpshooter:1.2})[klass]||(race==="werewolf"?1.1:1);
+  const element = ({ slime: "Water", skeleton: "Earth", goblin: "Wind", vampire: "Fire", werewolf: "Earth", golem: "Earth", orc:"Fire", kobold:"Wind", harpy:"Wind", fae:"Nature", myconid:"Nature", lizardfolk:"Water" })[race] || "None";
+  const dex = Math.max(1, 8 + ({goblin:2,specter:2,vampire:1,werewolf:2,golem:-1,zombie:-1,kobold:2,harpy:2,fae:1,myconid:-1,orc:-1,lizardfolk:1})[race] + ({Archer:2,Sharpshooter:2,Assassin:4,"Quick Caster":2,Mage:1,Paladin:-1,Brute:-3})[klass] + (boss?2:0));
+  const regionDamageBonus=region.id==="undead"&&race==="skeleton"&&["Sharpshooter","Mage","Quick Caster"].includes(klass)?1.15:1;
+  const regionDexBonus=region.id==="warrens"&&race==="goblin"?2:0;
   const easyBossDamageScale=state?.difficulty==="easy"&&boss?0.55:1;
-  return { name:enemyName, race, klass, element, dex:dex+regionDexBonus, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * rangedScale * damageScale * regionDamageBonus * (boss ? 1.5 * (milestoneBoss?1.25:1) : 1) * floorEnemyScale(floor, 1.1) * difficulty.enemyDamage * easyBossDamageScale)), damageReduction:race==="golem"?Math.max(1,Math.round((1+floor*0.35)*difficulty.enemyHealth)):0, dodge: race === "specter" ? 0.12 : klass === "Archer" ? 0.05 : 0.02, critChance:race==="werewolf"?0.1:0, lifeSteal:race==="vampire"?0.12:0, boss, milestoneBoss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)) };
+  const typeDefense=klass==="Paladin"?Math.max(1,Math.round((2+floor*0.15)*difficulty.enemyHealth)):0;
+  const dodge=Math.min(0.35,(race==="specter"?0.12:race==="kobold"?0.07:0)+(klass==="Assassin"?0.16:klass==="Archer"?0.05:klass==="Sharpshooter"?0.01:0.02));
+  const critChance=({Assassin:0.12,Sharpshooter:0.2})[klass]||(race==="werewolf"?0.1:0);
+  return { name:enemyName, race, klass, element, dex:dex+regionDexBonus, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * damageScale * regionDamageBonus * (boss ? 1.5 * (milestoneBoss?1.25:1) : 1) * floorEnemyScale(floor, 1.1) * difficulty.enemyDamage * easyBossDamageScale)), damageReduction:race==="golem"?Math.max(1,Math.round((1+floor*0.35)*difficulty.enemyHealth)):typeDefense, dodge, critChance, lifeSteal:race==="vampire"?0.12:0, boss, milestoneBoss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)) };
 }
 
 function assignRunChoice(floor,rooms,random=Math.random){
@@ -596,7 +626,7 @@ function assignRunChoice(floor,rooms,random=Math.random){
 function assignEnemyFormation(enemies,random=Math.random){
   if(enemies.length<2||random()>=0.45)return false;
   const guardianIndex=enemies.findIndex(enemy=>enemy.klass==="Warrior");
-  const protectedIndex=enemies.findIndex((enemy,index)=>index!==guardianIndex&&["Archer","Mage"].includes(enemy.klass));
+  const protectedIndex=enemies.findIndex((enemy,index)=>index!==guardianIndex&&["Archer","Sharpshooter","Mage","Quick Caster"].includes(enemy.klass));
   if(guardianIndex<0||protectedIndex<0)return false;
   enemies[guardianIndex].formationRole="Vanguard";
   enemies[protectedIndex].protectedByIndex=guardianIndex;
@@ -734,8 +764,16 @@ function mapRoomImage(room) {
 }
 
 function regionRaceNames(region=regionForFloor(state?.floor||1)){
-  const raceNames={slime:"Slimes",skeleton:"Skeletons",goblin:"Goblins",zombie:"Zombies",specter:"Specters",vampire:"Vampires",werewolf:"Werewolves",golem:"Golems"};
+  const raceNames={slime:"Slimes",skeleton:"Skeletons",goblin:"Goblins",zombie:"Zombies",specter:"Specters",vampire:"Vampires",werewolf:"Werewolves",golem:"Golems",orc:"Orcs",kobold:"Kobolds",harpy:"Harpies",fae:"Fae",myconid:"Myconids",lizardfolk:"Lizardfolk"};
   return region.races.map(race=>raceNames[race]||race).join(" · ");
+}
+
+function regionRaceRoles(region){
+  return region.races.map(race=>{
+    const variants=roomNames[race]||[];
+    const roles=[...new Set(variants.map(variant=>variant[1]))];
+    return `${race[0].toUpperCase()+race.slice(1)}: ${roles.join(", ")}`;
+  }).join(" · ");
 }
 
 function renderRegionBriefing(region=regionForFloor(state.floor)){
@@ -856,10 +894,11 @@ function getActions() {
     const spellBlocked = usesMana && state.equippedArmor?.shield;
     const noArrows=["Bow","Crossbow"].includes(weapon?.type)&&state.arrows<(weapon?.effect==="Overdraw"?2:1);
     const basicFallback = spellBlocked ? "shield" : (usesMana&&!freeMageBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon?.type,state.mana,state.arrows,(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0)):null)||(noArrows?"arrows":null);
+    const basicManaGain=freeMageBasic&&!basicFallback?5:0;
     const basicLabel = weaponClass === "mage" ? "Basic spell" : weaponClass === "archer" ? "Basic shot" : "Basic attack";
     const arrowsOut = ["Bow", "Crossbow"].includes(weapon?.type) && state.arrows < (weapon?.effect==="Overdraw"?2:1) && !basicFallback;
     const manaCost = freeMageBasic?0:usesMana?(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0):0;
-    const basicPreview=attackPreview({multiplier:basicFallback?0.5:1,critBonus:0,manaCost:0,freeBasic:freeMageBasic,aoe:false});
+    const basicPreview=attackPreview({multiplier:basicFallback?0.5:1,critBonus:0,manaCost:0,manaGain:basicManaGain||(state.class==="archer"?1:0),freeBasic:freeMageBasic,aoe:false});
     const heavyPreview=attackPreview({multiplier:1.5,critBonus:0.1,cooldown:2,aoe:false});
     const equippedSpell=state.spells?.find(spell=>spell.id===state.equippedSpellId);
     const specials = [...(weapon?.attacks || []), ...(equippedSpell?[classSpellAttack(equippedSpell)]:[])].map(attack => {
@@ -883,7 +922,7 @@ function getActions() {
     const disruptAction=disruptable?`<button class="action-button secondary" data-attack="disrupt" ${!DUNGEON_RULES.canDisrupt(selectedEnemy,disruptCooldown)?"disabled":""}>Disrupt<small>${disruptCooldown?`Cooldown ${disruptCooldown}`:`Cancel ${escapeHtml(selectedEnemy.intent.label)}`}</small></button>`:"";
     const basicDisabled=(usesMana&&!freeMageBasic&&state.mana<manaCost&&!basicFallback)||arrowsOut;
     const basicFallbackName=usesMana?"Staff strike":"Unarmed jab";
-    const basicResource=usesMana?(freeMageBasic||basicFallback?`No mana needed${basicFallback?" · reduced damage":""}`:`${manaCost} mana`):["Bow","Crossbow"].includes(weapon?.type)?(basicFallback?"No arrows · reduced-damage jab":`1 arrow · ${state.arrows||0} shared remaining${state.class==="archer"?" · +1 mana on hit":""}`):"Always available";
+    const basicResource=usesMana?(freeMageBasic?`No mana needed${basicManaGain?" · +5 mana on hit":""}${basicFallback?" · reduced damage":""}`:basicFallback?"No mana needed · reduced damage":`${manaCost} mana`):["Bow","Crossbow"].includes(weapon?.type)?(basicFallback?"No arrows · reduced-damage jab":`1 arrow · ${state.arrows||0} shared remaining${state.class==="archer"?" · +1 mana on hit":""}${basicManaGain?" · +5 mana on hit":""}`):`Always available${basicManaGain?" · +5 mana on hit":""}`;
     const basicPenalty=DUNGEON_RULES.weaponDamageMultiplier(state.class,weapon);
     const basicMatchup=` · elemental ${basicPreview.elementRelation}${previewModifiers(basicPreview)}`;
     const cannotFlee=state.combat.boss;
@@ -932,7 +971,7 @@ function statDescription(stat) {
 }
 
 function enemyIncomingDamage(enemy) {
-  const scale = enemy.intent?.damageMultiplier || (enemy.intent?.key === "cast" ? 1.15 : enemy.intent?.key === "shoot" ? 0.9 : 1);
+  const scale = enemy.intent?.damageMultiplier || (enemy.intent?.key === "cast" ? 1.15 : enemy.intent?.key === "shoot" ? 0.9 : enemy.intent?.key === "heavy" ? 1.25 : 1);
   const raw = Math.round(enemy.damage * scale);
   const reduction = DUNGEON_RULES.armorDamageReduction(state.equippedArmor || {}, state.class);
   return Math.max(1, raw - reduction);
@@ -1047,11 +1086,11 @@ function renderCombat(enemies) {
   if (state.class === "warrior") listedAttacks.splice(1, 0, { name: "Heavy attack", multiplier: 1.5, critBonus: 0.1, cooldown: 2, effect: null });
   const enemyCards = enemies.map(({ enemy, index }) => {
     const intent = enemy.intent || { label: "Preparing", key: "" };
-    const hint = intent.key === "guard" ? " · reduces incoming damage" : intent.key === "dodge" ? " · evades your next attack" : "";
+    const hint = intent.key === "guard" ? " · reduces incoming damage" : intent.key === "dodge" ? " · evades your next attack" : intent.key === "aim" ? " · next turn's shot deals extra damage" : "";
     const incoming=enemyIncomingDamage(enemy);
-    const preview=["attack","shoot","cast"].includes(intent.key)?`<span class="incoming-damage">Potential hit: ${incoming}</span>`:"";
+    const preview=["attack","shoot","cast","heavy"].includes(intent.key)?`<span class="incoming-damage">Potential hit: ${incoming}</span>`:"";
     const eliteBadge=enemy.elite?`<span class="elite-tag">Elite · ${escapeHtml(enemy.affinity)} affinity</span>`:"";
-    const affinityTelegraph=enemy.elite&&["attack","shoot","cast"].includes(intent.key)?` · ${escapeHtml(enemy.affinityEffect)} has a 15% chance on hit`:"";
+    const affinityTelegraph=enemy.elite&&["attack","shoot","cast","heavy"].includes(intent.key)?` · ${escapeHtml(enemy.affinityEffect)} has a 15% chance on hit`:"";
     const relation=DUNGEON_RULES.elementMatchup(state.weapon?.element,enemy.element).relation;
     const protector=enemy.protectedByIndex===undefined?null:state.combat.enemies[enemy.protectedByIndex];
     const formation=enemy.formationRole?`<p class="formation-note">Vanguard · intercepts single-target attacks on its ally</p>`:protector?.hp>0?`<p class="formation-note">Protected by ${escapeHtml(protector.name)} · single-target attacks are intercepted</p>`:protector?`<p class="formation-note">Vanguard fallen · no longer protected</p>`:"";
@@ -1396,7 +1435,7 @@ function combatAction(action) {
   }
   if(isSpellCast&&special?.selfEffect){state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},special.selfEffect,attackDamageDealt);message(`${special.selfEffect} surrounds you.`,"reward");}
   if(landed&&special?.healOnHit&&attackDamageDealt){const restored=Math.min(state.maxHp-state.hp,Math.max(1,Math.round(attackDamageDealt*special.healOnHit)));if(restored){state.hp+=restored;message(`${attack.name} restores ${restored} health.`,"reward");}}
-  const manaGain=basicFallback||isSpellCast?0:Math.max(0,Math.floor(Number(attack.manaGain)||(state.class==="archer"&&weaponFamily(weapon)==="archer"&&isBasic?1:0)));
+  const manaGain=basicFallback||isSpellCast?0:Math.max(0,Math.floor(Number(attack.manaGain)||(state.class==="mage"&&isBasic?5:state.class==="archer"&&weaponFamily(weapon)==="archer"&&isBasic?1:0)));
   if(arrowCost)message(`You spend ${arrowCost} arrow${arrowCost===1?"":"s"}. ${state.arrows} shared arrow${state.arrows===1?" remains":"s remain"}.`);
   if(landed&&manaGain){const restored=Math.min(manaGain,state.maxMana-state.mana);state.mana+=restored;if(restored)message(`Your attack restores ${restored} mana.`,"reward");}
   if(landed&&weapon.effect==="AmmoGeneration"&&Math.random()<0.2){const recovered=changeArrowCount(1);if(recovered)message(`Ammo Generation recovers ${recovered} arrow${recovered===1?"":"s"}.`);}
@@ -1427,6 +1466,8 @@ function enemyTurn() {
     if(enemy.effects?.Gust){delete enemy.effects.Gust;message(`${enemy.name} reels from the gust and loses its turn.`,"story");continue;}
     if(enemy.effects?.Freeze&&enemy.effects.Freeze.stacks>=5){delete enemy.effects.Freeze;message(`${enemy.name} is frozen solid and loses its turn.`,"story");continue;}
     if(enemy.intentDodging){enemy.intentDodging=false;message(`${enemy.name} spends its turn repositioning after the dodge.`,"story");continue;}
+    if(enemy.intent?.key==="dodge"){message(`${enemy.name} slips out of reach and repositions.`,"story");continue;}
+    if(enemy.intent?.key==="aim"){enemy.aimedShot=true;message(`${enemy.name} steadies its aim for a powerful shot.`,"danger");continue;}
     if(enemy.intent?.key==="guard"){message(`${enemy.name} holds its guard and waits for an opening.`);continue;}
     if(enemy.intent?.key==="ward"){message(`${enemy.name}'s ward fades after absorbing part of your attack.`);continue;}
     if(enemy.intent?.key==="summon"||enemy.intent?.key==="buff"){
@@ -1440,14 +1481,14 @@ function enemyTurn() {
       continue;
     }
     const intent=enemy.intent?.key;
-    const damageScale=enemy.intent?.damageMultiplier||(intent==="cast"?1.15:intent==="shoot"?0.9:1);
+    const damageScale=enemy.intent?.damageMultiplier||(intent==="cast"?1.15:intent==="shoot"?0.9:intent==="heavy"?1.25:1);
     const blind=enemy.effects?.Blind||enemy.effects?.Cripple?0.65:1;
     if(Math.random()<enemy.dodge||state.playerEffects?.Afterimage||Math.random()<passiveEvasionChance()||Math.random()>blind){delete state.playerEffects?.Afterimage;message(`You evade ${enemy.name}'s ${intent==="shoot"?"shot":intent==="cast"?"spell":"attack"}.`,"story");}
     else {
       const critical=Math.random()<(enemy.critChance||0);
       const weaknessScale=enemy.effects?.Weakness?0.55:1;
       const damage=takePlayerDamage(Math.round(enemy.damage*damageScale*weaknessScale)*(critical?2:1),enemy);
-      message(enemy.boss?`${enemy.name} uses ${enemy.intent.label}${critical?" critically":""} for ${damage} damage.`:`${enemy.name} ${intent==="shoot"?"shoots":intent==="cast"?"casts":"strikes"} you${critical?" critically":""} for ${damage} damage.`,"danger");
+      message(enemy.boss?`${enemy.name} uses ${enemy.intent.label}${critical?" critically":""} for ${damage} damage.`:`${enemy.name} ${intent==="shoot"?"shoots":intent==="cast"?"casts":intent==="heavy"?"lands a heavy blow on":"strikes"} you${critical?" critically":""} for ${damage} damage.`,"danger");
       if(enemy.hp<=0)continue;
       if(enemy.lifeSteal&&damage>0){const healed=Math.min(enemy.maxHp-enemy.hp,Math.max(1,Math.round(damage*enemy.lifeSteal)));enemy.hp+=healed;if(healed)message(`${enemy.name} siphons ${healed} health.` ,"danger");}
       if(state.hp>0)tryApplyEliteAffinityEffect(enemy,intent,true);
@@ -1459,7 +1500,10 @@ function enemyTurn() {
   if(!state.combat)return;
   if(DUNGEON_RULES.allEnemiesDefeated(state.combat.enemies)){winFight();return;}
   for(const enemy of enemies)enemy.effects=DUNGEON_RULES.tickCombatEffects(enemy.effects||{},{durationOnly:true}).statuses;
-  for(const enemy of state.combat.enemies.filter(item=>item.hp>0))enemy.intent=enemy.boss?nextBossIntent(enemy):DUNGEON_RULES.chooseEnemyIntent(enemy.klass,enemy.race);
+  for(const enemy of state.combat.enemies.filter(item=>item.hp>0)){
+    if(enemy.aimedShot){enemy.aimedShot=false;enemy.intent={key:"shoot",label:"Aimed Shot",damageMultiplier:1.5};}
+    else enemy.intent=enemy.boss?nextBossIntent(enemy):DUNGEON_RULES.chooseEnemyIntent(enemy.klass,enemy.race);
+  }
   if(!tickPlayerCombatEffects())return;
   for(const [key,value] of Object.entries(state.attackCooldowns||{})){state.attackCooldowns[key]=Math.max(0,value-1);if(!state.attackCooldowns[key])delete state.attackCooldowns[key];}
   for(const key of Object.keys(state.defenseCooldowns||{}))state.defenseCooldowns[key]=Math.max(0,state.defenseCooldowns[key]-1);
@@ -1558,14 +1602,14 @@ function winFight() {
   let rewards=`Victory. +${totalGold} gold and +${totalXp} XP.`;
   if(room.riskyChoice||Math.random()<0.8){const lootRarity=DUNGEON_RULES.rollLootRarity(room.enemyCount||1,fight.boss,Math.random());const loot=makeLoot(lootRarity,fight);if(loot.kind==="bundle"){for(const reward of loot.items){grantLoot(reward);rewards+=` Loot: ${reward.value.rarity} ${reward.value.name}.`;}}else{grantLoot(loot);rewards+=` Loot: ${loot.value.rarity} ${loot.value.name}${loot.kind==="weapon"?` (${loot.value.type})`:loot.kind==="armor"?` (${loot.value.slot})`:""}.`;}if((loot.kind!=="item"&&loot.kind!=="bundle")||loot.kind==="bundle"){if(Math.random()<0.6){const potion=makePotionLoot(lootRarity);grantLoot(potion);rewards+=` Bonus: ${potion.value.rarity} ${potion.value.name}.`;}}}
   if(state.weapons.some(weapon=>["Bow","Crossbow"].includes(weapon.type))&&Math.random()<0.45){const recovered=changeArrowCount(6);if(recovered)rewards+=` +${recovered} arrows.`;}
-  if(fight.enemies.some(enemy=>enemy.klass==="Archer")){const recovered=changeArrowCount(4);if(recovered)rewards+=` Archer dropped ${recovered} arrows.`;}
+  if(fight.enemies.some(enemy=>["Archer","Sharpshooter"].includes(enemy.klass))){const recovered=changeArrowCount(4);if(recovered)rewards+=` Archer dropped ${recovered} arrows.`;}
   if(levels)rewards+=` You leveled up! Current skillpoints: ${state.skillPoints}.`;
   const defeated=fight.enemies.filter(enemy=>!enemy.summoned).length;
   state.runStats.enemiesDefeated+=defeated;
   state.runStats.fights.unshift({floor:state.floor,boss:fight.boss,enemies:fight.enemies.map(enemy=>enemy.name),gold:totalGold,xp:totalXp,damageDealt:fight.damageDealt||0,damageTaken:fight.damageTaken||0,rewards,log:[...(fight.log||[])]});
   state.runStats.fights=state.runStats.fights.slice(0,20);
   state.combat=null;state.braced=false;state.activeDefense=null;room.cleared=true;
-  if(fight.boss){state.currentFloor.bossCleared=true;state.floorsCleared++;const milestone=state.floor%REGION_CYCLE_FLOORS===0;if(milestone){state.milestonePending=true;rewards+=` Milestone reached: Floor ${state.floor}. Choose whether to end this run or continue.`;}else rewards+=" The way to the next floor opens.";state.runStats.fights[0].rewards=rewards;state.runStats.fights.unshift({floor:state.floor,floorClear:true,milestone,level:state.level,enemiesDefeated:state.runStats.enemiesDefeated,gold:state.gold});state.runStats.fights=state.runStats.fights.slice(0,20);}
+  if(fight.boss){state.currentFloor.bossCleared=true;state.floorsCleared++;const milestone=state.floor%MILESTONE_BOSS_INTERVAL===0;if(milestone){state.milestonePending=true;rewards+=` Milestone reached: Floor ${state.floor}. Choose whether to end this run or continue.`;}else rewards+=" The way to the next floor opens.";state.runStats.fights[0].rewards=rewards;state.runStats.fights.unshift({floor:state.floor,floorClear:true,milestone,level:state.level,enemiesDefeated:state.runStats.enemiesDefeated,gold:state.gold});state.runStats.fights=state.runStats.fights.slice(0,20);}
   message(rewards,"reward");render();
 }
 
@@ -1591,7 +1635,7 @@ function makeLootWeapon(forcedRarity=null,minimumRarity="Common"){
 
 function makeLoot(rarity=null,fight=state.combat){
   rarity=rarity||DUNGEON_RULES.rollLootRarity(currentRoom().enemyCount||1,Boolean(state.combat?.boss),Math.random());
-  const eligibleMages=(fight?.enemies||[]).filter(enemy=>enemy.klass==="Mage"||/\bMage\b/i.test(enemy.name));
+  const eligibleMages=(fight?.enemies||[]).filter(enemy=>["Mage","Quick Caster"].includes(enemy.klass)||/\bMage\b/i.test(enemy.name));
   const mageChance=fight?.boss?0.12:0.025;
   if(state.class&&(eligibleMages.length||fight?.boss)&&Math.random()<mageChance){const scroll={kind:"classSpell",value:createClassSpellScroll(state.class,rarity)};if(fight?.boss)return{kind:"bundle",items:[scroll,Math.random()<0.5?{kind:"weapon",value:makeLootWeapon(rarity)}:makePotionLoot(rarity)]};return scroll;}
   const lootKind=DUNGEON_RULES.rollLootKind(Math.random,state.chosenClass||state.class);
@@ -1702,7 +1746,7 @@ function showModal(){
   } else if(modal==="leaderboard"){
     content=`<section class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title"><div class="modal-heading"><div><p class="section-kicker">Global rankings · Top 100</p><h2 id="leaderboard-title">Highest floors</h2></div><button class="icon-close" data-close-modal aria-label="Close leaderboard">×</button></div>${renderLeaderboard()}</section>`;
   } else if(modal==="index"){
-    content=`<section class="modal index-modal" role="dialog" aria-modal="true" aria-labelledby="index-title"><div class="modal-heading"><div><p class="section-kicker">Field reference</p><h2 id="index-title">Index</h2></div><button class="icon-close" data-close-modal aria-label="Close Index">×</button></div><div class="index-layout"><nav class="index-categories" aria-label="Index categories">${[["guide","Quick Guide"],["regions","Regions"],["warrior","Warrior Weapons"],["archer","Archer Weapons"],["mage","Mage Weapons"],["armor","Armor"],["items","Items"],["effects","Effects"]].map(([key,label])=>`<button class="index-category ${indexCategory===key?"active":""}" data-index-category="${key}">${label}</button>`).join("")}</nav><div class="index-content" id="index-content">${renderIndexCategory()}</div></div></section>`;
+    content=`<section class="modal index-modal" role="dialog" aria-modal="true" aria-labelledby="index-title"><div class="modal-heading"><div><p class="section-kicker">Field reference</p><h2 id="index-title">Index</h2></div><button class="icon-close" data-close-modal aria-label="Close Index">×</button></div><div class="index-layout"><nav class="index-categories" aria-label="Index categories">${[["guide","Quick Guide"],["regions","Regions"],["enemy-types","Enemy Types"],["warrior","Warrior Weapons"],["archer","Archer Weapons"],["mage","Mage Weapons"],["armor","Armor"],["items","Items"],["effects","Effects"]].map(([key,label])=>`<button class="index-category ${indexCategory===key?"active":""}" data-index-category="${key}">${label}</button>`).join("")}</nav><div class="index-content" id="index-content">${renderIndexCategory()}</div></div></section>`;
   }
   if(!content)return;
   screen.insertAdjacentHTML("beforeend",`<div class="modal-backdrop">${content}</div>`);
@@ -1760,7 +1804,8 @@ function renderIndexCategory() {
     const entries=indexCategory==="armor"?ARMOR_INDEX:ITEM_INDEX;
     return `<p class="index-intro">${entries.length} ${indexCategory==="armor"?"armor pieces.":"items and ammunition."}</p><div class="index-list">${entries.map((item,index)=>`<button class="index-entry ${rarityClass(item.rarity)}" data-index-item="${index}"><span class="index-entry-name">${escapeHtml(item.name)}</span><span class="index-entry-meta">${escapeHtml(item.rarity)} · ${escapeHtml(item.type)}</span></button>`).join("")}</div>`;
   }
-  if(indexCategory==="regions")return `<p class="index-intro">The dungeon cycles through four regions, each five floors long. Enemy pools and their signature race traits change with each region; regions repeat every 20 floors with deeper scaling. Every 20th floor ends with the Threshold Warden, whose defeat lets you end the run or continue.</p><div class="region-index-list">${REGION_DEFINITIONS.map((region,index)=>{const live=regionForFloor(state?.floor||1);return `<article class="region-index-entry ${live.id===region.id?"active":""}"><p class="section-kicker">Floors ${index*5+1}–${index*5+5} · repeats every 20 floors</p><h3>${escapeHtml(region.name)}</h3><p><strong>Enemy pool:</strong> ${escapeHtml(regionRaceNames(region))}</p><p><strong>Regular bosses:</strong> ${region.bosses.map(escapeHtml).join(" · ")}</p><p><strong>Regional rule:</strong> ${escapeHtml(region.rule)}</p><p>${escapeHtml(region.briefing)}</p></article>`;}).join("")}</div>`;
+  if(indexCategory==="regions")return `<p class="index-intro">The dungeon cycles through ${REGION_DEFINITIONS.length} regions, each five floors long, then repeats every ${REGION_CYCLE_FLOORS} floors with deeper scaling. Enemy pools and race traits vary by region. Every ${MILESTONE_BOSS_INTERVAL}th floor ends with the Threshold Warden, whose defeat lets you end the run or continue.</p><div class="region-index-list">${REGION_DEFINITIONS.map((region,index)=>{const live=regionForFloor(state?.floor||1);return `<article class="region-index-entry ${live.id===region.id?"active":""}"><p class="section-kicker">Floors ${index*BIOME_FLOORS+1}–${(index+1)*BIOME_FLOORS} · repeats every ${REGION_CYCLE_FLOORS} floors</p><h3>${escapeHtml(region.name)}</h3><p><strong>Enemy pool:</strong> ${escapeHtml(regionRaceNames(region))}</p><p><strong>Available roles:</strong> ${escapeHtml(regionRaceRoles(region))}</p><p><strong>Regular bosses:</strong> ${region.bosses.map(escapeHtml).join(" · ")}</p><p><strong>Regional rule:</strong> ${escapeHtml(region.rule)}</p><p>${escapeHtml(region.briefing)}</p></article>`;}).join("")}</div>`;
+  if(indexCategory==="enemy-types")return `<p class="index-intro">These enemy roles are active in the dungeon. Race and role combinations depend on the current region.</p><div class="region-index-list">${ENEMY_TYPE_PROFILES.map(profile=>`<article class="region-index-entry"><p class="section-kicker">${escapeHtml(profile.family)} · ${escapeHtml(profile.status)}</p><h3>${escapeHtml(profile.name)}</h3><p><strong>Strength:</strong> ${escapeHtml(profile.strengths)}</p><p><strong>Weakness:</strong> ${escapeHtml(profile.weakness)}</p></article>`).join("")}</div>`;
   if(indexCategory==="guide")return `<p class="index-intro">Quick Guide</p><div class="quick-guide"><section><h3>Class roles</h3><p>Warriors focus on melee and strength, Archers on ranged attacks and speed, and Mages on magic and intelligence. Your chosen class stays fixed when you equip another class's weapon.</p></section><section><h3>Mana and arrows</h3><p>Staffs and wands spend mana, even when used off-class. Bows and crossbows spend from one shared arrow supply. If the resource runs out, a weaker fallback attack remains available.</p></section><section><h3>Elements</h3><p>Fire is weak to Water; Water is weak to Earth or Nature; Earth is weak to Wind; Wind is weak to Fire. Advantage and resistance change final damage.</p></section><section><h3>Fountains</h3><p>Inspect a fountain to learn what it is. Drinking restores health, and you can leave and return before using it.</p></section><section><h3>Off-class weapons</h3><p>You can equip any weapon. Attacks made with a weapon outside your chosen class deal 25% less damage, while its attacks, effects, and resource costs still apply.</p></section><section><h3>Regions and milestones</h3><p>Regions change every five floors and define their enemy pool and signature trait. Every 20th-floor milestone boss gives you the option to end the run and record your score or continue.</p></section></div>`;
   return `<p class="index-intro">Effect glossary</p><div class="index-list effect-list">${EFFECT_DETAILS.map(([name,icon,description])=>`<article class="index-entry effect-entry"><span class="effect-name"><span aria-hidden="true">${icon}</span>${escapeHtml(name)}</span><span class="index-entry-meta">${escapeHtml(description)}</span></article>`).join("")}</div>`;
 }
@@ -1874,24 +1919,24 @@ function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUp
 function priceFor(base,rarity="Common"){const rarityScale=[1,1.35,1.9,2.8,4.5,8,15][Math.max(0,RARITIES.indexOf(rarity))];return Math.max(1,Math.round(base*rarityScale*(DIFFICULTIES[state.difficulty]?.shopCost||1)*(1-Math.max(0,effectiveStat("cha")-10)*0.02)));}
 function shopRerollCost(){const floorScale=1+Math.max(0,(state.floor||1)-1)*0.08;const upgradeScale=1+Math.max(0,state.shopLootUpgradeLevel||0)*0.12;return Math.round(30*floorScale*upgradeScale*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function shopUpgradeCost(){return Math.round(125*Math.pow(2,state.shopLootUpgradeLevel||0)*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
-function weaponUpgradeCost(weapon){return Math.round((30+10*state.floor)*Math.pow(1.12,Math.max(0,(weapon.level||1)-1))*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
+function weaponUpgradeCost(weapon){return Math.round((5+3*Math.max(0,(state.floor||1)-1))*Math.pow(1.93,weaponUpgradeCount(weapon))*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function weaponUpgradeCount(weapon){return (weapon.upgradeFloor||state.floor)===state.floor?(weapon.upgradesThisFloor||0):0;}
 function renderWeaponForge(weapon){
   if(!weapon)return "";
-  const count=weaponUpgradeCount(weapon),cost=weaponUpgradeCost(weapon),disabled=count>=3||state.gold<cost;
+  const count=weaponUpgradeCount(weapon),cost=weaponUpgradeCost(weapon),disabled=state.gold<cost;
   const choices=[
     ["damage",`Damage +${state.floor} (locked to this floor)`],
     ["crit","Crit +1 percentage point"],
     ["speed","Weapon Speed +2 (improves evasion)"],
     ...(weapon.attacks?.some(attack=>attack.effect)?[["effect","Special-attack effect chance +4 points"]]:[])
   ];
-  return `<div class="weapon-forge-status"><span>Level ${weapon.level||1}</span><span>${count}/3 upgrades this floor</span><span>${weapon.damage+(weapon.damageUpgrade||0)} damage · ${Math.round(((weapon.crit||0)+(weapon.critUpgrade||0))*100)}% weapon crit · ${Math.round((weapon.effectChance??0.2)*100)}% special-effect chance</span></div><div class="forge-upgrades">${choices.map(([key,label])=>`<button class="small-button" data-weapon-upgrade="${key}" ${disabled?"disabled":""}>${escapeHtml(label)} · ${cost}g</button>`).join("")}</div><p class="forge-cost-note">Next upgrade costs ${cost} gold. ${count>=3?"This weapon has reached its three-upgrade limit for this floor.":"Limit: three upgrades per weapon per floor."}</p>`;
+  return `<div class="weapon-forge-status"><span>Level ${weapon.level||1}</span><span>${count} upgrade${count===1?"":"s"} this floor</span><span>${weapon.damage+(weapon.damageUpgrade||0)} damage · ${Math.round(((weapon.crit||0)+(weapon.critUpgrade||0))*100)}% weapon crit · ${Math.round((weapon.effectChance??0.2)*100)}% special-effect chance</span></div><div class="forge-upgrades">${choices.map(([key,label])=>`<button class="small-button" data-weapon-upgrade="${key}" ${disabled?"disabled":""}>${escapeHtml(label)} · ${cost}g</button>`).join("")}</div><p class="forge-cost-note">Next upgrade costs ${cost} gold. The price rises with each purchase and resets at the start of the next floor.</p>`;
 }
 function upgradeWeapon(upgrade){
   const weapon=state.weapons[Number(state.upgradeWeaponIndex)];
   if(!weapon||!weaponFamily(weapon))return;
   const count=weaponUpgradeCount(weapon),cost=weaponUpgradeCost(weapon);
-  if(count>=3||state.gold<cost)return;
+  if(state.gold<cost)return;
   if(weapon.upgradeFloor!==state.floor){weapon.upgradeFloor=state.floor;weapon.upgradesThisFloor=0;}
   state.gold-=cost;
   if(upgrade==="damage")weapon.damageUpgrade=(weapon.damageUpgrade||0)+state.floor;
@@ -1933,7 +1978,7 @@ function sellItem(kind,index,returnModal="shop"){
 }
 
 function finishMilestoneRun(){
-  if(!state?.milestonePending||state.floor%REGION_CYCLE_FLOORS!==0||state.runEnded)return;
+  if(!state?.milestonePending||state.floor%MILESTONE_BOSS_INTERVAL!==0||state.runEnded)return;
   state.milestonePending=false;state.runEnded=true;state.runEndReason="milestone";updatePersonalBest(state);submitCompletedRun(state);modal="run-end";message(`Run complete. ${state.floorsCleared} floors cleared.`,"reward");render();
 }
 

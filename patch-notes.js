@@ -1,4 +1,31 @@
 window.GAME_PATCH_NOTES = {
+  "v1.5": {
+    title: "Update V1.5",
+    subtitle: "New enemy roles, races, and regions",
+    sections: [
+      {
+        heading: "New Enemies",
+        items: [
+          "Assassins, Paladins, Quick Casters, and Brutes now join Warriors, Archers, and Mages. Sharpshooters add a slower, hard-hitting Archer variant with a higher critical-hit chance.",
+          "New races now appear in their own regions: Orcs and Lizardfolk in the Ironfang Highlands; Kobolds and Harpies in the Skyfang Aeries; Fae and Myconids in the Verdant Veil.",
+          "Enemy races now have distinct role pools. Skeletons include normal Mages, Slimes appear as Brutes, and Goblins can take on every enemy role."
+        ]
+      },
+      {
+        heading: "Dungeon Regions",
+        items: [
+          "The dungeon now has seven five-floor regions and cycles through all seven over 35 floors. The Threshold Warden milestone remains every 20 floors."
+        ]
+      },
+      {
+        heading: "Improvements",
+        items: [
+          "Mage basic attacks remain free and restore 5 mana when they hit, helping you build mana back for spells.",
+          "Weapon upgrades no longer have a per-floor cap. Their gold cost rises with each upgrade, then resets when you reach a new floor."
+        ]
+      }
+    ]
+  },
   "v1.4": {
     title: "Update V1.4",
     subtitle: "Potion balance, inventory sorting, and class spells",

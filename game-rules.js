@@ -471,7 +471,12 @@
 
   function chooseEnemyIntent(enemyClass, race, random = Math.random) {
     let options;
-    if (enemyClass === "Archer") options = [["shoot", "Shoot", 0.8], ["dodge", "Dodge", 0.2]];
+    if (enemyClass === "Sharpshooter") options = [["shoot", "Take a shot", 0.65], ["aim", "Take Aim", 0.35]];
+    else if (enemyClass === "Archer") options = [["shoot", "Shoot", 0.8], ["dodge", "Dodge", 0.2]];
+    else if (enemyClass === "Assassin") options = [["attack", "Quick strike", 0.75], ["dodge", "Vanish", 0.25]];
+    else if (enemyClass === "Paladin") options = [["attack", "Paladin strike", 0.65], ["guard", "Raise guard", 0.2], ["ward", "Aegis stance", 0.15]];
+    else if (enemyClass === "Quick Caster") options = [["cast", race === "fae" ? "Glimmer bolt" : "Quick cast", 1]];
+    else if (enemyClass === "Brute") options = [["heavy", "Heavy blow", 0.75], ["guard", "Brace", 0.25]];
     else if (enemyClass === "Warrior") options = [["attack", "Strike", 0.75], ["guard", "Guard", 0.25]];
     else if (enemyClass === "Mage" && race === "skeleton") options = [["cast", "Bone bolt", 0.75], ["summon", "Summon", 0.25]];
     else if (enemyClass === "Mage" && race === "goblin") options = [["cast", "Hex", 0.7], ["buff", "Rally", 0.3]];
@@ -484,7 +489,7 @@
   }
 
   function hasDisruptibleIntent(enemy) {
-    return Boolean(enemy && enemy.hp > 0 && ["cast", "shoot"].includes(enemy.intent?.key));
+    return Boolean(enemy && enemy.hp > 0 && ["aim", "cast", "shoot"].includes(enemy.intent?.key));
   }
 
   function canDisrupt(enemy, cooldown = 0) {
