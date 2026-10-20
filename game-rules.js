@@ -14,6 +14,9 @@
   const EFFECT_DEFINITIONS = {
     Burn: ["🔥", "Damage over time; repeated applications build its burn damage.", "damageOverTime", 3],
     Freeze: ["❄️", "Builds stacks; five stacks freeze the target for one turn.", "freeze", 5],
+    Frozen: ["🧊", "Stops the target from acting for two turns.", "stun", 2],
+    Weakness: ["⬇️", "Reduces the target's attack damage for two turns.", "weakness", 2],
+    Silence: ["🤫", "Prevents the target from casting spells for two turns.", "silence", 2],
     Gust: ["🌪️", "Disrupts the target, making it lose its next turn.", "stagger", 1],
     Root: ["🌿", "Pins the target in place and prevents its normal dodge.", "root", 2],
     Poison: ["☠️", "Deals stacking damage over time.", "damageOverTime", 4],
@@ -283,7 +286,7 @@
 
   function applyCombatEffect(statuses = {}, effect, damage = 0) {
     const definition = getEffectDefinition(effect);
-    if (!definition || !["damageOverTime", "freeze", "stagger", "root", "blind", "marked", "cripple", "manaShield", "evasion", "thorns"].includes(definition.mechanic)) return { ...statuses };
+    if (!definition || !["damageOverTime", "freeze", "stagger", "root", "blind", "marked", "cripple", "manaShield", "evasion", "thorns", "stun", "weakness", "silence"].includes(definition.mechanic)) return { ...statuses };
     const statusKey = ({ Pin: "Root", Trap: "Root", Mark: "Marked" })[effect] || effect;
     const current = statuses[effect] || { turns: 0, stacks: 0, potency: 0 };
     const existing = statuses[statusKey] || current;
@@ -326,16 +329,16 @@
   }
 
   function createAttackPreview({ player = {}, playerClass = "warrior", weapon = {}, attack = {}, targetCount = 1, charged = null, targetElement = null } = {}) {
-    const statKey = playerClass === "mage" ? "int" : "str";
+    const statKey = attack.spell ? (playerClass === "mage" ? "int" : playerClass === "archer" ? "dex" : "str") : playerClass === "mage" ? "int" : "str";
     const stat = effectiveStat(player[statKey] || 0, statKey, playerClass);
-    const effect = weapon.effect;
+    const effect = attack.spell ? null : weapon.effect;
     const attackEffect = attack.effect;
     const critChance = Math.min(1, Math.max(0, (player.critChance || 0) + (weapon.crit || 0) + (weapon.critUpgrade || 0) + (attack.critBonus || 0) + (charged?.critBonus || 0) + (effect === "Focus" ? 0.1 : 0) + (["Headshot", "Snipe"].includes(effect) || ["Headshot", "Snipe"].includes(attackEffect) ? 0.2 : 0)));
     const passiveMultiplier = ({ Penetration: 1.15, Pierce: 1.1, PiercingShot: 1.12, Void: 1.12, SpellPower: 1.12, SpellEcho: 1.08, Focus: 1.08, Draw: 1.12, DelayedCast: 1.15, Overcast: 1.25, RangeScaling: 1.12, Overdraw: 1.25, Momentum: 1 + Math.min(5, player.momentum || 0) * 0.04, ArcaneCharge: 1 + Math.min(5, player.arcaneCharge || 0) * 0.04 })[effect] || 1;
-    const matchup = elementMatchup(weapon.element, targetElement);
+    const matchup = elementMatchup(attack.element || weapon.element, targetElement);
     const playerDamageScale = player.playerEffects?.Cripple ? 0.85 : 1;
-    const damageMultiplier = weaponDamageMultiplier(playerClass, weapon);
-    const rawPrimaryDamage = (stat + (weapon.damage || 0) + (weapon.damageUpgrade || 0)) * (attack.multiplier || 1) * (charged?.multiplier || 1) * passiveMultiplier * playerDamageScale * damageMultiplier;
+    const damageMultiplier = attack.spell ? 1 : weaponDamageMultiplier(playerClass, weapon);
+    const rawPrimaryDamage = (stat + (attack.spell ? 0 : (weapon.damage || 0) + (weapon.damageUpgrade || 0))) * (attack.multiplier || 1) * (charged?.multiplier || 1) * (attack.spell ? 1 : passiveMultiplier) * playerDamageScale * damageMultiplier;
     const primaryDamage = Math.max(1, Math.round(rawPrimaryDamage * matchup.multiplier - (attack.targetDamageReduction || 0)));
     const usesMana = weaponUsesMana(weapon, playerClass);
     return {
@@ -344,9 +347,9 @@
       secondaryDamage: attack.aoe ? Math.max(1, Math.round(primaryDamage * (attack.secondaryMultiplier || 0.5))) : 0,
       criticalDamage: primaryDamage * 2,
       critChance,
-      manaCost: (attack.manaCost || (usesMana ? weapon.manaCost || 5 : 0)) + (effect === "Overcast" && usesMana ? 2 : 0),
+      manaCost: attack.freeBasic ? 0 : attack.spell ? (attack.manaCost || 0) : (attack.manaCost || (usesMana ? weapon.manaCost || 5 : 0)) + (effect === "Overcast" && usesMana ? 2 : 0),
       manaGain: Math.max(0, Number(attack.manaGain) || 0),
-      ammoCost: ["Bow", "Crossbow"].includes(weapon.type) && !attack.chargesNextAttack ? (effect === "Overdraw" || attack.overdraw ? 2 : 1) : 0,
+      ammoCost: !attack.spell && ["Bow", "Crossbow"].includes(weapon.type) && !attack.chargesNextAttack ? (effect === "Overdraw" || attack.overdraw ? 2 : 1) : 0,
       cooldown: Math.max(0, (attack.cooldown || 0) - (effect === "CooldownReduction" && attack.cooldown ? 1 : 0)),
       targetCount: attack.aoe ? Math.max(1, targetCount) : 1,
       elementMultiplier: matchup.multiplier,

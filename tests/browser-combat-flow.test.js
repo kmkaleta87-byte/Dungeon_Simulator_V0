@@ -138,17 +138,51 @@ test("level-ups restore half of maximum HP and fully restore mana", () => {
   assert.equal(vm.runInContext("state.hp", context), 140);
 });
 
-test("health potions scale by rarity and max HP while mana potions stay flat", () => {
+test("health and mana potions scale by rarity and their maximum resource", () => {
   const context = loadBrowserGame();
-  vm.runInContext(`newRun("Tester"); state.maxHp=301; state.items=[
+  vm.runInContext(`newRun("Tester"); state.maxHp=301; state.maxMana=201; state.items=[
     {name:"Legendary Healing Potion",type:"health",rarity:"Legendary",amount:40,quantity:1},
     {name:"Legendary Mana Potion",type:"mana",rarity:"Legendary",amount:24,quantity:1}
   ];`, context);
   assert.equal(vm.runInContext("healthPotionRestore(state.items[0])", context), 151);
   assert.equal(vm.runInContext("healthPotionRestore({rarity:'Common'})", context), 61);
+  assert.equal(vm.runInContext("manaPotionRestore(state.items[1])", context), 101);
+  assert.equal(vm.runInContext("manaPotionRestore({rarity:'Common'})", context), 41);
   const itemMarkup = vm.runInContext("renderInventoryItems('items')", context);
   assert.match(itemMarkup, /Restores 50% max HP \(151 HP now\)/);
-  assert.match(itemMarkup, /Restores 24 mana/);
+  assert.match(itemMarkup, /Restores 50% max MP \(101 MP now\)/);
+});
+
+test("Mage basic spells are free at full or empty mana, while their special spells keep costs", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`newRun("Mage Tester"); chooseClass("mage");
+    state.weapon={name:"Test Wand",type:"Wand",rarity:"Common",damage:12,manaCost:7,element:"Fire",attacks:[{name:"Paid Spell",command:"paidspell",multiplier:1.5,critBonus:0,cooldown:0,manaCost:9}]};
+    state.mana=40; state.combat={boss:false,summonedCount:0,damageDealt:0,damageTaken:0,enemies:[{name:"Target",hp:500,maxHp:500,damage:1,dodge:0,intent:{key:"guard",label:"Guard"}}]}; state.target=0; Math.random=()=>0.99;
+    var previewMarkup=getActions(); combatAction("basic"); var afterFullMana=state.mana;
+    state.mana=0; combatAction("basic"); var afterEmptyMana=state.mana;
+    state.mana=40; combatAction("paidspell"); var afterSpecial=state.mana;
+  `, context);
+  assert.match(vm.runInContext("previewMarkup", context), /No mana needed/);
+  assert.equal(vm.runInContext("afterFullMana", context), 40);
+  assert.equal(vm.runInContext("afterEmptyMana", context), 0);
+  assert.equal(vm.runInContext("afterSpecial", context), 31);
+});
+
+test("Items tab sorts by rarity and quantity in both directions", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`newRun("Sorter"); state.maxMana=100; state.items=[
+    {name:"Common Health Potion",type:"health",rarity:"Common",quantity:4},
+    {name:"Divine Mana Potion",type:"mana",rarity:"Divine",quantity:1},
+    {name:"Rare Health Potion",type:"health",rarity:"Rare",quantity:2}
+  ];`, context);
+  const order = () => Array.from(vm.runInContext(`Array.from(renderInventoryItems("items").matchAll(/data-use-item="(\\d+)"/g),match=>state.items[Number(match[1])].name)`, context));
+  assert.deepEqual(order(), ["Divine Mana Potion","Rare Health Potion","Common Health Potion"]);
+  vm.runInContext(`itemSort={key:"rarity",direction:"asc"}`, context);
+  assert.deepEqual(order(), ["Common Health Potion","Rare Health Potion","Divine Mana Potion"]);
+  vm.runInContext(`itemSort={key:"count",direction:"asc"}`, context);
+  assert.deepEqual(order(), ["Divine Mana Potion","Rare Health Potion","Common Health Potion"]);
+  vm.runInContext(`itemSort={key:"count",direction:"desc"}`, context);
+  assert.deepEqual(order(), ["Common Health Potion","Rare Health Potion","Divine Mana Potion"]);
 });
 
 test("legacy local leaderboard data is difficulty-filtered and capped at 100", () => {
@@ -368,7 +402,7 @@ test("class defenses spend a turn, apply once, and begin their cooldown", () => 
   }
 });
 
-test("Mage retains a basic strike after Aegis and while a shield blocks spellcasting", () => {
+test("Mage basic spell is free after Aegis and staff strike remains available through a shield", () => {
   const context = loadBrowserGame();
   vm.runInContext(`
     newRun("Tester"); chooseClass("mage");
@@ -387,7 +421,7 @@ test("Mage retains a basic strike after Aegis and while a shield blocks spellcas
     var manaAfterShieldStrike=state.mana, hpAfterShieldStrike=enemy.hp;
   `, context);
   assert.match(vm.runInContext("actionsAfterAegis", context), /data-attack="basic"(?! disabled)/);
-  assert.match(vm.runInContext("actionsAtZeroMana", context), /data-attack="basic"(?! disabled)[^>]*>Staff strike/);
+  assert.match(vm.runInContext("actionsAtZeroMana", context), /data-attack="basic"(?! disabled)[^>]*>Basic spell/);
   assert.match(vm.runInContext("actionsWithShield", context), /data-attack="basic"(?! disabled)[^>]*>Staff strike/);
   assert.match(vm.runInContext("actionsWithShield", context), /data-attack="magicbolt" disabled/);
   assert.equal(vm.runInContext("manaAfterShieldStrike", context), vm.runInContext("manaBeforeShieldStrike", context));
@@ -1073,7 +1107,7 @@ test("V1.2 patch notes include regions and milestone bosses", () => {
   const notes = fs.readFileSync("patch-notes.js", "utf8");
   const page = fs.readFileSync("index.html", "utf8");
   assert.match(notes, /"v1\.2"[\s\S]*?four five-floor regions[\s\S]*?own regular-enemy and boss pool[\s\S]*?Threshold Warden[\s\S]*?global leaderboard/);
-  assert.match(page, /data-patch="v1\.3"[^>]*>Update V1\.3 <span>Current<\/span>/);
-  assert.match(page, /data-patch="v1\.3"[\s\S]*data-patch="v1\.2"[\s\S]*data-patch="v1\.1"[\s\S]*data-patch="v1"/);
+  assert.match(page, /data-patch="v1\.4"[^>]*>Update V1\.4 <span>Current<\/span>/);
+  assert.match(page, /data-patch="v1\.4"[\s\S]*data-patch="v1\.3"[\s\S]*data-patch="v1\.2"[\s\S]*data-patch="v1\.1"[\s\S]*data-patch="v1"/);
   assert.match(fs.readFileSync("Images/ART_ASSET_CHECKLIST.txt", "utf8"), /Floors\/HauntedHollows\/environment-background\.png[\s\S]*?floor-20-milestone-boss\.png - The Threshold Warden/);
 });

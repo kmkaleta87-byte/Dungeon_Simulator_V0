@@ -1,4 +1,25 @@
 window.GAME_PATCH_NOTES = {
+  "v1.4": {
+    title: "Update V1.4",
+    subtitle: "Potion balance, inventory sorting, and class spells",
+    sections: [
+      {
+        heading: "New Features",
+        items: [
+          "Class spell scrolls add a growing library of rarity-tuned abilities for each class. Every shop stocks one scroll, treasure chests can contain one, and mage enemies have a low chance to drop one; bosses can drop a scroll alongside a weapon or potion.",
+          "Choosing a class grants one of its weaker Uncommon spells. Equip one class spell at a time in its own inventory tab; off-class spells work at reduced power and cost more mana.",
+          "Class spells use mana and your combat turn, with effects such as Burn, Freeze, Weakness, Silence, Root, and defensive wards. They are separate from weapon attacks and weapon special attacks."
+        ]
+      },
+      {
+        heading: "Improvements",
+        items: [
+          "Common through Legendary potions share the standard health or mana potion art; Mythic and Divine potions have distinct appearances. Potion names now use rarity instead of size.",
+          "Mana potions restore a percentage of maximum mana based on rarity, and the Items tab can sort by rarity or stack count in either direction."
+        ]
+      }
+    ]
+  },
   "v1.3": {
     title: "Update V1.3",
     subtitle: "Weapon arts and dungeon choices",
@@ -17,9 +38,9 @@ window.GAME_PATCH_NOTES = {
           "Shop armor prices now reflect their rarity and floor-scaled defensive bonuses, so high-tier pieces cost more as their power rises.",
           "Shop rerolls cost a little more on deeper floors and with higher stock-quality upgrades.",
           "Easy enemies hit harder as you descend; a floor 11 boss now deals about 10 damage per hit before defenses.",
-          "Common through Legendary potions share the standard health or mana potion art; Mythic and Divine potions have distinct appearances. Potion names now use rarity instead of size.",
           "You can attempt to flee ordinary fights with a 40% chance; a failed escape gives enemies a turn. Boss fights still lock the way out.",
-          "End Run lets you finish an expedition early and submit its cleared-floor score to the leaderboard."
+          "End Run lets you finish an expedition early and submit its cleared-floor score to the leaderboard.",
+          "Mage basic attacks now use no mana. Special spells still spend their listed mana costs."
         ]
       }
     ]

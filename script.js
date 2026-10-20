@@ -13,6 +13,7 @@ const SAVE_SLOT_IDS = ["slot1", "slot2", "slot3", "dev"];
 const CLASS_NAMES = { warrior: "Warrior", archer: "Archer", mage: "Mage" };
 const RARITIES = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Divine"];
 const HEALTH_POTION_PERCENT = { Common: 20, Uncommon: 25, Rare: 30, Epic: 40, Legendary: 50, Mythic: 65, Divine: 80 };
+const MANA_POTION_PERCENT = { ...HEALTH_POTION_PERCENT };
 const DIFFICULTIES = {
   easy: { label: "Easy", enemyHealth: 0.75, enemyDamage: 0.75, xpRequirement: 0.8, shopCost: 0.8 },
   normal: { label: "Normal", enemyHealth: 1.1, enemyDamage: 0.9, xpRequirement: 1, shopCost: 1 },
@@ -52,6 +53,9 @@ const BOSS_PATTERNS = {
 const PLAYER_EFFECT_DESCRIPTIONS = {
   Burn: "Burn deals damage over time.",
   Freeze: "At five stacks, you lose your next action.",
+  Frozen: "You cannot act while frozen.",
+  Weakness: "Your attacks deal reduced damage while this lasts.",
+  Silence: "You cannot cast spells while this lasts.",
   Cripple: "Your attacks deal 15% less damage while this lasts.",
   Blind: "Your attacks have a 20% chance to miss while this lasts."
 };
@@ -74,6 +78,9 @@ const RARITY_MULTIPLIER = [1, 1.25, 1.6, 2.1, 2.8, 3.7, 5];
 const EFFECT_DETAILS = [
   ["Burn", "🔥", "Deals damage over time; fire attacks can spread it to nearby enemies."],
   ["Freeze", "❄️", "Builds stacks until the target becomes frozen."],
+  ["Frozen", "🧊", "Stops an enemy from acting for two turns."],
+  ["Weakness", "⬇️", "Reduces an enemy's attack damage for two turns."],
+  ["Silence", "🤫", "Prevents an enemy from casting for two turns."],
   ["Gust", "🌪️", "Pushes enemies away or pulls them toward an attack's center."],
   ["Root", "🌿", "Prevents an enemy from moving for a short duration."],
   ["Poison", "☠️", "Deals stacking damage over time."],
@@ -94,6 +101,101 @@ const ARMOR_INDEX = [...GAME_INDEX_DATA.armor, {
   description: "A starter iron chestplate found in the first room.", file: "iron-chestplate.png"
 }];
 const ITEM_INDEX = [...GAME_INDEX_DATA.items];
+const CLASS_SPELLS = {
+  warrior: [
+    { id: "warrior-rising-guard", rarity: "Common", name: "Rising Guard", description: "Spend a turn gathering strength; your next attack deals double damage.", manaCost: 5, multiplier: 2, critBonus: 0.05, chargesNextAttack: true, cooldown: 0, element: "Earth" },
+    { id: "warrior-steady-breath", rarity: "Common", name: "Steady Breath", description: "Brace yourself, slightly strengthening your next attack.", manaCost: 4, multiplier: 1.35, critBonus: 0.03, chargesNextAttack: true, cooldown: 0, element: "Earth" },
+    { id: "warrior-weakening-roar", rarity: "Uncommon", name: "Weakening Roar", description: "Crush one foe's resolve, reducing its attack damage for two turns.", manaCost: 7, multiplier: 0.55, effect: "Weakness", effectChance: 1, cooldown: 1, element: "Wind" },
+    { id: "warrior-stone-skin", rarity: "Uncommon", name: "Stone Skin", description: "Gain a brief Thorns ward against an attacker.", manaCost: 7, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 2, element: "Earth" },
+    { id: "warrior-frostbrand", rarity: "Rare", name: "Frostbrand Seal", description: "Freeze one enemy in place; it loses its next two turns.", manaCost: 11, multiplier: 0.6, effect: "Frozen", effectChance: 1, cooldown: 3, element: "Water" },
+    { id: "warrior-crushing-oath", rarity: "Rare", name: "Crushing Oath", description: "A focused blow leaves a foe marked for increased follow-up damage.", manaCost: 10, multiplier: 1.1, effect: "Marked", effectChance: 1, cooldown: 2, element: "Physical" },
+    { id: "warrior-iron-tempest", rarity: "Rare", name: "Iron Tempest", description: "Strike several foes with a reduced-damage sweep.", manaCost: 12, multiplier: 0.8, aoe: true, secondaryMultiplier: 0.55, cooldown: 2, element: "Physical" },
+    { id: "warrior-earthshaker", rarity: "Epic", name: "Earthshaker Rune", description: "A runic blow staggers one foe and disrupts its next attack.", manaCost: 13, multiplier: 1.1, effect: "Gust", effectChance: 1, cooldown: 2, element: "Earth" },
+    { id: "warrior-ashen-circle", rarity: "Epic", name: "Ashen Circle", description: "Burn all foes with a sweeping ember strike.", manaCost: 15, multiplier: 0.85, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.6, cooldown: 3, element: "Fire" },
+    { id: "warrior-breaker-mark", rarity: "Epic", name: "Breaker Mark", description: "A heavy hit marks one enemy for increased follow-up damage.", manaCost: 14, multiplier: 1.45, effect: "Marked", effectChance: 1, cooldown: 3, element: "Physical" },
+    { id: "warrior-warding-stance", rarity: "Epic", name: "Warding Stance", description: "Gain a stronger Thorns ward before the enemy acts.", manaCost: 15, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 3, element: "Earth" },
+    { id: "warrior-rootquake", rarity: "Legendary", name: "Rootquake", description: "Root every foe in place, stopping their usual evasive movement.", manaCost: 16, multiplier: 0.7, effect: "Root", effectChance: 1, aoe: true, secondaryMultiplier: 0.65, cooldown: 3, element: "Nature" },
+    { id: "warrior-kingbreaker", rarity: "Legendary", name: "Kingbreaker", description: "A precise, high-impact strike that weakens its target.", manaCost: 18, multiplier: 1.8, effect: "Weakness", effectChance: 1, cooldown: 4, element: "Physical" },
+    { id: "warrior-cinderwall", rarity: "Legendary", name: "Cinderwall", description: "Burn and weaken the entire enemy group.", manaCost: 19, multiplier: 0.9, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.65, cooldown: 4, element: "Fire" },
+    { id: "warrior-iron-vow", rarity: "Mythic", name: "Iron Vow", description: "Raise a thorns ward that reflects part of the next incoming hit.", manaCost: 19, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 3, element: "Earth" },
+    { id: "warrior-seismic-chain", rarity: "Mythic", name: "Seismic Chain", description: "A crushing sweep roots and damages every enemy.", manaCost: 22, multiplier: 1.25, effect: "Root", effectChance: 1, aoe: true, secondaryMultiplier: 0.75, cooldown: 4, element: "Earth" },
+    { id: "warrior-ashen-judgment", rarity: "Mythic", name: "Ashen Judgment", description: "Burn a single target with a devastating strike.", manaCost: 23, multiplier: 2, effect: "Burn", effectChance: 1, cooldown: 4, element: "Fire" },
+    { id: "warrior-unbroken-line", rarity: "Mythic", name: "Unbroken Line", description: "Gain a heavy Thorns ward that lasts through several attacks.", manaCost: 24, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 4, element: "Earth" },
+    { id: "warrior-titans-decree", rarity: "Divine", name: "Titan's Decree", description: "Weaken the entire enemy group, reducing their attack damage.", manaCost: 24, multiplier: 0.85, effect: "Weakness", effectChance: 1, aoe: true, secondaryMultiplier: 0.7, cooldown: 4, element: "Fire" }
+    ,{ id: "warrior-worlds-anvil", rarity: "Divine", name: "World's Anvil", description: "A titanic strike cripples one foe and marks it for follow-up attacks.", manaCost: 28, multiplier: 2.5, effect: "Marked", effectChance: 1, cooldown: 5, element: "Earth" }
+    ,{ id: "warrior-last-bastion", rarity: "Divine", name: "Last Bastion", description: "Surround yourself with a mighty Thorns ward.", manaCost: 27, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 5, element: "Earth" },
+    { id: "warrior-redoubt-breaker", rarity: "Legendary", name: "Redoubt Breaker", description: "Break through a guard and leave the target staggered.", manaCost: 20, multiplier: 1.7, effect: "Gust", effectChance: 1, targetDamageReduction: 4, cooldown: 4, element: "Physical" },
+    { id: "warrior-blood-iron", rarity: "Legendary", name: "Blood Iron", description: "A punishing blow leaves a deep Bleed on one enemy.", manaCost: 19, multiplier: 1.5, effect: "Bleed", effectChance: 1, cooldown: 3, element: "Physical" },
+    { id: "warrior-mountain-oath", rarity: "Mythic", name: "Mountain Oath", description: "Fortify yourself with a long-lasting Thorns ward.", manaCost: 25, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 4, element: "Earth" },
+    { id: "warrior-emberfall", rarity: "Mythic", name: "Emberfall", description: "A fiery sweep burns the entire enemy group.", manaCost: 26, multiplier: 1.3, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.8, cooldown: 4, element: "Fire" },
+    { id: "warrior-sun-forged", rarity: "Divine", name: "Sun-Forged Verdict", description: "Strike all foes with a divine blow that marks them.", manaCost: 30, multiplier: 1.7, effect: "Marked", effectChance: 1, aoe: true, secondaryMultiplier: 0.9, cooldown: 5, element: "Light" },
+    { id: "warrior-cathedral-fall", rarity: "Divine", name: "Cathedral Fall", description: "A crushing impact roots and staggers the enemy group.", manaCost: 31, multiplier: 1.5, effect: "Root", effectChance: 1, aoe: true, secondaryMultiplier: 0.85, cooldown: 5, element: "Earth" },
+    { id: "warrior-red-kingdom", rarity: "Divine", name: "Red Kingdom", description: "Set every foe ablaze with an overwhelming cleave.", manaCost: 33, multiplier: 1.8, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.9, cooldown: 5, element: "Fire" },
+    { id: "warrior-final-guard", rarity: "Divine", name: "Final Guard", description: "Raise an immense Thorns ward before the next enemy assault.", manaCost: 32, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 5, element: "Earth" }
+  ],
+  archer: [
+    { id: "archer-galesight", rarity: "Common", name: "Galesight Draw", description: "Spend a turn guiding your next shot; it deals double damage and still uses an arrow.", manaCost: 5, multiplier: 2, critBonus: 0.1, chargesNextAttack: true, cooldown: 0, element: "Wind" },
+    { id: "archer-quiet-aim", rarity: "Common", name: "Quiet Aim", description: "Steady your aim to empower your next shot.", manaCost: 4, multiplier: 1.35, critBonus: 0.05, chargesNextAttack: true, cooldown: 0, element: "Wind" },
+    { id: "archer-thornbind", rarity: "Uncommon", name: "Thornbind Shot", description: "Root one enemy so it cannot evade your attacks.", manaCost: 7, multiplier: 0.7, effect: "Root", effectChance: 1, cooldown: 1, element: "Nature" },
+    { id: "archer-dulling-arrow", rarity: "Uncommon", name: "Dulling Arrow", description: "A light shot weakens one foe's attacks for two turns.", manaCost: 7, multiplier: 0.6, effect: "Weakness", effectChance: 1, cooldown: 1, element: "Physical" },
+    { id: "archer-hushstring", rarity: "Rare", name: "Hushstring Hex", description: "Cripple a foe, making its attacks less accurate for two turns.", manaCost: 10, multiplier: 0.65, effect: "Cripple", effectChance: 1, cooldown: 2, element: "Wind" },
+    { id: "archer-pinpoint-shot", rarity: "Rare", name: "Pinpoint Shot", description: "A high-precision attack marks a target for your next hit.", manaCost: 11, multiplier: 1.25, effect: "Marked", effectChance: 1, critBonus: 0.12, cooldown: 2, element: "Physical" },
+    { id: "archer-forked-flight", rarity: "Rare", name: "Forked Flight", description: "A splitting shot clips the whole enemy group.", manaCost: 12, multiplier: 0.8, aoe: true, secondaryMultiplier: 0.55, cooldown: 2, element: "Wind" },
+    { id: "archer-hunters-mark", rarity: "Epic", name: "Huntress' Mark", description: "Mark one target to take 20% more damage from follow-up attacks.", manaCost: 13, multiplier: 0.8, effect: "Marked", effectChance: 1, cooldown: 2, element: "Light" },
+    { id: "archer-wind-shear", rarity: "Epic", name: "Wind Shear", description: "A gusting volley disrupts every enemy's next action.", manaCost: 15, multiplier: 0.85, effect: "Gust", effectChance: 1, aoe: true, secondaryMultiplier: 0.6, cooldown: 3, element: "Wind" },
+    { id: "archer-black-feather", rarity: "Epic", name: "Black Feather", description: "A barbed shot poisons one enemy over time.", manaCost: 14, multiplier: 1, effect: "Poison", effectChance: 1, cooldown: 2, element: "Dark" },
+    { id: "archer-vanishing-trail", rarity: "Epic", name: "Vanishing Trail", description: "Evade the next incoming attack with a phantom sidestep.", manaCost: 15, multiplier: 0, selfEffect: "Afterimage", selfOnly: true, cooldown: 3, element: "Wind" },
+    { id: "archer-blindcanopy", rarity: "Legendary", name: "Blind Canopy", description: "Blind every enemy, reducing their chance to land attacks.", manaCost: 16, multiplier: 0.7, effect: "Blind", effectChance: 1, aoe: true, secondaryMultiplier: 0.6, cooldown: 3, element: "Wind" },
+    { id: "archer-widowmaker", rarity: "Legendary", name: "Widowmaker", description: "A high-crit shot poisons and marks a single target.", manaCost: 19, multiplier: 1.9, critBonus: 0.2, effect: "Poison", effectChance: 1, cooldown: 4, element: "Physical" },
+    { id: "archer-storm-feathers", rarity: "Legendary", name: "Storm Feathers", description: "A rapid storm of arrows roots the whole group.", manaCost: 20, multiplier: 1, effect: "Root", effectChance: 1, aoe: true, secondaryMultiplier: 0.7, cooldown: 4, element: "Wind" },
+    { id: "archer-phantomstep", rarity: "Mythic", name: "Phantom Step", description: "Leave an afterimage that evades the next incoming hit.", manaCost: 19, multiplier: 0, selfEffect: "Afterimage", selfOnly: true, cooldown: 3, element: "Wind" },
+    { id: "archer-starfall-string", rarity: "Mythic", name: "Starfall String", description: "A celestial volley marks and damages every foe.", manaCost: 22, multiplier: 1.15, effect: "Marked", effectChance: 1, aoe: true, secondaryMultiplier: 0.75, cooldown: 4, element: "Light" },
+    { id: "archer-hollow-point", rarity: "Mythic", name: "Hollow Point", description: "A devastating shot weakens a foe and pierces its defenses.", manaCost: 23, multiplier: 2.1, effect: "Weakness", effectChance: 1, targetDamageReduction: 4, cooldown: 4, element: "Dark" },
+    { id: "archer-horizon-step", rarity: "Mythic", name: "Horizon Step", description: "Gain an afterimage and a brief Thorns ward.", manaCost: 24, multiplier: 0, selfEffect: "Afterimage", selfOnly: true, cooldown: 4, element: "Wind" },
+    { id: "archer-moonlessvolley", rarity: "Divine", name: "Moonless Volley", description: "Strike all foes with a binding volley that leaves them rooted.", manaCost: 23, multiplier: 1, effect: "Root", effectChance: 1, aoe: true, secondaryMultiplier: 0.7, cooldown: 4, element: "Water" }
+    ,{ id: "archer-worlds-eye", rarity: "Divine", name: "World's Eye", description: "A perfect volley marks every target for devastating follow-up damage.", manaCost: 28, multiplier: 1.5, effect: "Marked", effectChance: 1, aoe: true, secondaryMultiplier: 0.85, cooldown: 5, element: "Light" }
+    ,{ id: "archer-silent-extinction", rarity: "Divine", name: "Silent Extinction", description: "A single impossible shot silences and cripples its target.", manaCost: 29, multiplier: 2.7, effect: "Silence", effectChance: 1, cooldown: 5, element: "Dark" },
+    { id: "archer-gloam-net", rarity: "Legendary", name: "Gloam Net", description: "A binding spread roots every foe in the field.", manaCost: 20, multiplier: 0.9, effect: "Root", effectChance: 1, aoe: true, secondaryMultiplier: 0.7, cooldown: 4, element: "Dark" },
+    { id: "archer-red-fletching", rarity: "Legendary", name: "Red Fletching", description: "A barbed critical shot bleeds its target over time.", manaCost: 19, multiplier: 1.8, critBonus: 0.18, effect: "Bleed", effectChance: 1, cooldown: 4, element: "Physical" },
+    { id: "archer-wind-beyond", rarity: "Mythic", name: "Wind Beyond", description: "Slip from sight, evading the next enemy strike.", manaCost: 25, multiplier: 0, selfEffect: "Afterimage", selfOnly: true, cooldown: 4, element: "Wind" },
+    { id: "archer-night-orbit", rarity: "Mythic", name: "Night Orbit", description: "A circling volley blinds and weakens the enemy group.", manaCost: 26, multiplier: 1.3, effect: "Blind", effectChance: 1, aoe: true, secondaryMultiplier: 0.8, cooldown: 4, element: "Dark" },
+    { id: "archer-zenith-rain", rarity: "Divine", name: "Zenith Rain", description: "A radiant barrage marks every enemy for follow-up hits.", manaCost: 31, multiplier: 1.8, effect: "Marked", effectChance: 1, aoe: true, secondaryMultiplier: 0.9, cooldown: 5, element: "Light" },
+    { id: "archer-eclipse-pin", rarity: "Divine", name: "Eclipse Pin", description: "Pin a target beneath a shot that freezes it for two turns.", manaCost: 32, multiplier: 2.4, effect: "Frozen", effectChance: 1, cooldown: 5, element: "Water" },
+    { id: "archer-hundred-horizons", rarity: "Divine", name: "Hundred Horizons", description: "A world-spanning storm blinds every foe.", manaCost: 34, multiplier: 1.8, effect: "Blind", effectChance: 1, aoe: true, secondaryMultiplier: 0.9, cooldown: 5, element: "Wind" },
+    { id: "archer-last-light", rarity: "Divine", name: "Last Light", description: "A perfect arrow deals massive damage and weakens its target.", manaCost: 33, multiplier: 3, critBonus: 0.25, effect: "Weakness", effectChance: 1, cooldown: 5, element: "Light" }
+  ],
+  mage: [
+    { id: "mage-warding-flame", rarity: "Common", name: "Warding Flame", description: "Burn one target with a quick flame spell.", manaCost: 6, multiplier: 0.7, effect: "Burn", effectChance: 1, cooldown: 1, element: "Fire" },
+    { id: "mage-spark-ward", rarity: "Common", name: "Spark Ward", description: "A small spark burns a foe and strengthens your next defense.", manaCost: 5, multiplier: 0.65, effect: "Burn", effectChance: 1, cooldown: 1, element: "Fire" },
+    { id: "mage-rimeprison", rarity: "Uncommon", name: "Rime Prison", description: "Build Freeze stacks on one enemy; at five stacks it loses a turn.", manaCost: 8, multiplier: 0.75, effect: "Freeze", effectChance: 1, cooldown: 1, element: "Water" },
+    { id: "mage-frail-thread", rarity: "Uncommon", name: "Frail Thread", description: "Reduce one enemy's damage for two turns.", manaCost: 7, multiplier: 0.55, effect: "Weakness", effectChance: 1, cooldown: 1, element: "Arcane" },
+    { id: "mage-weakening-veil", rarity: "Rare", name: "Veil of Frailty", description: "Reduce one enemy's damage for two turns.", manaCost: 11, multiplier: 0.65, effect: "Weakness", effectChance: 1, cooldown: 2, element: "Dark" },
+    { id: "mage-brittle-prism", rarity: "Rare", name: "Brittle Prism", description: "A focused shard freezes and damages one target.", manaCost: 12, multiplier: 0.9, effect: "Freeze", effectChance: 1, cooldown: 2, element: "Water" },
+    { id: "mage-cinder-orbit", rarity: "Rare", name: "Cinder Orbit", description: "Arcane embers burn every enemy for reduced damage.", manaCost: 13, multiplier: 0.8, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.55, cooldown: 2, element: "Fire" },
+    { id: "mage-silence-sigil", rarity: "Epic", name: "Silence Sigil", description: "Silence one foe and cancel its next spell cast.", manaCost: 14, multiplier: 0.8, effect: "Silence", effectChance: 1, cooldown: 2, element: "Arcane" },
+    { id: "mage-gravity-well", rarity: "Epic", name: "Gravity Well", description: "Pull enemies together and root the entire group.", manaCost: 16, multiplier: 0.75, effect: "Root", effectChance: 1, aoe: true, secondaryMultiplier: 0.65, cooldown: 3, element: "Void" },
+    { id: "mage-mind-fray", rarity: "Epic", name: "Mind Fray", description: "Silence and weaken a single enemy.", manaCost: 16, multiplier: 0.9, effect: "Silence", effectChance: 1, cooldown: 3, element: "Arcane" },
+    { id: "mage-prismatic-shell", rarity: "Epic", name: "Prismatic Shell", description: "Gain a Thorns ward while the enemy's next attack is disrupted.", manaCost: 17, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 3, element: "Light" },
+    { id: "mage-stillwinter", rarity: "Legendary", name: "Stillwinter", description: "Freeze one enemy solid; it loses its next two turns.", manaCost: 17, multiplier: 0.9, effect: "Frozen", effectChance: 1, cooldown: 3, element: "Water" },
+    { id: "mage-void-collapse", rarity: "Legendary", name: "Void Collapse", description: "Silence and weaken the whole enemy group.", manaCost: 20, multiplier: 1, effect: "Silence", effectChance: 1, aoe: true, secondaryMultiplier: 0.65, cooldown: 4, element: "Void" },
+    { id: "mage-ember-cataclysm", rarity: "Legendary", name: "Ember Cataclysm", description: "A focused inferno burns a single foe for heavy damage.", manaCost: 21, multiplier: 2, effect: "Burn", effectChance: 1, cooldown: 4, element: "Fire" },
+    { id: "mage-astralburst", rarity: "Mythic", name: "Astral Burst", description: "Burn every enemy in a wide arcane detonation.", manaCost: 20, multiplier: 1.05, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.7, cooldown: 3, element: "Fire" },
+    { id: "mage-glacial-eclipse", rarity: "Mythic", name: "Glacial Eclipse", description: "Freeze one foe and leave the entire group weakened.", manaCost: 24, multiplier: 1.5, effect: "Frozen", effectChance: 1, cooldown: 4, element: "Water" },
+    { id: "mage-storm-of-names", rarity: "Mythic", name: "Storm of Names", description: "Silence all enemies as arcane force strikes the group.", manaCost: 25, multiplier: 1.25, effect: "Silence", effectChance: 1, aoe: true, secondaryMultiplier: 0.8, cooldown: 4, element: "Arcane" },
+    { id: "mage-aegis-star", rarity: "Mythic", name: "Aegis Star", description: "Surround yourself with a powerful Thorns ward.", manaCost: 24, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 4, element: "Light" },
+    { id: "mage-nullstar", rarity: "Divine", name: "Nullstar", description: "Seal every foe's magic, preventing their spell casts.", manaCost: 25, multiplier: 1.15, effect: "Silence", effectChance: 1, aoe: true, secondaryMultiplier: 0.75, cooldown: 4, element: "Dark" }
+    ,{ id: "mage-primeval-zero", rarity: "Divine", name: "Primeval Zero", description: "Erase a target's next two turns beneath absolute frost.", manaCost: 30, multiplier: 2.2, effect: "Frozen", effectChance: 1, cooldown: 5, element: "Water" }
+    ,{ id: "mage-worldfire", rarity: "Divine", name: "Worldfire", description: "Burn and weaken every foe in a divine conflagration.", manaCost: 32, multiplier: 1.6, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.85, cooldown: 5, element: "Fire" },
+    { id: "mage-kingdom-of-ash", rarity: "Legendary", name: "Kingdom of Ash", description: "A spreading fire burns every foe for several turns.", manaCost: 20, multiplier: 0.95, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.7, cooldown: 4, element: "Fire" },
+    { id: "mage-quiet-annihilation", rarity: "Legendary", name: "Quiet Annihilation", description: "Silence one enemy and strike with concentrated void energy.", manaCost: 21, multiplier: 1.8, effect: "Silence", effectChance: 1, cooldown: 4, element: "Void" },
+    { id: "mage-frozen-script", rarity: "Mythic", name: "Frozen Script", description: "Freeze a foe solid and silence its allies.", manaCost: 26, multiplier: 1.5, effect: "Frozen", effectChance: 1, aoe: true, secondaryMultiplier: 0.7, cooldown: 4, element: "Water" },
+    { id: "mage-ashen-mandala", rarity: "Mythic", name: "Ashen Mandala", description: "Burn and weaken every enemy in a broad spell circle.", manaCost: 27, multiplier: 1.4, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.85, cooldown: 4, element: "Fire" },
+    { id: "mage-heavens-quiet", rarity: "Divine", name: "Heaven's Quiet", description: "Silence the enemy group beneath a divine wave.", manaCost: 34, multiplier: 1.9, effect: "Silence", effectChance: 1, aoe: true, secondaryMultiplier: 0.9, cooldown: 5, element: "Light" },
+    { id: "mage-white-absence", rarity: "Divine", name: "White Absence", description: "Freeze one foe and root all others in absolute winter.", manaCost: 35, multiplier: 2.6, effect: "Frozen", effectChance: 1, aoe: true, secondaryMultiplier: 0.75, cooldown: 5, element: "Water" },
+    { id: "mage-black-sun", rarity: "Divine", name: "Black Sun", description: "A void detonation weakens and burns every enemy.", manaCost: 37, multiplier: 2, effect: "Burn", effectChance: 1, aoe: true, secondaryMultiplier: 0.95, cooldown: 5, element: "Dark" },
+    { id: "mage-eternal-aegis", rarity: "Divine", name: "Eternal Aegis", description: "Wrap yourself in a powerful ward that punishes attackers.", manaCost: 36, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 5, element: "Light" }
+  ]
+};
 const ROOM_LABELS = {
   start: "Starting Room", enemy: "Enemy Room", empty: "Empty Room", treasure: "Treasure Room",
   weapon: "Weapon Cache", fountain: "Fountain Room", shop: "Shop Room", trap: "Treasure Room", boss: "Boss Room"
@@ -117,6 +219,7 @@ let selectedIndexItem = null;
 let inventoryWeaponFamily = "warrior";
 let inventoryCategory = "weapons";
 let weaponSort = { key: "rarity", direction: "desc" };
+let itemSort = { key: "rarity", direction: "desc" };
 let leaderboardDifficulty = "normal";
 let leaderboardEntries = [];
 let leaderboardStatus = "idle";
@@ -368,12 +471,25 @@ function addInventoryItem(item) {
   return item;
 }
 
+function createClassSpellScroll(className, rarity="Common", starterOnly=false) {
+  const catalog=CLASS_SPELLS[className]||CLASS_SPELLS.warrior;
+  const matching=catalog.filter(spell=>spell.rarity===rarity);
+  const template=starterOnly?matching[0]:choice(matching.length?matching:catalog);
+  return {...template,id:`${template.id}-${Date.now()}-${Math.floor(Math.random()*1e9)}`,spellId:template.id,rarity:template.rarity,className,
+    command:`class-spell-${slug(template.id)}`,name:`${template.rarity} ${template.name} Scroll`,spellName:template.name,
+    quantity:1,kind:"classSpell",classSpell:true,file:"spell-scroll.svg"};
+}
 function migrateBrowserSave() {
   if (!state) return;
   state.saveSlot ||= state.devMode ? "dev" : "slot1";
   if(!DIFFICULTIES[state.difficulty])state.difficulty="normal";
   state.inventoryNotice ??= false;
+  state.spells ||= [];
+  for(const spell of state.spells){if(!spell||spell.className||!spell.spellId)continue;const owner=Object.keys(CLASS_SPELLS).find(key=>CLASS_SPELLS[key].some(entry=>entry.id===spell.spellId));const profile=CLASS_SPELLS[owner]?.find(entry=>entry.id===spell.spellId);if(profile){Object.assign(spell,{...profile,className:owner,spellName:profile.name,command:`class-spell-${slug(profile.id)}`,classSpell:true,kind:"classSpell",name:`${profile.rarity} ${profile.name} Scroll`,file:"spell-scroll.svg"});}}
+  state.equippedSpellId ||= null;
+  if(state.equippedSpellId&&!state.spells.some(spell=>spell.id===state.equippedSpellId))state.equippedSpellId=null;
   state.shopLootUpgradeLevel ??= 0;
+  if(Array.isArray(state.shopStock))state.shopStock=state.shopStock.map(item=>item?.kind==="spell"?{...item,kind:"classSpell"}:item);
   state.chosenClass ||= state.class || null;
   state.class=state.chosenClass;
   state.defenseCooldowns ||= { aegis: 0, block: 0, dodge: 0 };
@@ -388,6 +504,7 @@ function migrateBrowserSave() {
     if(item&&["health","mana"].includes(item.type)){
       item.rarity=RARITIES.includes(item.rarity)?item.rarity:"Common";
       item.name=`${item.rarity} ${item.type==="mana"?"Mana":"Health"} Potion`;
+      if(item.type==="mana")item.amount=0;
     }
     addInventoryItem(item);
   }
@@ -574,7 +691,7 @@ function newRun(name, devMode = false, saveSlot = "slot1", difficulty = "normal"
   state = {
     name: name || "Adventurer", devMode, saveSlot, difficulty: DIFFICULTIES[difficulty] ? difficulty : "normal", inventoryNotice: false, shopLootUpgradeLevel: 0, floor: 1, level: 1, xp: 0, skillPoints: 0, hp: 100, maxHp: 100,
     mana: 50, maxMana: 50, gold: 0, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
-    speed: 10, critChance: 0.05, class: null, chosenClass: null, weapon: null, weapons: [], armor: [], items: [],
+    speed: 10, critChance: 0.05, class: null, chosenClass: null, weapon: null, weapons: [], armor: [], items: [], spells: [], equippedSpellId: null,
     currentFloor: makeFloor(1), combat: null, deaths: 0, floorsCleared: 0, milestonePending:false, runEnded:false, log: [],
     starter: { desk: false, closet: false, classOffer: false }, equippedArmor: {}, baseMaxHp: 100, attackCooldowns: {}, defenseCooldowns: { aegis: 0, block: 0, dodge: 0 }, activeDefense: null, disruptCooldown: 0, braced: false, showWeaponInfo: false,
     runStats: { enemiesDefeated: 0, damageDealt: 0, damageTaken: 0, fights: [] }
@@ -735,22 +852,24 @@ function getActions() {
     const weapon = state.weapon;
     const weaponClass=weaponFamily(weapon);
     const usesMana=DUNGEON_RULES.weaponUsesMana(weapon,state.class);
+    const freeMageBasic=state.class==="mage";
     const spellBlocked = usesMana && state.equippedArmor?.shield;
     const noArrows=["Bow","Crossbow"].includes(weapon?.type)&&state.arrows<(weapon?.effect==="Overdraw"?2:1);
-    const basicFallback = spellBlocked ? "shield" : DUNGEON_RULES.basicAttackFallback(state.class,weapon?.type,state.mana,state.arrows,(weapon?.manaCost||5)+(weapon?.effect==="Overcast"&&usesMana?2:0))||(noArrows?"arrows":null);
+    const basicFallback = spellBlocked ? "shield" : (usesMana&&!freeMageBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon?.type,state.mana,state.arrows,(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0)):null)||(noArrows?"arrows":null);
     const basicLabel = weaponClass === "mage" ? "Basic spell" : weaponClass === "archer" ? "Basic shot" : "Basic attack";
     const arrowsOut = ["Bow", "Crossbow"].includes(weapon?.type) && state.arrows < (weapon?.effect==="Overdraw"?2:1) && !basicFallback;
-    const manaCost = usesMana ? (weapon?.manaCost || 5) + (weapon?.effect==="Overcast"?2:0) : 0;
-    const basicPreview=attackPreview({multiplier:basicFallback?0.5:1,critBonus:0,manaCost:basicFallback?0:weapon?.manaCost||5,aoe:false});
+    const manaCost = freeMageBasic?0:usesMana?(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0):0;
+    const basicPreview=attackPreview({multiplier:basicFallback?0.5:1,critBonus:0,manaCost:0,freeBasic:freeMageBasic,aoe:false});
     const heavyPreview=attackPreview({multiplier:1.5,critBonus:0.1,cooldown:2,aoe:false});
-    const specials = (weapon?.attacks || []).map(attack => {
+    const equippedSpell=state.spells?.find(spell=>spell.id===state.equippedSpellId);
+    const specials = [...(weapon?.attacks || []), ...(equippedSpell?[classSpellAttack(equippedSpell)]:[])].map(attack => {
       const cooldown = DUNGEON_RULES.isAttackOnCooldown(state.attackCooldowns,attack.command) ? state.attackCooldowns[attack.command] : 0;
       const preview = attackPreview(attack);
-      const disabled = cooldown > 0 || (usesMana && spellBlocked) || (usesMana && state.mana < preview.manaCost) || (preview.ammoCost > 0 && state.arrows < preview.ammoCost);
+      const disabled = cooldown > 0 || (!attack.spell && usesMana && spellBlocked) || state.mana < preview.manaCost || (preview.ammoCost > 0 && state.arrows < preview.ammoCost);
       const aoePreview=attack.aoe?` · AoE secondary ~${preview.secondaryDamage}`:"";
       const chargeLabel=attack.chargesNextAttack?`Next hit: ~${preview.primaryDamage} dmg / ${preview.criticalDamage} crit · ${Math.round(preview.critChance*100)}% crit${aoePreview}`:`~${preview.primaryDamage} dmg / ${preview.criticalDamage} crit · ${Math.round(preview.critChance*100)}% crit${aoePreview}`;
       const matchup=` · elemental ${preview.elementRelation}${previewModifiers(preview)}`;
-      const classPenalty=preview.offClass?" · off-class ×0.75":"";
+      const classPenalty=attack.offClass?" · off-class spell: ×0.75 power, +50% mana":preview.offClass?" · off-class ×0.75":"";
       const targetLabel=attack.aoe?` · ${preview.targetCount} targets`:` · single target`;
       const resources=`${preview.manaCost?` · ${preview.manaCost} mana`:""}${preview.ammoCost?` · ${preview.ammoCost} arrow${preview.ammoCost===1?"":"s"} · ${state.arrows||0} shared remaining`:""}${preview.manaGain?` · +${preview.manaGain} mana on hit`:""}${attack.healOnHit?` · heals ${Math.round(attack.healOnHit*100)}% of damage`:""}`;
       const cooldownLabel=` · ${preview.cooldown?`${preview.cooldown} turn cooldown`:"no cooldown"}`;
@@ -762,9 +881,9 @@ function getActions() {
     const defense=classDefenseOption();
     const defenseAction=defense?`<button class="action-button secondary" data-attack="${defense.action}" ${defense.disabled?"disabled":""}>${defense.label}<small>${defense.description}</small></button>`:"";
     const disruptAction=disruptable?`<button class="action-button secondary" data-attack="disrupt" ${!DUNGEON_RULES.canDisrupt(selectedEnemy,disruptCooldown)?"disabled":""}>Disrupt<small>${disruptCooldown?`Cooldown ${disruptCooldown}`:`Cancel ${escapeHtml(selectedEnemy.intent.label)}`}</small></button>`:"";
-    const basicDisabled=(usesMana&&state.mana<manaCost&&!basicFallback)||arrowsOut;
+    const basicDisabled=(usesMana&&!freeMageBasic&&state.mana<manaCost&&!basicFallback)||arrowsOut;
     const basicFallbackName=usesMana?"Staff strike":"Unarmed jab";
-    const basicResource=usesMana?(basicFallback?"No mana needed · reduced damage":`${manaCost} mana`):["Bow","Crossbow"].includes(weapon?.type)?(basicFallback?"No arrows · reduced-damage jab":`1 arrow · ${state.arrows||0} shared remaining${state.class==="archer"?" · +1 mana on hit":""}`):"Always available";
+    const basicResource=usesMana?(freeMageBasic||basicFallback?`No mana needed${basicFallback?" · reduced damage":""}`:`${manaCost} mana`):["Bow","Crossbow"].includes(weapon?.type)?(basicFallback?"No arrows · reduced-damage jab":`1 arrow · ${state.arrows||0} shared remaining${state.class==="archer"?" · +1 mana on hit":""}`):"Always available";
     const basicPenalty=DUNGEON_RULES.weaponDamageMultiplier(state.class,weapon);
     const basicMatchup=` · elemental ${basicPreview.elementRelation}${previewModifiers(basicPreview)}`;
     const cannotFlee=state.combat.boss;
@@ -822,6 +941,11 @@ function enemyIncomingDamage(enemy) {
 function healthPotionRestore(item) {
   const percent = HEALTH_POTION_PERCENT[item.rarity] || HEALTH_POTION_PERCENT.Common;
   return Math.ceil(state.maxHp * percent / 100);
+}
+
+function manaPotionRestore(item) {
+  const percent = MANA_POTION_PERCENT[item.rarity] || MANA_POTION_PERCENT.Common;
+  return Math.ceil(state.maxMana * percent / 100) + Math.max(0,effectiveStat("wis")-10);
 }
 
 function classDefenseOption() {
@@ -915,10 +1039,11 @@ function render() {
 }
 
 function renderCombat(enemies) {
+  const equippedSpell=state.spells?.find(spell=>spell.id===state.equippedSpellId);
   const attacks = state.weapon?.attacks || [];
   const targetCount = state.combat?.enemies.filter(enemy => enemy.hp > 0).length || 1;
-  const basic = { name: state.class === "mage" ? "Basic spell" : state.class === "archer" ? "Basic shot" : "Basic attack", multiplier: 1, critBonus: 0, cooldown: 0, effect: state.weapon?.effect || null, manaGain: state.class === "archer" ? 1 : 0 };
-  const listedAttacks = [basic, ...attacks];
+  const basic = { name: state.class === "mage" ? "Basic spell" : state.class === "archer" ? "Basic shot" : "Basic attack", multiplier: 1, critBonus: 0, cooldown: 0, effect: state.weapon?.effect || null, manaGain: state.class === "archer" ? 1 : 0, freeBasic: state.class === "mage" };
+  const listedAttacks = [basic, ...attacks, ...(equippedSpell?[classSpellAttack(equippedSpell)]:[])];
   if (state.class === "warrior") listedAttacks.splice(1, 0, { name: "Heavy attack", multiplier: 1.5, critBonus: 0.1, cooldown: 2, effect: null });
   const enemyCards = enemies.map(({ enemy, index }) => {
     const intent = enemy.intent || { label: "Preparing", key: "" };
@@ -946,11 +1071,11 @@ function attackPreview(attack, targetCount = state.combat?.enemies.filter(enemy=
   const armor = DUNGEON_RULES.armorBonuses(state.equippedArmor || {}, state.class);
   const preview = DUNGEON_RULES.createAttackPreview({
     player: { ...state, critChance: state.critChance + armor.critChance }, playerClass: state.class,
-    weapon: weaponOverride || {}, attack, targetCount, charged: chargedOverride,
+    weapon: attack.spell ? {} : (weaponOverride || {}), attack, targetCount, charged: chargedOverride,
     targetElement: target?.element
   });
   if(target){
-    preview.defensePierce=["Void","Penetration","Pierce","PiercingShot"].includes(weaponOverride?.effect)?0.5:0;
+  preview.defensePierce=!attack.spell&&["Void","Penetration","Pierce","PiercingShot"].includes(weaponOverride?.effect)?0.5:0;
     const reduction=Math.max(0,(target.damageReduction||0)*(1-preview.defensePierce));
     const applyPreviewMitigation=raw=>{
       let damage=Math.max(1,Math.round(raw*preview.elementMultiplier-reduction));
@@ -964,7 +1089,8 @@ function attackPreview(attack, targetCount = state.combat?.enemies.filter(enemy=
     preview.secondaryDamage=attack.aoe?applyPreviewMitigation(preview.rawPrimaryDamage*(attack.secondaryMultiplier||0.5)):0;
     preview.criticalDamage=preview.primaryDamage*2;
   }
-  if (weaponFamily(weaponOverride) === "archer" && attack.chargesNextAttack) preview.ammoCost = 0;
+  if (attack.spell) { preview.manaCost=attack.manaCost||0; preview.ammoCost=0; }
+  if (!attack.spell && weaponFamily(weaponOverride) === "archer" && attack.chargesNextAttack) preview.ammoCost = 0;
   return preview;
 }
 
@@ -1041,10 +1167,12 @@ function chooseClass(className) {
   const entries = WEAPONS[className];
   state.weapon=createWeapon(entries[0]);
   state.weapons=[state.weapon];
+  const starterSpell=createClassSpellScroll(className,"Uncommon",true);
+  state.spells=[starterSpell];state.equippedSpellId=starterSpell.id;
   state.inventoryNotice=true;
   if(className==="archer")state.arrows=14;
   state.starter.classOffer=false;
-  message(`You choose the ${CLASS_NAMES[className]} path and take the ${state.weapon.name}.`, "story"); render();
+  message(`You choose the ${CLASS_NAMES[className]} path, take the ${state.weapon.name}, and learn ${starterSpell.spellName}.`, "story"); render();
 }
 
 function act(action) {
@@ -1088,7 +1216,17 @@ function inspectChest(room) {
     else if(outcome===1){const stolen=Math.min(state.gold,Math.ceil(state.gold/2));state.gold-=stolen;message(`The trapped chest springs. A hidden mechanism steals ${stolen} gold.`,"danger");}
     else {const loot=makeLoot();grantLoot(loot);message(`You avoid the mechanism and find ${loot.kind==="weapon"?`${loot.value.rarity} ${loot.value.name}`:loot.kind==="armor"?`${loot.value.rarity} ${loot.value.name}`:itemNameWithRarity(loot.value)}.`);}
   } else if(room.type==="weapon") { const weapon=makeLootWeapon(null,"Rare");state.weapons.push(weapon);state.inventoryNotice=true;addInventoryItem({name:"Rare Health Potion",type:"health",amount:60,quantity:1,rarity:"Rare"});message(`Inside: ${weapon.rarity} ${weapon.name} (${weapon.type}) and a Rare Health Potion.`); }
-  else {state.gold+=15;const foundPotion=Math.random()<0.35;if(foundPotion)addInventoryItem({name:"Common Health Potion",type:"health",amount:25,quantity:1,rarity:"Common"});message(foundPotion?"Inside the chest, beneath a layer of velvet, you find a Common Health Potion and 15 gold coins.":"The chest holds 15 gold coins; its healing supplies have long since been taken.");}
+  else {
+    state.gold+=15;
+    const foundPotion=Math.random()<0.35;
+    if(foundPotion)addInventoryItem({name:"Common Health Potion",type:"health",amount:25,quantity:1,rarity:"Common"});
+    let foundSpell=null;
+    if(state.class&&Math.random()<0.2){foundSpell=createClassSpellScroll(state.class,DUNGEON_RULES.rollLootRarity(1,false,Math.random()));grantLoot({kind:"classSpell",value:foundSpell});}
+    let chestMessage=foundPotion?"Inside the chest, you find a Common Health Potion and 15 gold coins.":"The chest holds 15 gold coins; its healing supplies have long since been taken.";
+    if(foundSpell)chestMessage+=` You also find a ${foundSpell.rarity} ${foundSpell.spellName} scroll.`;
+    message(chestMessage);
+  }
+  if(room.type==="trap"&&state.class&&Math.random()<0.2){const scroll=createClassSpellScroll(state.class,DUNGEON_RULES.rollLootRarity(1,false,Math.random()));grantLoot({kind:"classSpell",value:scroll});message(`Among the chest's contents, you find a ${scroll.rarity} ${scroll.spellName} scroll.`,"reward");}
 }
 
 function roomTypeForFloor(room) {
@@ -1126,10 +1264,14 @@ function startCombat(boss) {
   message(opening,"danger"); render();
 }
 
+function getEquippedClassSpell(command){const spell=state?.spells?.find(item=>item.id===state.equippedSpellId&&item.command===command);return classSpellAttack(spell);}
+
+function classSpellAttack(spell){if(!spell)return null;const offClass=Boolean(state.class&&spell.className!==state.class);return{...spell,name:spell.spellName,spell:true,element:spell.element||"Arcane",offClass,multiplier:(spell.multiplier||1)*(offClass?0.75:1),manaCost:Math.ceil((spell.manaCost||0)*(offClass?1.5:1))};}
+
 function combatAction(action) {
   const fight=state.combat; if(!fight)return;
   const wasBonusAttack=Boolean(fight.bonusAttackPending);
-  if(wasBonusAttack && !["basic","attack"].includes(action) && !DUNGEON_RULES.getSpecialAttack(state.weapon,action)){message("You’re too fast! Choose an attack before the enemies act.");render();return;}
+  if(wasBonusAttack && !["basic","attack"].includes(action) && !DUNGEON_RULES.getSpecialAttack(state.weapon,action) && !getEquippedClassSpell(action)){message("You’re too fast! Choose an attack before the enemies act.");render();return;}
   if(DUNGEON_RULES.allEnemiesDefeated(fight.enemies)){winFight();return;}
   if(state.playerEffects?.Freeze?.stacks>=5){
     delete state.playerEffects.Freeze;
@@ -1172,37 +1314,40 @@ function combatAction(action) {
     enemyTurn();return;
   }
   if(action==="flee") { if(fight.boss){message("The boss chamber seals behind you. You cannot flee this fight.","danger");render();return;} if(Math.random()<0.4){state.combat=null;state.braced=false;message("You slip past the enemy and retreat to the previous room.","story");render();return;} message(`${enemy.name} blocks your path and stops you from escaping!` ,"danger");enemyTurn();return; }
-  if(action==="heal"||action==="mana") { const type=action==="heal"?"health":"mana";const item=state.items.find(it=>it.type===type && it.quantity>0);if(!item){message(`No ${type} potion in your inventory.`);render();return;}item.quantity--;if(type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+item.amount+Math.max(0,effectiveStat("wis")-10));message(`You use a ${item.name}. Your turn passes.`);enemyTurn();return; }
+  if(action==="heal"||action==="mana") { const type=action==="heal"?"health":"mana";const item=state.items.find(it=>it.type===type && it.quantity>0);if(!item){message(`No ${type} potion in your inventory.`);render();return;}item.quantity--;if(type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+manaPotionRestore(item));message(`You use a ${item.name}. Your turn passes.`);enemyTurn();return; }
   const weapon=state.weapon; if(!weapon){message("You need a weapon before you can attack.");render();return;}
-  const special=DUNGEON_RULES.getSpecialAttack(weapon,action);
+  const spell=getEquippedClassSpell(action);
+  const special=DUNGEON_RULES.getSpecialAttack(weapon,action)||spell;
+  const isSpellCast=Boolean(spell);
   const isBasic=action==="basic"||action==="attack";
   const isHeavy=action==="heavy";
-  const usesMana=DUNGEON_RULES.weaponUsesMana(weapon,state.class);
-  const spellBlocked=usesMana&&state.equippedArmor?.shield;
+  const usesMana=DUNGEON_RULES.weaponUsesMana(weapon,state.class)||isSpellCast;
+  const freeMageBasic=state.class==="mage";
+  const spellBlocked=usesMana&&state.equippedArmor?.shield&&!isSpellCast;
   const noArrows=["Bow","Crossbow"].includes(weapon.type)&&state.arrows<(weapon.effect==="Overdraw"?2:1);
-  const basicFallback=isBasic&&spellBlocked?"shield":isBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon.type,state.mana,state.arrows,(weapon.manaCost||5)+(weapon.effect==="Overcast"&&usesMana?2:0))||(noArrows?"arrows":null):null;
+  const basicFallback=isBasic&&spellBlocked?"shield":isBasic&&usesMana&&!freeMageBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon.type,state.mana,state.arrows,(weapon.manaCost||5)+(weapon.effect==="Overcast"?2:0))||(noArrows?"arrows":null):isBasic&&noArrows?"arrows":null;
   const attack=special|| (isHeavy?{name:"Heavy attack",multiplier:1.5,critBonus:0.10,cooldown:2}:isBasic?{name:basicFallback&&usesMana?"Staff strike":basicFallback==="arrows"?"Unarmed jab":"Basic attack",multiplier:basicFallback?0.5:1,critBonus:0,cooldown:0}:null);
   if(!attack){message("That attack is not available for this weapon.");render();return;}
   if(special&&DUNGEON_RULES.isAttackOnCooldown(state.attackCooldowns,action)){message(`${attack.name} is cooling down for ${state.attackCooldowns[action]} turn(s).`);render();return;}
   if(spellBlocked&&!basicFallback){message("You cannot cast while a shield is equipped.");render();return;}
   if(special?.chargesNextAttack){
     if(wasBonusAttack){message("Use a direct attack for your extra action.");render();return;}
-    if(usesMana){const cost=(special.manaCost||weapon.manaCost||5)+(weapon.effect==="Overcast"?2:0);if(state.mana<cost){message(`Not enough mana. Channeling costs ${cost}.`);render();return;}state.mana-=cost;}
+    if(usesMana){const cost=(special.manaCost||weapon.manaCost||5)+(weapon.effect==="Overcast"&&!isSpellCast?2:0);if(state.mana<cost){message(`Not enough mana. Channeling costs ${cost}.`);render();return;}state.mana-=cost;}
     state.chargedAttack={multiplier:special.multiplier,critBonus:special.critBonus};
     message(`${special.name} is ready. Your next basic attack is empowered.`);enemyTurn();return;
   }
-  const manaCost=usesMana&&!basicFallback?(special?.manaCost||weapon.manaCost||5)+(weapon.effect==="Overcast"?2:0):0;
+  const manaCost=isSpellCast?(special.manaCost||0):isBasic&&freeMageBasic?0:usesMana&&!basicFallback?(special?.manaCost||weapon.manaCost||5)+(weapon.effect==="Overcast"?2:0):0;
   if(state.mana<manaCost){message(`Not enough mana. This spell costs ${manaCost} mana.`);render();return;}
   if(manaCost)state.mana-=manaCost;
-  const arrowCost=["Bow","Crossbow"].includes(weapon.type)&&!basicFallback?(weapon.effect==="Overdraw"?2:1):0;
+  const arrowCost=["Bow","Crossbow"].includes(weapon.type)&&!basicFallback&&!isSpellCast&&!special?.selfOnly?(weapon.effect==="Overdraw"?2:1):0;
   if(arrowCost){state.arrows??=0;if(state.arrows<arrowCost){message(`Not enough arrows. This shot costs ${arrowCost}.`);render();return;}changeArrowCount(-arrowCost);}
-  if(!special?.aoe&&enemy.protectedByIndex!==undefined){const guardian=fight.enemies[enemy.protectedByIndex];if(guardian?.hp>0){message(`${guardian.name} intercepts the attack meant for ${enemy.name}.`,"story");enemy=guardian;}}
+  if(!special?.aoe&&!special?.selfOnly&&enemy.protectedByIndex!==undefined){const guardian=fight.enemies[enemy.protectedByIndex];if(guardian?.hp>0){message(`${guardian.name} intercepts the attack meant for ${enemy.name}.`,"story");enemy=guardian;}}
   const charged=state.chargedAttack||{multiplier:1,critBonus:0};
   const multiplier=attack.multiplier*charged.multiplier;
   const armorBonuses=DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class);
-  const crit=Math.min(1,state.critChance+armorBonuses.critChance+(weapon.crit||0)+(weapon.critUpgrade||0)+(attack.critBonus||0)+charged.critBonus+(weapon.effect==="Focus"?0.1:0)+(["Headshot","Snipe"].includes(weapon.effect)||["Headshot","Snipe"].includes(attack.effect)?0.2:0));
-  const targets=special?.aoe?fight.enemies.filter(candidate=>candidate.hp>0):[enemy];
-  let landed=false;
+  const crit=Math.min(1,state.critChance+armorBonuses.critChance+(isSpellCast?0:(weapon.crit||0)+(weapon.critUpgrade||0))+(attack.critBonus||0)+charged.critBonus+(!isSpellCast&&weapon.effect==="Focus"?0.1:0)+(!isSpellCast&&["Headshot","Snipe"].includes(weapon.effect)||["Headshot","Snipe"].includes(attack.effect)?0.2:0));
+  const targets=special?.selfOnly?[]:special?.aoe?fight.enemies.filter(candidate=>candidate.hp>0):[enemy];
+  let landed=Boolean(special?.selfOnly);
   let attackDamageDealt=0;
   for(const target of targets){
     if(state.playerEffects?.Blind&&Math.random()<0.2){message(`Blindness makes your ${attack.name.toLowerCase()} miss.` ,"danger");continue;}
@@ -1210,13 +1355,14 @@ function combatAction(action) {
     if(target.intent?.key==="dodge"&&!target.effects?.Root&&!tracksTarget){target.intentDodging=true;message(`${target.name} reads your movement and evades the attack!`,"danger");continue;}
     if(Math.random()<target.dodge&&!target.effects?.Root&&!tracksTarget){message(`${target.name} dodges the attack!`,"danger");continue;}
     landed=true;
-  const passiveBonus=({Penetration:1.15,Pierce:1.10,PiercingShot:1.12,Void:1.12,SpellPower:1.12,SpellEcho:1.08,Focus:1.08,Draw:1.12,DelayedCast:1.15,Overcast:1.25,RangeScaling:1.12,ArcaneCharge:1+Math.min(5,state.arcaneCharge||0)*0.04,Overdraw:1.25})[weapon.effect]||1;
-    const momentumBonus=weapon.effect==="Momentum"?1+Math.min(5,state.momentum||0)*0.04:1;
+  const passiveBonus=isSpellCast?1:({Penetration:1.15,Pierce:1.10,PiercingShot:1.12,Void:1.12,SpellPower:1.12,SpellEcho:1.08,Focus:1.08,Draw:1.12,DelayedCast:1.15,Overcast:1.25,RangeScaling:1.12,ArcaneCharge:1+Math.min(5,state.arcaneCharge||0)*0.04,Overdraw:1.25})[weapon.effect]||1;
+    const momentumBonus=!isSpellCast&&weapon.effect==="Momentum"?1+Math.min(5,state.momentum||0)*0.04:1;
     const defensePierce=["Void","Penetration","Pierce","PiercingShot"].includes(weapon.effect)?0.5:0;
-    const matchup=DUNGEON_RULES.elementMatchup(weapon.element,target.element);
+    const matchup=DUNGEON_RULES.elementMatchup(special?.element||weapon.element,target.element);
     const crippleScale=state.playerEffects?.Cripple?0.85:1;
-    const classPenalty=DUNGEON_RULES.weaponDamageMultiplier(state.class,weapon);
-    const rawDamage=((state.class==="mage"?effectiveStat("int"):effectiveStat("str"))+weapon.damage+(weapon.damageUpgrade||0))*multiplier*passiveBonus*momentumBonus*crippleScale*classPenalty*(target===enemy?1:special.secondaryMultiplier||0.5)*matchup.multiplier;
+    const classPenalty=isSpellCast?1:DUNGEON_RULES.weaponDamageMultiplier(state.class,weapon);
+    const spellStat=state.class==="mage"?effectiveStat("int"):state.class==="archer"?effectiveStat("dex"):effectiveStat("str");
+    const rawDamage=(spellStat+(isSpellCast?0:weapon.damage+(weapon.damageUpgrade||0)))*multiplier*(isSpellCast?1:passiveBonus*momentumBonus)*crippleScale*classPenalty*(target===enemy?1:special.secondaryMultiplier||0.5)*matchup.multiplier;
     const armorReduction=Math.max(0,target.damageReduction||0);
     let damage=Math.max(1,Math.round(rawDamage-(target.damageReduction||0)*(1-defensePierce)));
     const guardReduced=target.intent?.key==="guard";
@@ -1235,27 +1381,28 @@ function combatAction(action) {
     const detail=reasons.length?` (${reasons.join("; ")})`:"";
     const dealt=applyEnemyDamage(target,damage,`${attack.name} hits ${target.name}${isCrit?" critically":""}${detail}`);
     attackDamageDealt+=dealt;
-    let applied=weapon.effect||null;
-    if(weapon.effect==="Thorns")state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Thorns",damage);
-    else if(weapon.effect)applyWeaponEffect(target,weapon.effect,damage,!special?.aoe);
-    if(special?.effect&&special.effect!==weapon.effect){const upgradeBonus=Math.max(0,(weapon.effectChance??0.2)-0.2);const chance=Math.min(1,(special.effectChance??0.2)+upgradeBonus);if(Math.random()<chance){applyWeaponEffect(target,special.effect,damage,!special.aoe);applied=special.effect;}else message(`${special.effect} did not trigger.`);}
-    if(weapon.effect==="LifeSteal"||special?.effect==="LifeSteal")state.hp=Math.min(state.maxHp,state.hp+Math.max(1,Math.round(damage*0.05)));
-    if(weapon.effect==="ManaSteal"||special?.effect==="ManaSteal")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.05)));
-    if(weapon.effect==="ManaSurge")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.08)));
-    if(weapon.effect==="ArcaneCharge")state.arcaneCharge=Math.min(5,(state.arcaneCharge||0)+1);
-    if(weapon.effect==="Momentum")state.momentum=Math.min(5,(state.momentum||0)+1);
-    if(weapon.effect==="Afterimage"||weapon.effect==="Teleport")state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Afterimage",damage);
-    if(["SpellEcho","Conjure"].includes(weapon.effect)&&target.hp>0){const echo=Math.max(1,Math.round(damage*(weapon.effect==="Conjure"?0.2:0.3)));applyEnemyDamage(target,echo,`${weapon.effect==="Conjure"?"Conjured wisp":"Spell Echo"} adds damage to ${target.name}`);}
+    let applied=isSpellCast?null:weapon.effect||null;
+    if(!isSpellCast&&weapon.effect==="Thorns")state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Thorns",damage);
+    else if(!isSpellCast&&weapon.effect)applyWeaponEffect(target,weapon.effect,damage,!special?.aoe);
+    if(special?.effect&&(isSpellCast||special.effect!==weapon.effect)){const upgradeBonus=isSpellCast?0:Math.max(0,(weapon.effectChance??0.2)-0.2);const chance=Math.min(1,(special.effectChance??0.2)+upgradeBonus);if(Math.random()<chance){applyWeaponEffect(target,special.effect,damage,!special.aoe);applied=special.effect;}else message(`${special.effect} did not trigger.`);}
+    if((!isSpellCast&&weapon.effect==="LifeSteal")||special?.effect==="LifeSteal")state.hp=Math.min(state.maxHp,state.hp+Math.max(1,Math.round(damage*0.05)));
+    if((!isSpellCast&&weapon.effect==="ManaSteal")||special?.effect==="ManaSteal")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.05)));
+    if(!isSpellCast&&weapon.effect==="ManaSurge")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.08)));
+    if(!isSpellCast&&weapon.effect==="ArcaneCharge")state.arcaneCharge=Math.min(5,(state.arcaneCharge||0)+1);
+    if(!isSpellCast&&weapon.effect==="Momentum")state.momentum=Math.min(5,(state.momentum||0)+1);
+    if(!isSpellCast&&(weapon.effect==="Afterimage"||weapon.effect==="Teleport"))state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Afterimage",damage);
+    if(!isSpellCast&&["SpellEcho","Conjure"].includes(weapon.effect)&&target.hp>0){const echo=Math.max(1,Math.round(damage*(weapon.effect==="Conjure"?0.2:0.3)));applyEnemyDamage(target,echo,`${weapon.effect==="Conjure"?"Conjured wisp":"Spell Echo"} adds damage to ${target.name}`);}
     if(applied)message(`Effect applied: ${applied}${matchup.relation!=="neutral"?` · elemental ${matchup.relation}`:""}.`);
   }
+  if(isSpellCast&&special?.selfEffect){state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},special.selfEffect,attackDamageDealt);message(`${special.selfEffect} surrounds you.`,"reward");}
   if(landed&&special?.healOnHit&&attackDamageDealt){const restored=Math.min(state.maxHp-state.hp,Math.max(1,Math.round(attackDamageDealt*special.healOnHit)));if(restored){state.hp+=restored;message(`${attack.name} restores ${restored} health.`,"reward");}}
-  const manaGain=basicFallback?0:Math.max(0,Math.floor(Number(attack.manaGain)||(state.class==="archer"&&weaponFamily(weapon)==="archer"&&isBasic?1:0)));
+  const manaGain=basicFallback||isSpellCast?0:Math.max(0,Math.floor(Number(attack.manaGain)||(state.class==="archer"&&weaponFamily(weapon)==="archer"&&isBasic?1:0)));
   if(arrowCost)message(`You spend ${arrowCost} arrow${arrowCost===1?"":"s"}. ${state.arrows} shared arrow${state.arrows===1?" remains":"s remain"}.`);
   if(landed&&manaGain){const restored=Math.min(manaGain,state.maxMana-state.mana);state.mana+=restored;if(restored)message(`Your attack restores ${restored} mana.`,"reward");}
   if(landed&&weapon.effect==="AmmoGeneration"&&Math.random()<0.2){const recovered=changeArrowCount(1);if(recovered)message(`Ammo Generation recovers ${recovered} arrow${recovered===1?"":"s"}.`);}
   if(landed&&weapon.effect==="Quiver"&&Math.random()<0.25){const recovered=changeArrowCount(2);if(recovered)message(`Quiver recovers ${recovered} arrow${recovered===1?"":"s"}.`);}
   state.chargedAttack=null;
-  if(weapon.effect==="Channel"&&landed){state.chargedAttack={multiplier:1.25,critBonus:0.05};message("Channel stores power for your next attack.");}
+  if(!isSpellCast&&weapon.effect==="Channel"&&landed){state.chargedAttack={multiplier:1.25,critBonus:0.05};message("Channel stores power for your next attack.");}
   state.aimed=false;
   if(special?.cooldown){const effectiveCooldown=Math.max(0,special.cooldown-(weapon.effect==="CooldownReduction"?1:0));if(effectiveCooldown)state.attackCooldowns[action]=effectiveCooldown+1;}
   if(isHeavy)state.cooldown=3;
@@ -1274,7 +1421,9 @@ function enemyTurn() {
   const enemies=state.combat?.enemies.filter(enemy=>enemy.hp>0)||[];
   for(const enemy of enemies){
     processEnemyEffects(enemy);if(enemy.hp<=0)continue;
+    if(enemy.effects?.Frozen?.turns>0){message(`${enemy.name} is frozen solid and loses this turn.`,"story");continue;}
     if(DUNGEON_RULES.consumeDisruptedIntent(enemy)){message(`${enemy.name}'s telegraphed action is disrupted.`,"story");continue;}
+    if(enemy.effects?.Silence&&["cast","shoot"].includes(enemy.intent?.key)){message(`${enemy.name} is silenced and cannot use its ranged attack this turn.`,"story");continue;}
     if(enemy.effects?.Gust){delete enemy.effects.Gust;message(`${enemy.name} reels from the gust and loses its turn.`,"story");continue;}
     if(enemy.effects?.Freeze&&enemy.effects.Freeze.stacks>=5){delete enemy.effects.Freeze;message(`${enemy.name} is frozen solid and loses its turn.`,"story");continue;}
     if(enemy.intentDodging){enemy.intentDodging=false;message(`${enemy.name} spends its turn repositioning after the dodge.`,"story");continue;}
@@ -1296,7 +1445,8 @@ function enemyTurn() {
     if(Math.random()<enemy.dodge||state.playerEffects?.Afterimage||Math.random()<passiveEvasionChance()||Math.random()>blind){delete state.playerEffects?.Afterimage;message(`You evade ${enemy.name}'s ${intent==="shoot"?"shot":intent==="cast"?"spell":"attack"}.`,"story");}
     else {
       const critical=Math.random()<(enemy.critChance||0);
-      const damage=takePlayerDamage(Math.round(enemy.damage*damageScale)*(critical?2:1),enemy);
+      const weaknessScale=enemy.effects?.Weakness?0.55:1;
+      const damage=takePlayerDamage(Math.round(enemy.damage*damageScale*weaknessScale)*(critical?2:1),enemy);
       message(enemy.boss?`${enemy.name} uses ${enemy.intent.label}${critical?" critically":""} for ${damage} damage.`:`${enemy.name} ${intent==="shoot"?"shoots":intent==="cast"?"casts":"strikes"} you${critical?" critically":""} for ${damage} damage.`,"danger");
       if(enemy.hp<=0)continue;
       if(enemy.lifeSteal&&damage>0){const healed=Math.min(enemy.maxHp-enemy.hp,Math.max(1,Math.round(damage*enemy.lifeSteal)));enemy.hp+=healed;if(healed)message(`${enemy.name} siphons ${healed} health.` ,"danger");}
@@ -1406,7 +1556,7 @@ function winFight() {
   if(room.riskyChoice){totalGold=Math.round(totalGold*1.5);totalXp=Math.round(totalXp*1.5);}
   state.gold+=totalGold;totalXp+=Math.round(totalXp*0.35);const levels=gainXp(totalXp);
   let rewards=`Victory. +${totalGold} gold and +${totalXp} XP.`;
-  if(room.riskyChoice||Math.random()<0.8){const lootRarity=DUNGEON_RULES.rollLootRarity(room.enemyCount||1,fight.boss,Math.random());const loot=makeLoot(lootRarity);grantLoot(loot);rewards+=` Loot: ${loot.value.rarity} ${loot.value.name}${loot.kind==="weapon"?` (${loot.value.type})`:loot.kind==="armor"?` (${loot.value.slot})`:""}.`;if(loot.kind!=="item"&&Math.random()<0.6){const potion=makePotionLoot(lootRarity);grantLoot(potion);rewards+=` Bonus: ${potion.value.rarity} ${potion.value.name}.`;}}
+  if(room.riskyChoice||Math.random()<0.8){const lootRarity=DUNGEON_RULES.rollLootRarity(room.enemyCount||1,fight.boss,Math.random());const loot=makeLoot(lootRarity,fight);if(loot.kind==="bundle"){for(const reward of loot.items){grantLoot(reward);rewards+=` Loot: ${reward.value.rarity} ${reward.value.name}.`;}}else{grantLoot(loot);rewards+=` Loot: ${loot.value.rarity} ${loot.value.name}${loot.kind==="weapon"?` (${loot.value.type})`:loot.kind==="armor"?` (${loot.value.slot})`:""}.`;}if((loot.kind!=="item"&&loot.kind!=="bundle")||loot.kind==="bundle"){if(Math.random()<0.6){const potion=makePotionLoot(lootRarity);grantLoot(potion);rewards+=` Bonus: ${potion.value.rarity} ${potion.value.name}.`;}}}
   if(state.weapons.some(weapon=>["Bow","Crossbow"].includes(weapon.type))&&Math.random()<0.45){const recovered=changeArrowCount(6);if(recovered)rewards+=` +${recovered} arrows.`;}
   if(fight.enemies.some(enemy=>enemy.klass==="Archer")){const recovered=changeArrowCount(4);if(recovered)rewards+=` Archer dropped ${recovered} arrows.`;}
   if(levels)rewards+=` You leveled up! Current skillpoints: ${state.skillPoints}.`;
@@ -1439,12 +1589,14 @@ function makeLootWeapon(forcedRarity=null,minimumRarity="Common"){
   return weapon;
 }
 
-function makeLoot(rarity=null){
+function makeLoot(rarity=null,fight=state.combat){
   rarity=rarity||DUNGEON_RULES.rollLootRarity(currentRoom().enemyCount||1,Boolean(state.combat?.boss),Math.random());
+  const eligibleMages=(fight?.enemies||[]).filter(enemy=>enemy.klass==="Mage"||/\bMage\b/i.test(enemy.name));
+  const mageChance=fight?.boss?0.12:0.025;
+  if(state.class&&(eligibleMages.length||fight?.boss)&&Math.random()<mageChance){const scroll={kind:"classSpell",value:createClassSpellScroll(state.class,rarity)};if(fight?.boss)return{kind:"bundle",items:[scroll,Math.random()<0.5?{kind:"weapon",value:makeLootWeapon(rarity)}:makePotionLoot(rarity)]};return scroll;}
   const lootKind=DUNGEON_RULES.rollLootKind(Math.random,state.chosenClass||state.class);
   if(lootKind==="weapon")return{kind:"weapon",value:makeLootWeapon(rarity)};
   if(lootKind==="armor"){
-    const available=ARMOR_INDEX.filter(entry=>entry.rarity===rarity&&!(rarity==="Divine"&&[...state.armor,...state.items,...state.weapons].some(item=>item.name===entry.name)));
     const pool=available.length?available:ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");
     return{kind:"armor",value:DUNGEON_RULES.createCatalogArmor(choice(pool),state.floor)};
   }
@@ -1454,12 +1606,13 @@ function makeLoot(rarity=null){
 function makePotionLoot(rarity="Common"){
   const type=DUNGEON_RULES.rollPotionType(Math.random,state.chosenClass||state.class);
   rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===type));
-  return{kind:"item",value:{name:`${rarity} ${type==="mana"?"Mana":"Health"} Potion`,type,amount:type==="mana"?24+state.floor*3:0,quantity:1,rarity}};
+  return{kind:"item",value:{name:`${rarity} ${type==="mana"?"Mana":"Health"} Potion`,type,amount:0,quantity:1,rarity}};
 }
 
 function grantLoot(loot){
   if(loot.kind==="weapon"){state.weapons.push(loot.value);state.inventoryNotice=true;}
   else if(loot.kind==="armor"){state.armor.push(loot.value);state.inventoryNotice=true;equipCollectedArmor(loot.value);}
+  else if(loot.kind==="classSpell"){state.spells||=[];state.spells.push(loot.value);state.inventoryNotice=true;}
   else addInventoryItem(loot.value);
 }
 
@@ -1479,6 +1632,7 @@ function openInventory(){
 }
 function equipWeapon(index){const weapon=state.weapons[index];if(!weapon)return;const family=weaponFamily(weapon);if(!family){message("That weapon type cannot be equipped.");modal="inventory";render();return;}state.weapon=weapon;state.class=state.chosenClass||state.class;weapon.attacks ||= DUNGEON_RULES.createWeaponAttacks(family,weapon.rarity,weapon.type,weapon.element||"Physical",weapon.manaCost||0);const offClass=family!==state.class;message(`${weapon.name} equipped${offClass?". Off-class attacks deal 25% less damage.":"."}`);modal="inventory";render();}
 function equipArmor(index){const armor=state.armor[index];if(!armor)return;const list=screen.querySelector("#inventory-list");const scrollTop=list?.scrollTop||0;const scrollLeft=list?.scrollLeft||0;state.equippedArmor=DUNGEON_RULES.equipArmor(state.equippedArmor||{},armor);updateArmorBonuses();message(`${armor.name} equipped in the ${armor.slot} slot.`);modal="inventory";if(modal==="inventory"&&list){list.innerHTML=renderInventoryItems("armor");bindInventoryListActions();bindUseItem();bindInventoryControls();list.scrollTop=scrollTop;list.scrollLeft=scrollLeft;updateInventoryEquipmentSummary();save();}else render();}
+function equipSpell(index){const spell=state.spells[index];if(!spell)return;state.equippedSpellId=spell.id;const profile=classSpellAttack(spell);message(`${spell.spellName} equipped${profile.offClass?` as an off-class spell: ${Math.ceil(spell.manaCost*1.5)} mana and 25% reduced power`:` for ${spell.manaCost} mana`}.`);modal="inventory";render();}
 function equipBestArmor(){
   const list=screen.querySelector("#inventory-list");
   const scrollTop=list?.scrollTop||0;
@@ -1516,6 +1670,7 @@ function weaponShopStats(weapon){
 }
 function renderShopGearItem(item,index){
   const value=item.value;
+  if(item.kind==="classSpell")return `<article class="shop-item ${rarityClass(value.rarity)}">${itemArt(`Images/Items/Spells/${value.file}`,value.name)}<div><span class="item-meta">${escapeHtml(value.rarity)} · ${escapeHtml(CLASS_NAMES[value.className])} class spell</span><strong>${escapeHtml(value.spellName)}</strong><p>${escapeHtml(value.description)} · ${value.manaCost} mana · ${item.price} gold</p></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`;
   const isWeapon=item.kind==="weapon";
   const current=isWeapon?state.weapon:state.equippedArmor?.[value.slot];
   const offered=isWeapon?weaponShopStats(value):`${escapeHtml(value.slot)} · ${value.defense||0} defense · ${value.damageReduction||0} damage reduction · +${value.healthBonus||0} max HP`;
@@ -1532,7 +1687,7 @@ function showModal(){
     const endedAtMilestone=state.runEndReason==="milestone";
     content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="run-end-title"><p class="section-kicker">Run complete${endedAtMilestone?" · milestone clear":""}</p><h2 id="run-end-title">${endedAtMilestone?`${escapeHtml(state.name)} has conquered the threshold.`:`${escapeHtml(state.name)} ends the expedition.`}</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:"<p class=\"run-submission-result\">Personal best recorded. Global score submission is pending or unavailable.</p>"}${!state.devMode&&state.runSubmissionStatus?.includes("Global submission failed:")?'<button class="small-button" data-retry-score>Retry global submission</button>':""}<div class="action-grid"><button class="action-button" data-title>Return to title</button></div></section>`;
   } else if(modal==="inventory"){
-    content=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="inventory-title"><div class="modal-heading"><div><p class="section-kicker">Pack &amp; equipment</p><h2 id="inventory-title">Inventory</h2></div><button class="icon-close" data-close-modal aria-label="Close inventory">×</button></div><div class="inventory-tabs"><button class="tab-button active" data-tab="weapons">Weapons</button><button class="tab-button" data-tab="armor">Armor</button><button class="tab-button" data-tab="items">Items</button><button class="tab-button" data-open-skills>Skills${state.skillPoints ? ` (${state.skillPoints} unspent)` : ""}</button></div><div class="equipped-slots">${["head","chest","legs","feet","shield"].map(slot=>`<div><span>${slot}</span><strong>${escapeHtml(state.equippedArmor?.[slot]?.name||"Empty")}</strong></div>`).join("")}</div><p class="armor-set-summary">${escapeHtml(armorSummaryText())}</p><div class="inventory-list" id="inventory-list">${renderInventoryItems("weapons")}</div><p class="inventory-gold">${state.gold} gold · ${state.class?escapeHtml(CLASS_NAMES[state.class]):"Class unchosen"}</p></section>`;
+    content=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="inventory-title"><div class="modal-heading"><div><p class="section-kicker">Pack &amp; equipment</p><h2 id="inventory-title">Inventory</h2></div><button class="icon-close" data-close-modal aria-label="Close inventory">×</button></div><div class="inventory-tabs"><button class="tab-button active" data-tab="weapons">Weapons</button><button class="tab-button" data-tab="armor">Armor</button><button class="tab-button" data-tab="items">Items</button><button class="tab-button" data-tab="class-spells">Class Spells</button><button class="tab-button" data-open-skills>Skills${state.skillPoints ? ` (${state.skillPoints} unspent)` : ""}</button></div><div class="equipped-slots">${["head","chest","legs","feet","shield"].map(slot=>`<div><span>${slot}</span><strong>${escapeHtml(state.equippedArmor?.[slot]?.name||"Empty")}</strong></div>`).join("")}</div><p class="armor-set-summary">${escapeHtml(armorSummaryText())}</p><div class="inventory-list" id="inventory-list">${renderInventoryItems("weapons")}</div><p class="inventory-gold">${state.gold} gold · ${state.class?escapeHtml(CLASS_NAMES[state.class]):"Class unchosen"}</p></section>`;
   } else if(modal==="skills"){
     content=`<section class="modal skills-modal" role="dialog" aria-modal="true" aria-labelledby="skills-title"><div class="modal-heading"><div><p class="section-kicker">Character development</p><h2 id="skills-title">Skills &amp; advanced stats</h2></div><button class="icon-close" data-close-modal aria-label="Close skills">×</button></div><p class="skill-points">Unspent skill points: <strong>${state.skillPoints}</strong></p><div class="skill-list">${DUNGEON_RULES.STAT_DEFINITIONS.map(stat=>{const cost=DUNGEON_RULES.skillPointCost(state,stat.key);return `<article class="skill-row"><div><strong>${stat.label}: ${statValueLabel(stat)}</strong><p>${statDescription(stat)}${stat.key==="dex"&&state.class==="archer"&&state.equippedArmor?.shield?" Equipped shield penalty applied.":""}</p></div><button class="small-button" data-spend-stat="${stat.key}" ${state.skillPoints<cost || (stat.key === "critChance" && state.critChance>=1) ? "disabled" : ""}>Improve · ${cost} SP</button></article>`;}).join("")}</div><button class="secondary-button skill-inventory-link" data-open-inventory type="button">Return to inventory</button></section>`;
   } else if(modal==="shop"){
@@ -1631,13 +1786,25 @@ function getIndexEntries(category) {
 }
 
 function renderInventoryItems(tab){
+  if(tab==="class-spells"){
+    const equipped=state.spells?.find(spell=>spell.id===state.equippedSpellId);
+    const header=`<p class="armor-set-summary">Equipped class spell (one slot): <strong>${escapeHtml(equipped?.spellName||"None")}</strong> · Class spells cost mana and use your combat turn. Weapon attacks remain listed with your weapon.</p>`;
+    const cards=(state.spells||[]).map((spell,index)=>`<article class="inventory-item ${rarityClass(spell.rarity)}">${itemArt(`Images/Items/Spells/${spell.file||"spell-scroll.svg"}`,spell.name)}<div class="item-copy"><span class="item-meta">${escapeHtml(spell.rarity)} · ${escapeHtml(CLASS_NAMES[spell.className]||"Adventurer")} class spell</span><strong>${escapeHtml(spell.spellName||spell.name)}</strong><span class="item-stats">${escapeHtml(spell.description)} · ${spell.manaCost} mana · ${spell.cooldown?`${spell.cooldown} turn cooldown`:"No cooldown"}${spell.aoe?" · Hits all enemies":" · One target"}${spell.className!==state.class?" · Off-class: 25% reduced power, 50% more mana":""}</span></div><div class="inventory-item-actions">${spell.id===state.equippedSpellId?`<span class="equipped-tag">Equipped</span><button class="small-button" data-unequip-spell>Unequip</button>`:`<button class="small-button" data-equip-spell="${index}">Equip</button>`}<button class="small-button" data-inventory-sell="spell" data-sell-index="${index}" ${spell.id===state.equippedSpellId?"disabled title=\"Unequip this class spell before selling it\"":""}>Sell · ${sellValue(spell,"spell")}g</button></div></article>`).join("");
+    return `${header}${cards||"<p class=\"empty-list\">No class spell scrolls collected. Find one in loot or buy one from a shop.</p>"}`;
+  }
   if(tab==="items"){
     const ammunition=renderArrowInventoryItem();
-    const items=state.items.map((item,index)=>{
-      const restoration=item.type==="mana"?`Restores ${item.amount} mana`:`Restores ${HEALTH_POTION_PERCENT[item.rarity]||20}% max HP (${healthPotionRestore(item)} HP now)`;
+    const rarityOrder=RARITIES;
+    const items=state.items.map((item,index)=>({item,index})).sort((a,b)=>{
+      const result=itemSort.key==="count"?a.item.quantity-b.item.quantity:rarityOrder.indexOf(a.item.rarity)-rarityOrder.indexOf(b.item.rarity);
+      return result?(itemSort.direction==="desc"?-result:result):a.item.name.localeCompare(b.item.name);
+    }).map(({item,index})=>{
+      const restoration=item.type==="mana"?`Restores ${MANA_POTION_PERCENT[item.rarity]||20}% max MP (${manaPotionRestore(item)} MP now)`:`Restores ${HEALTH_POTION_PERCENT[item.rarity]||20}% max HP (${healthPotionRestore(item)} HP now)`;
       return `<article class="inventory-item ${rarityClass(item.rarity)}">${potionArt(item)}<div class="item-copy"><span class="item-meta">${escapeHtml(item.rarity)} · x${item.quantity}</span><strong>${escapeHtml(item.name)}</strong><span class="item-stats">${restoration}</span></div><div class="inventory-item-actions"><button class="small-button" data-use-item="${index}">Use</button><button class="small-button" data-inventory-sell="item" data-sell-index="${index}">Sell · ${sellValue(item,"item")}g</button></div></article>`;
     }).join("");
-    return `${ammunition}${items||(!ammunition?"<p class=\"empty-list\">No items in your pack.</p>":"")}`;
+    const sortButton=(key,label)=>`<button class="sort-button ${itemSort.key===key?"active":""}" data-item-sort="${key}" aria-label="Sort items by ${label} ${itemSort.key===key?(itemSort.direction==="desc"?"descending":"ascending"):"descending"}">${label} <span>${itemSort.key===key?(itemSort.direction==="desc"?"↓":"↑"):"↕"}</span></button>`;
+    const controls=state.items.length?`<div class="weapon-sort-controls item-sort-controls">${sortButton("rarity","Rarity")}${sortButton("count","Count")}</div>`:"";
+    return `${ammunition}${controls}${items||(!ammunition?"<p class=\"empty-list\">No items in your pack.</p>":"")}`;
   }
   if(tab==="weapons"){
     const familyWeapons=state.weapons.map((weapon,index)=>({weapon,index})).filter(({weapon})=>weaponFamily(weapon)===inventoryWeaponFamily);
@@ -1652,7 +1819,7 @@ function renderInventoryItems(tab){
   }
   if(tab==="armor")return state.armor.length?`<div class="inventory-toolbar"><button class="small-button" data-equip-best>Equip Best</button></div>${state.armor.map((item,index)=>{const equipped=state.equippedArmor?.[item.slot]===item;return `<article class="inventory-item ${rarityClass(item.rarity)}">${itemArt(`Images/Armor/${item.file||`${slug(item.set||"iron")}-${item.slot}.png`}`,item.name)}<div class="item-copy"><span class="item-meta">${escapeHtml(item.rarity)} · ${escapeHtml(item.slot)} · ${escapeHtml(item.set||"")}</span><strong>${escapeHtml(item.name)}</strong><span class="item-stats">${item.defense} defense · ${item.damageReduction} damage reduction · +${item.healthBonus||0} max HP · ${escapeHtml(armorPerkText(item))}</span></div><div class="inventory-item-actions">${equipped?`<span class="equipped-tag">Equipped</span>`:`<button class="small-button" data-equip-armor="${index}">Equip</button>`}<button class="small-button" data-inventory-sell="armor" data-sell-index="${index}" ${equipped?"disabled title=\"Unequip this armor before selling it\"":""}>Sell · ${sellValue(item,"armor")}g</button></div></article>`;}).join("")}`:`<p class="empty-list">No armor collected.</p>`;
   const ammunition=renderArrowInventoryItem();
-  return `${ammunition}${state.items.length?state.items.map((item,index)=>`<article class="inventory-item ${rarityClass(item.rarity)}">${potionArt(item)}<div class="item-copy"><span class="item-meta">${escapeHtml(item.rarity)} · x${item.quantity}</span><strong>${escapeHtml(item.name)}</strong><span class="item-stats">Restores ${item.amount} ${item.type==="mana"?"mana":"health"}</span></div><div class="inventory-item-actions"><button class="small-button" data-use-item="${index}">Use</button><button class="small-button" data-inventory-sell="item" data-sell-index="${index}">Sell · ${sellValue(item,"item")}g</button></div></article>`).join(""):`${ammunition?"":"<p class=\"empty-list\">No items in your pack.</p>"}`}`;
+  return `${ammunition}${state.items.length?state.items.map((item,index)=>`<article class="inventory-item ${rarityClass(item.rarity)}">${potionArt(item)}<div class="item-copy"><span class="item-meta">${escapeHtml(item.rarity)} · x${item.quantity}</span><strong>${escapeHtml(item.name)}</strong><span class="item-stats">${item.type==="mana"?`Restores ${MANA_POTION_PERCENT[item.rarity]||20}% max MP (${manaPotionRestore(item)} MP now)`: `Restores ${HEALTH_POTION_PERCENT[item.rarity]||20}% max HP (${healthPotionRestore(item)} HP now)`}</span></div><div class="inventory-item-actions"><button class="small-button" data-use-item="${index}">Use</button><button class="small-button" data-inventory-sell="item" data-sell-index="${index}">Sell · ${sellValue(item,"item")}g</button></div></article>`).join(""):`${ammunition?"":"<p class=\"empty-list\">No items in your pack.</p>"}`}`;
 }
 
 function renderArrowInventoryItem(){
@@ -1669,12 +1836,19 @@ function bindInventoryControls(){
     weaponSort=weaponSort.key===key?{key,direction:weaponSort.direction==="desc"?"asc":"desc"}:{key,direction:key==="name"?"asc":"desc"};
     refreshInventoryList("weapons");
   }));
+  screen.querySelectorAll("[data-item-sort]").forEach(button=>button.addEventListener("click",()=>{
+    const key=button.dataset.itemSort;
+    itemSort=itemSort.key===key?{key,direction:itemSort.direction==="desc"?"asc":"desc"}:{key,direction:"desc"};
+    refreshInventoryList("items");
+  }));
 }
 
 function bindInventoryListActions(){
   screen.querySelectorAll("#inventory-list [data-equip-weapon]").forEach(button=>button.addEventListener("click",()=>equipWeapon(Number(button.dataset.equipWeapon))));
   screen.querySelectorAll("#inventory-list [data-equip-armor]").forEach(button=>button.addEventListener("click",()=>equipArmor(Number(button.dataset.equipArmor))));
   screen.querySelector("#inventory-list [data-equip-best]")?.addEventListener("click",equipBestArmor);
+  screen.querySelectorAll("#inventory-list [data-equip-spell]").forEach(button=>button.addEventListener("click",()=>equipSpell(Number(button.dataset.equipSpell))));
+  screen.querySelector("#inventory-list [data-unequip-spell]")?.addEventListener("click",()=>{state.equippedSpellId=null;message("Your spell is unequipped.");modal="inventory";render();});
   screen.querySelectorAll("#inventory-list [data-inventory-sell]").forEach(button=>button.addEventListener("click",()=>sellItem(button.dataset.inventorySell,Number(button.dataset.sellIndex),"inventory")));
 }
 
@@ -1685,17 +1859,18 @@ function refreshInventoryList(tab){
   bindInventoryListActions();bindUseItem();bindInventoryControls();
 }
 
-function bindUseItem(){screen.querySelectorAll("[data-use-item]").forEach(button=>button.addEventListener("click",()=>{if(state.combat?.bonusAttackPending){message("Take your extra attack before using an item.");render();return;}const item=state.items[Number(button.dataset.useItem)];if(!item)return;if(item.type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+item.amount+Math.max(0,effectiveStat("wis")-10));item.quantity--;if(item.quantity<=0)state.items.splice(state.items.indexOf(item),1);message(`Used ${item.name}.${state.combat?" Your turn passes.":""}`);modal="inventory";if(state.combat)enemyTurn();else render();}));}
+function bindUseItem(){screen.querySelectorAll("[data-use-item]").forEach(button=>button.addEventListener("click",()=>{if(state.combat?.bonusAttackPending){message("Take your extra attack before using an item.");render();return;}const item=state.items[Number(button.dataset.useItem)];if(!item)return;if(item.type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+manaPotionRestore(item));item.quantity--;if(item.quantity<=0)state.items.splice(state.items.indexOf(item),1);message(`Used ${item.name}.${state.combat?" Your turn passes.":""}`);modal="inventory";if(state.combat)enemyTurn();else render();}));}
 
 function openShop(){
-  if(!Array.isArray(state.shopStock)||state.shopStock.some(item=>item.kind==="item")){state.shopStock=Array.from({length:6},()=>shopItem());}if(!Array.isArray(state.shopPotions))state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();
+  if(!Array.isArray(state.shopStock)){state.shopStock=[...Array.from({length:5},()=>shopItem()),shopClassSpellOffer()];}else{state.shopStock=state.shopStock.filter((item,index,items)=>item.kind!=="classSpell"||items.findIndex(candidate=>candidate.kind==="classSpell")===index);if(!state.shopStock.some(item=>item.kind==="classSpell"))state.shopStock.push(shopClassSpellOffer());}state.shopScrollAdded=true;if(!Array.isArray(state.shopPotions))state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();
 }
+function shopClassSpellOffer(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const value=createClassSpellScroll(state.chosenClass||state.class||"warrior",rarity);return{kind:"classSpell",value,price:priceFor(24+state.floor*4+value.manaCost*2,rarity)};}
 function shopItem(){
   let rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const kind=Math.random()<0.6?"weapon":"armor";
   if(kind==="weapon"){const value=makeLootWeapon(rarity);rarity=value.rarity;return{kind:"weapon",value,price:priceFor(value.goldValue||value.damage*5,rarity)};}
   let entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);if(rarity==="Divine")entries=entries.filter(entry=>![...state.armor,...state.weapons,...state.items].some(item=>item.name===entry.name));if(!entries.length)entries=ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");const value=DUNGEON_RULES.createCatalogArmor(choice(entries),state.floor);const armorBaseValue=Math.max(value.goldValue||0,Math.round((value.defense*4+value.damageReduction*6+(value.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return{kind:"armor",value,price:priceFor(armorBaseValue,rarity)};
 }
-function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const value=makePotionLoot(rarity).value;value.amount=value.type==="mana"?30+state.floor*4:0;return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};}
+function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const value=makePotionLoot(rarity).value;return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};}
 function priceFor(base,rarity="Common"){const rarityScale=[1,1.35,1.9,2.8,4.5,8,15][Math.max(0,RARITIES.indexOf(rarity))];return Math.max(1,Math.round(base*rarityScale*(DIFFICULTIES[state.difficulty]?.shopCost||1)*(1-Math.max(0,effectiveStat("cha")-10)*0.02)));}
 function shopRerollCost(){const floorScale=1+Math.max(0,(state.floor||1)-1)*0.08;const upgradeScale=1+Math.max(0,state.shopLootUpgradeLevel||0)*0.12;return Math.round(30*floorScale*upgradeScale*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function shopUpgradeCost(){return Math.round(125*Math.pow(2,state.shopLootUpgradeLevel||0)*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
@@ -1727,29 +1902,30 @@ function upgradeWeapon(upgrade){
   weapon.level=(weapon.level||1)+1;weapon.upgradesThisFloor=(weapon.upgradesThisFloor||0)+1;
   message(`${weapon.name} upgraded: ${upgrade}.` ,"reward");modal="shop";render();
 }
-function buyItem(index){const item=state.shopStock[index];if(!item||state.gold<item.price)return;state.gold-=item.price;if(item.kind==="weapon"){state.weapons.push(item.value);state.inventoryNotice=true;}else{state.armor.push(item.value);state.inventoryNotice=true;equipCollectedArmor(item.value);}state.shopStock.splice(index,1);if(item.value.rarity==="Divine"){state.shopStock=state.shopStock.filter(offer=>offer.kind!==item.kind||offer.value.name!==item.value.name);}message(`Purchased ${item.value.name}.`);modal="shop";render();}
+function buyItem(index){const item=state.shopStock[index];if(!item||state.gold<item.price)return;state.gold-=item.price;if(item.kind==="weapon"){state.weapons.push(item.value);state.inventoryNotice=true;}else if(item.kind==="classSpell"){state.spells||=[];state.spells.push(item.value);state.inventoryNotice=true;}else{state.armor.push(item.value);state.inventoryNotice=true;equipCollectedArmor(item.value);}state.shopStock.splice(index,1);if(item.value.rarity==="Divine"){state.shopStock=state.shopStock.filter(offer=>offer.kind!==item.kind||offer.value.name!==item.value.name);}message(`Purchased ${item.value.name}.`);modal="shop";render();}
 function buyPotion(index){const item=state.shopPotions?.[index];if(!item||state.gold<item.price)return;state.gold-=item.price;addInventoryItem(item.value);state.shopPotions.splice(index,1);message(`Purchased ${item.value.name}.`);modal="shop";render();}
-function rerollShop(){const cost=shopRerollCost();if(state.gold<cost){message(`Rerolling costs ${cost} gold.`);modal="shop";render();return;}state.gold-=cost;state.shopStock=Array.from({length:6},()=>shopItem());state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();}
-function upgradeShopLoot(){if((state.shopLootUpgradeLevel||0)>=5)return;const cost=shopUpgradeCost();if(state.gold<cost)return;state.gold-=cost;state.shopLootUpgradeLevel=(state.shopLootUpgradeLevel||0)+1;state.shopStock=Array.from({length:6},()=>shopItem());state.shopPotions=Array.from({length:2},()=>shopPotion());message(`Permanent shop stock upgrade increased to level ${state.shopLootUpgradeLevel} for this run.`);modal="shop";render();}
+function rerollShop(){const cost=shopRerollCost();if(state.gold<cost){message(`Rerolling costs ${cost} gold.`);modal="shop";render();return;}state.gold-=cost;state.shopStock=[...Array.from({length:5},()=>shopItem()),shopClassSpellOffer()];state.shopScrollAdded=true;state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();}
+function upgradeShopLoot(){if((state.shopLootUpgradeLevel||0)>=5)return;const cost=shopUpgradeCost();if(state.gold<cost)return;state.gold-=cost;state.shopLootUpgradeLevel=(state.shopLootUpgradeLevel||0)+1;state.shopStock=[...Array.from({length:5},()=>shopItem()),shopClassSpellOffer()];state.shopScrollAdded=true;state.shopPotions=Array.from({length:2},()=>shopPotion());message(`Permanent shop stock upgrade increased to level ${state.shopLootUpgradeLevel} for this run.`);modal="shop";render();}
 
 function sellValue(item,kind){
   const rarityIndex=Math.max(0,RARITIES.indexOf(item.rarity||"Common"));
-  const base=kind==="weapon"?Math.max(8,Math.round((item.damage||1)*2.5)):kind==="armor"?Math.max(8,Math.round((item.goldValue||item.defense*5||5)*0.4)):Math.max(2,Math.round((item.amount||5)*0.15));
+  const base=kind==="weapon"?Math.max(8,Math.round((item.damage||1)*2.5)):kind==="armor"?Math.max(8,Math.round((item.goldValue||item.defense*5||5)*0.4)):kind==="spell"?Math.max(8,Math.round((item.manaCost||5)*1.5)):Math.max(2,Math.round((item.amount||5)*0.15));
   return Math.max(1,Math.round(base*(1+rarityIndex*0.35)));
 }
 
 function renderSellList(){
-  const groups=[{kind:"weapon",items:state.weapons},{kind:"armor",items:state.armor},{kind:"item",items:state.items}];
-  const entries=groups.flatMap(group=>group.items.map((item,index)=>({item,index,kind:group.kind}))).filter(({item,kind})=>!(kind==="weapon"&&item===state.weapon)&&!(kind==="armor"&&Object.values(state.equippedArmor||{}).includes(item)));
+  const groups=[{kind:"weapon",items:state.weapons},{kind:"armor",items:state.armor},{kind:"item",items:state.items},{kind:"spell",items:state.spells||[]}];
+  const entries=groups.flatMap(group=>group.items.map((item,index)=>({item,index,kind:group.kind}))).filter(({item,kind})=>!(kind==="weapon"&&item===state.weapon)&&!(kind==="armor"&&Object.values(state.equippedArmor||{}).includes(item))&&!(kind==="spell"&&item.id===state.equippedSpellId));
   if(!entries.length)return `<p class="empty-list">No unequipped gear or consumables to sell.</p>`;
   return `<div class="sell-list">${entries.map(({item,index,kind})=>`<article class="sell-row"><span>${escapeHtml(item.rarity||"Common")} ${escapeHtml(item.name)}${kind==="item"?` · x${item.quantity}`:""}</span><button class="small-button" data-sell-type="${kind}" data-sell-index="${index}">Sell · ${sellValue(item,kind)} gold</button></article>`).join("")}</div>`;
 }
 
 function sellItem(kind,index,returnModal="shop"){
-  const list=kind==="weapon"?state.weapons:kind==="armor"?state.armor:state.items;
+  const list=kind==="weapon"?state.weapons:kind==="armor"?state.armor:kind==="spell"?state.spells:state.items;
   const item=list[index];if(!item)return;
   if(kind==="weapon"&&item===state.weapon)return;
   if(kind==="armor"&&Object.values(state.equippedArmor||{}).includes(item))return;
+  if(kind==="spell"&&item.id===state.equippedSpellId)return;
   state.gold+=sellValue(item,kind);
   if(kind==="item"&&item.quantity>1)item.quantity--;else list.splice(index,1);
   message(`Sold ${item.name} for ${sellValue(item,kind)} gold.`);
@@ -1771,7 +1947,7 @@ function endRunEarly(){
 function advanceFloor(){
   if(!state||state.runEnded||state.milestonePending)return;
   const previousRegion=regionForFloor(state.floor);
-  state.floor++;state.baseMaxHp=(state.baseMaxHp||state.maxHp)+Math.floor(state.maxHp*0.08);state.maxHp=state.baseMaxHp+DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).healthBonus;state.hp=Math.min(state.maxHp,state.hp+Math.round(state.maxHp*0.2));state.mana=state.maxMana;state.shopStock=null;state.shopPotions=null;state.currentFloor=makeFloor(state.floor);state.currentFloor.rooms[0].visited=true;state.items=state.items.filter(item=>item.quantity>0);
+  state.floor++;state.baseMaxHp=(state.baseMaxHp||state.maxHp)+Math.floor(state.maxHp*0.08);state.maxHp=state.baseMaxHp+DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).healthBonus;state.hp=Math.min(state.maxHp,state.hp+Math.round(state.maxHp*0.2));state.mana=state.maxMana;state.shopStock=null;state.shopPotions=null;state.shopSpell=null;state.shopScrollAdded=false;state.currentFloor=makeFloor(state.floor);state.currentFloor.rooms[0].visited=true;state.items=state.items.filter(item=>item.quantity>0);
   const nextRegion=regionForFloor(state.floor);
   if(previousRegion.id!==nextRegion.id)message(`Region transition: ${nextRegion.name}. Known enemies: ${regionRaceNames(nextRegion)}. Regional rule: ${nextRegion.rule}`,"story");
   else message(`Floor ${state.floor}. You continue through ${nextRegion.name}.`,"story");
@@ -1794,7 +1970,7 @@ function renderPatchNotes(version){
 }
 
 document.querySelectorAll?.("[data-patch]").forEach(button=>button.addEventListener("click",()=>renderPatchNotes(button.dataset.patch)));
-renderPatchNotes("v1.3");
+renderPatchNotes("v1.4");
 if(typeof fetch==="function")fetch("about.txt").then(response=>{if(!response.ok)throw new Error("About text unavailable");return response.text();}).then(text=>{
   const target=document.querySelector("#about-copy");
   if(!target)return;

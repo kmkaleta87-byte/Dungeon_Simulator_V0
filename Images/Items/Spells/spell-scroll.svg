@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="A spell scroll">
+  <defs>
+    <linearGradient id="paper" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#fff0c7"/><stop offset="1" stop-color="#c79b58"/></linearGradient>
+    <linearGradient id="glow" x1="0" x2="1"><stop stop-color="#6ab8bf"/><stop offset="1" stop-color="#7465a6"/></linearGradient>
+  </defs>
+  <path d="M31 24c-9 0-14 5-14 12s5 12 14 12v42c-9 0-14 5-14 12s5 12 14 12h98c9 0 14-5 14-12s-5-12-14-12V48c9 0 14-5 14-12s-5-12-14-12z" fill="url(#paper)" stroke="#745b38" stroke-width="4"/>
+  <path d="M32 25v86m96-86v86" fill="none" stroke="#9a713e" stroke-width="3"/>
+  <path d="M54 48h53M54 63h43M54 78h48" fill="none" stroke="#8b7658" stroke-linecap="round" stroke-width="4" opacity=".75"/>
+  <path d="m81 32 6 14 14 2-11 9 3 14-12-7-12 7 3-14-11-9 14-2z" fill="url(#glow)" stroke="#4e5578" stroke-linejoin="round" stroke-width="2"/>
+  <circle cx="81" cy="54" r="3" fill="#fff4bd"/>
+</svg>

@@ -105,12 +105,15 @@ test("V1.3 patch notes cover the weapon, fountain, and chest updates", () => {
   const notes = context.window.GAME_PATCH_NOTES;
   const v12 = notes["v1.2"].sections.flatMap(section => section.items).join(" ");
   const v13 = notes["v1.3"].sections.flatMap(section => section.items).join(" ");
+  const v14 = notes["v1.4"].sections.flatMap(section => section.items).join(" ");
   assert.match(v13, /weapon-themed special attack progressions/);
   assert.match(v13, /Fountains now offer a choice/);
   assert.match(v13, /trapped chest now tests your Speed/);
-  assert.match(v13, /Potion names now use rarity instead of size/);
   assert.match(v13, /40% chance/);
   assert.match(v13, /End Run lets you finish an expedition early/);
+  assert.match(v13, /Mage basic attacks now use no mana/);
+  assert.match(v14, /Potion names now use rarity instead of size/);
+  assert.match(v14, /Mana potions restore a percentage/);
   assert.doesNotMatch(v12, /weapon-themed special attack progressions|Fountains now offer a choice|trapped chest now tests your Speed/);
 });
 
@@ -118,9 +121,9 @@ test("patch notes are ordered newest to oldest", () => {
   const context = { window: {} };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync("patch-notes.js", "utf8"), context);
-  assert.deepEqual(Object.keys(context.window.GAME_PATCH_NOTES), ["v1.3", "v1.2", "v1.1", "v1"]);
+  assert.deepEqual(Object.keys(context.window.GAME_PATCH_NOTES), ["v1.4", "v1.3", "v1.2", "v1.1", "v1"]);
   const html = fs.readFileSync("index.html", "utf8");
-  assert.match(html, /data-patch="v1\.3"[^>]*>Update V1\.3 <span>Current<\/span>/);
-  assert.match(html, /data-patch="v1\.3"[\s\S]*data-patch="v1\.2"[\s\S]*data-patch="v1\.1"[\s\S]*data-patch="v1"/);
-  assert.match(fs.readFileSync("script.js", "utf8"), /renderPatchNotes\("v1\.3"\)/);
+  assert.match(html, /data-patch="v1\.4"[^>]*>Update V1\.4 <span>Current<\/span>/);
+  assert.match(html, /data-patch="v1\.4"[\s\S]*data-patch="v1\.3"[\s\S]*data-patch="v1\.2"[\s\S]*data-patch="v1\.1"[\s\S]*data-patch="v1"/);
+  assert.match(fs.readFileSync("script.js", "utf8"), /renderPatchNotes\("v1\.4"\)/);
 });
