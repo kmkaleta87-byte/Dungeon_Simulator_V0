@@ -17,6 +17,20 @@ window.GAME_PATCH_NOTES = {
         items: [
           "End Run asks for confirmation before ending the expedition; popups support Escape and keep keyboard focus in the menu."
         ]
+      },
+      {
+        heading: "Loot Balance",
+        items: [
+          "Loot rarity now rises with floor depth, and gear drops favor missing armor slots and useful upgrades over duplicate or weaker equipment.",
+          "Bonus potions are less common, and shops offer a smaller potion stock alongside more useful, varied gear.",
+          "Treasure and safe-route gold rewards now grow with floor depth; summons are capped to keep fights readable as enemy groups grow."
+        ]
+      },
+      {
+        heading: "Combat and Spells",
+        items: [
+          "Attack buttons show their expected non-critical damage and effect. Class spells focus on control and support, with longer effects at higher rarities and percentage-based mana costs from Legendary upward."
+        ]
       }
     ]
   },

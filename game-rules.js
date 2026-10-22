@@ -14,7 +14,7 @@
   const EFFECT_DEFINITIONS = {
     Burn: ["🔥", "Damage over time; repeated applications build its burn damage.", "damageOverTime", 3],
     Freeze: ["❄️", "Builds stacks; five stacks freeze the target for one turn.", "freeze", 5],
-    Frozen: ["🧊", "Stops the target from acting for two turns.", "stun", 2],
+    Frozen: ["🧊", "Stops the target from acting while the effect lasts.", "stun", 2],
     Weakness: ["⬇️", "Reduces the target's attack damage for two turns.", "weakness", 2],
     Silence: ["🤫", "Prevents the target from casting spells for two turns.", "silence", 2],
     Gust: ["🌪️", "Disrupts the target, making it lose its next turn.", "stagger", 1],
@@ -284,7 +284,7 @@
     return definition ? { key: effect, icon: definition[0], description: definition[1], mechanic: definition[2], duration: definition[3] } : null;
   }
 
-  function applyCombatEffect(statuses = {}, effect, damage = 0) {
+  function applyCombatEffect(statuses = {}, effect, damage = 0, duration = null) {
     const definition = getEffectDefinition(effect);
     if (!definition || !["damageOverTime", "freeze", "stagger", "root", "blind", "marked", "cripple", "manaShield", "evasion", "thorns", "stun", "weakness", "silence"].includes(definition.mechanic)) return { ...statuses };
     const statusKey = ({ Pin: "Root", Trap: "Root", Mark: "Marked" })[effect] || effect;
@@ -294,7 +294,7 @@
     return {
       ...statuses,
       [statusKey]: {
-        turns: Math.max(existing.turns || 0, definition.duration),
+        turns: Math.max(existing.turns || 0, Number(duration) || definition.duration),
         stacks: Math.min(maxStacks, (existing.stacks || 0) + 1),
         potency: Math.max(existing.potency, Math.max(1, Math.round(damage * 0.06)))
       }
@@ -378,7 +378,33 @@
     return RARITIES[thresholds.findIndex(threshold => roll < threshold) < 0 ? 6 : thresholds.findIndex(threshold => roll < threshold)];
   }
 
-  function rollShopRarity(upgradeLevel = 0, random = Math.random()) {
+  function rollProgressiveRarity(floor = 1, random = Math.random, roomTier = 1) {
+    const depth = Math.min(20, Math.max(1, Number(floor) || 1) + Math.max(0, Math.min(4, Number(roomTier) || 1) - 1) * 0.5);
+    const progress = (depth - 1) / 19;
+    const early = [5500, 2700, 1300, 450, 45, 4, 1];
+    const deep = [2500, 2500, 2200, 1500, 800, 400, 100];
+    const weights = early.map((value, index) => Math.round(value + (deep[index] - value) * progress));
+    weights[6] += 10000 - weights.reduce((sum, weight) => sum + weight, 0);
+    const randomValue = typeof random === "function" ? random() : Number(random);
+    const roll = Math.min(9999, Math.floor(randomValue * 10000));
+    let boundary = 0;
+    for (let index = 0; index < weights.length; index++) {
+      boundary += weights[index];
+      if (roll < boundary) return index;
+    }
+    return RARITIES.length - 1;
+  }
+
+  function rollFloorLootRarity(floor = 1, boss = false, random = Math.random, roomTier = 1) {
+    const tier = rollProgressiveRarity(floor, random, roomTier);
+    return RARITIES[Math.min(RARITIES.length - 1, tier + (boss ? 1 : 0))];
+  }
+
+  function rollShopRarity(upgradeLevel = 0, random = Math.random(), floor = null) {
+    if (floor !== null && floor !== undefined) {
+      const level = Math.max(0, Math.min(5, Number(upgradeLevel) || 0));
+      return RARITIES[rollProgressiveRarity((Number(floor) || 1) + level * 2, random)];
+    }
     const roll = Math.min(999, Math.floor(random * 1000));
     const level = Math.max(0, Math.min(5, upgradeLevel));
     const base = [550, 810, 930, 980, 995, 999, 1000];
@@ -405,7 +431,19 @@
     return roll < 0.63 ? "warrior" : roll < 0.91 ? "archer" : "mage";
   }
 
-  function rollLootKind(random = Math.random, playerClass = null) {
+  function rollLootKind(random = Math.random, playerClass = null, weights = null) {
+    if (weights && Number(weights.weapon) >= 0 && Number(weights.armor) >= 0 && Number(weights.item) >= 0) {
+      const weapon = Number(weights.weapon) || 0;
+      const armor = Number(weights.armor) || 0;
+      const item = Number(weights.item) || 0;
+      const total = weapon + armor + item;
+      if (total > 0) {
+        const roll = random() * total;
+        if (roll < weapon) return "weapon";
+        if (roll < weapon + armor) return "armor";
+        return "item";
+      }
+    }
     const roll = random();
     if (playerClass === "mage") return roll < 0.54 ? "weapon" : roll < 0.80 ? "armor" : "item";
     if (playerClass === "archer") return roll < 0.58 ? "weapon" : roll < 0.88 ? "armor" : "item";
@@ -543,5 +581,5 @@
     return save ? `${save.name || "Adventurer"} · Floor ${save.floor || 1} · Level ${save.level || 1}` : "Empty";
   }
 
-  root.DungeonRules = { STAT_DEFINITIONS, effectiveStat, statSynergy, skillPointCost, entryRoomType, spendSkillPoint, chooseCatalogWeapon, createCatalogWeapon, createWeaponAttacks, createCatalogArmor, equipArmor, armorSetBonus, armorDamageReduction, armorBonuses, getEffectDefinition, applyCombatEffect, tickCombatEffects, createAttackPreview, rollLootRarity, rollShopRarity, rollWeaponFamily, rollLootKind, rollPotionType, rollShopOfferKind, getSpecialAttack, isAttackOnCooldown, basicAttackFallback, weaponFamilyForType, weaponDamageMultiplier, weaponUsesMana, allEnemiesDefeated, avoidDuplicateDivine, elementMatchup, chooseEnemyIntent, hasDisruptibleIntent, canDisrupt, disruptEnemy, consumeDisruptedIntent, tickDisruptCooldown, guardDamage, brace, applyBraceToDamage, createSaveSlots, writeSaveSlot, describeSaveSlot };
+  root.DungeonRules = { STAT_DEFINITIONS, effectiveStat, statSynergy, skillPointCost, entryRoomType, spendSkillPoint, chooseCatalogWeapon, createCatalogWeapon, createWeaponAttacks, createCatalogArmor, equipArmor, armorSetBonus, armorDamageReduction, armorBonuses, getEffectDefinition, applyCombatEffect, tickCombatEffects, createAttackPreview, rollLootRarity, rollFloorLootRarity, rollShopRarity, rollWeaponFamily, rollLootKind, rollPotionType, rollShopOfferKind, getSpecialAttack, isAttackOnCooldown, basicAttackFallback, weaponFamilyForType, weaponDamageMultiplier, weaponUsesMana, allEnemiesDefeated, avoidDuplicateDivine, elementMatchup, chooseEnemyIntent, hasDisruptibleIntent, canDisrupt, disruptEnemy, consumeDisruptedIntent, tickDisruptCooldown, guardDamage, brace, applyBraceToDamage, createSaveSlots, writeSaveSlot, describeSaveSlot };
 })(window);

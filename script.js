@@ -188,7 +188,7 @@ const CLASS_SPELLS = {
   mage: [
     { id: "mage-warding-flame", rarity: "Common", name: "Warding Flame", description: "Burn one target with a quick flame spell.", manaCost: 6, multiplier: 0.7, effect: "Burn", effectChance: 1, cooldown: 1, element: "Fire" },
     { id: "mage-spark-ward", rarity: "Common", name: "Spark Ward", description: "A small spark burns a foe and strengthens your next defense.", manaCost: 5, multiplier: 0.65, effect: "Burn", effectChance: 1, cooldown: 1, element: "Fire" },
-    { id: "mage-rimeprison", rarity: "Uncommon", name: "Rime Prison", description: "Build Freeze stacks on one enemy; at five stacks it loses a turn.", manaCost: 8, multiplier: 0.75, effect: "Freeze", effectChance: 1, cooldown: 1, element: "Water" },
+    { id: "mage-rimeprison", rarity: "Uncommon", name: "Rime Prison", description: "Freeze one enemy in place for a turn.", manaCost: 8, multiplier: 0, effect: "Frozen", effectChance: 1, cooldown: 2, element: "Water" },
     { id: "mage-frail-thread", rarity: "Uncommon", name: "Frail Thread", description: "Reduce one enemy's damage for two turns.", manaCost: 7, multiplier: 0.55, effect: "Weakness", effectChance: 1, cooldown: 1, element: "Arcane" },
     { id: "mage-weakening-veil", rarity: "Rare", name: "Veil of Frailty", description: "Reduce one enemy's damage for two turns.", manaCost: 11, multiplier: 0.65, effect: "Weakness", effectChance: 1, cooldown: 2, element: "Dark" },
     { id: "mage-brittle-prism", rarity: "Rare", name: "Brittle Prism", description: "A focused shard freezes and damages one target.", manaCost: 12, multiplier: 0.9, effect: "Freeze", effectChance: 1, cooldown: 2, element: "Water" },
@@ -217,6 +217,16 @@ const CLASS_SPELLS = {
     { id: "mage-eternal-aegis", rarity: "Divine", name: "Eternal Aegis", description: "Wrap yourself in a powerful ward that punishes attackers.", manaCost: 36, multiplier: 0, selfEffect: "Thorns", selfOnly: true, cooldown: 5, element: "Light" }
   ]
 };
+const SPELL_RARITY_DURATION={Common:1,Uncommon:1,Rare:2,Epic:2,Legendary:3,Mythic:3,Divine:4};
+const SPELL_MANA_PERCENT={Legendary:0.24,Mythic:0.32,Divine:0.40};
+const SPELL_EFFECT_TEXT={Frozen:"freeze the target and stop its turns",Weakness:"reduce the target’s attack damage",Silence:"prevent spellcasting",Root:"prevent normal evasion",Marked:"increase follow-up damage",Burn:"apply a burning damage-over-time effect",Poison:"apply a poison damage-over-time effect",Bleed:"apply a bleeding damage-over-time effect",Blind:"reduce attack accuracy",Cripple:"reduce accuracy and damage",Gust:"disrupt the target’s next action"};
+for(const [className,spells] of Object.entries(CLASS_SPELLS))for(const spell of spells){
+  spell.multiplier=0;spell.critBonus=0;spell.duration=SPELL_RARITY_DURATION[spell.rarity]||1;
+  if(spell.chargesNextAttack){delete spell.chargesNextAttack;spell.selfOnly=true;spell.selfEffect=className==="archer"?"Afterimage":"Thorns";spell.description=className==="archer"?"Evade the next incoming attack.":"Brace for the next hit with a Thorns ward.";}
+  if(SPELL_MANA_PERCENT[spell.rarity])spell.manaPercent=SPELL_MANA_PERCENT[spell.rarity];
+  if(spell.selfEffect&&!spell.chargesNextAttack)spell.description=`${spell.selfEffect==="Afterimage"?"Evade the next incoming attack":"Reflect part of incoming damage with Thorns"} for ${spell.duration} turn${spell.duration===1?"":"s"}.`;
+  else if(spell.effect)spell.description=`${spell.aoe?"All foes":"One foe"}: ${SPELL_EFFECT_TEXT[spell.effect]||spell.effect} for ${spell.duration} turn${spell.duration===1?"":"s"}.`;
+}
 const ROOM_LABELS = {
   start: "Starting Room", enemy: "Enemy Room", empty: "Empty Room", treasure: "Treasure Room",
   weapon: "Weapon Cache", fountain: "Fountain Room", shop: "Shop Room", trap: "Treasure Room", boss: "Boss Room"
@@ -529,13 +539,24 @@ function addInventoryItem(item) {
   return item;
 }
 
-function createClassSpellScroll(className, rarity="Common", starterOnly=false) {
+function createClassSpellScroll(className, rarity="Common", starterOnly=false, excludedSpellIds=[]) {
   const catalog=CLASS_SPELLS[className]||CLASS_SPELLS.warrior;
-  const matching=catalog.filter(spell=>spell.rarity===rarity);
-  const template=starterOnly?matching[0]:choice(matching.length?matching:catalog);
+  const available=catalog.filter(spell=>!excludedSpellIds.includes(spell.id));
+  const matching=available.filter(spell=>spell.rarity===rarity);
+  const template=starterOnly?matching[0]:choice(matching.length?matching:available);
+  if(!template)return null;
   return {...template,id:`${template.id}-${Date.now()}-${Math.floor(Math.random()*1e9)}`,spellId:template.id,rarity:template.rarity,className,
     command:`class-spell-${slug(template.id)}`,name:`${template.rarity} ${template.name} Scroll`,spellName:template.name,
     quantity:1,kind:"classSpell",classSpell:true,file:"spell-scroll.svg"};
+}
+function refreshClassSpellProfile(spell){
+  if(!spell)return;
+  const spellId=spell.spellId||Object.values(CLASS_SPELLS).flat().find(entry=>spell.id===entry.id||spell.id?.startsWith(`${entry.id}-`))?.id;
+  const owner=spell.className||Object.keys(CLASS_SPELLS).find(key=>CLASS_SPELLS[key].some(entry=>entry.id===spellId));
+  const profile=CLASS_SPELLS[owner]?.find(entry=>entry.id===spellId);
+  if(!profile)return;
+  const instanceId=spell.id;
+  Object.assign(spell,{...profile,id:instanceId||`${profile.id}-${Date.now()}`,spellId:profile.id,className:owner,spellName:profile.name,command:`class-spell-${slug(profile.id)}`,classSpell:true,kind:"classSpell",name:`${profile.rarity} ${profile.name} Scroll`,file:"spell-scroll.svg"});
 }
 function migrateBrowserSave() {
   if (!state) return;
@@ -543,11 +564,11 @@ function migrateBrowserSave() {
   if(!DIFFICULTIES[state.difficulty])state.difficulty="normal";
   state.inventoryNotice ??= false;
   state.spells ||= [];
-  for(const spell of state.spells){if(!spell||spell.className||!spell.spellId)continue;const owner=Object.keys(CLASS_SPELLS).find(key=>CLASS_SPELLS[key].some(entry=>entry.id===spell.spellId));const profile=CLASS_SPELLS[owner]?.find(entry=>entry.id===spell.spellId);if(profile){Object.assign(spell,{...profile,className:owner,spellName:profile.name,command:`class-spell-${slug(profile.id)}`,classSpell:true,kind:"classSpell",name:`${profile.rarity} ${profile.name} Scroll`,file:"spell-scroll.svg"});}}
+  for(const spell of state.spells)refreshClassSpellProfile(spell);
   state.equippedSpellId ||= null;
   if(state.equippedSpellId&&!state.spells.some(spell=>spell.id===state.equippedSpellId))state.equippedSpellId=null;
   state.shopLootUpgradeLevel ??= 0;
-  if(Array.isArray(state.shopStock))state.shopStock=state.shopStock.map(item=>item?.kind==="spell"?{...item,kind:"classSpell"}:item);
+  if(Array.isArray(state.shopStock))state.shopStock=state.shopStock.map(item=>{if(item?.kind==="spell")item.kind="classSpell";if(item?.kind==="classSpell")refreshClassSpellProfile(item.value);return item;});
   state.chosenClass ||= state.class || null;
   state.class=state.chosenClass;
   state.defenseCooldowns ||= { aegis: 0, block: 0, dodge: 0 };
@@ -963,6 +984,12 @@ function combatActionIcon(kind) {
 function combatActionButton(label, hint, {kind="weapon", attribute="attack", command="basic", className="", disabled=false, title=""}={}) {
   return `<button class="action-button ${className}" data-${attribute}="${escapeHtml(command)}" ${disabled?`disabled${title?` title="${escapeHtml(title)}"`:""}`:""}><span class="action-icon">${combatActionIcon(kind)}</span><span class="action-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hint)}</small></span></button>`;
 }
+function attackButtonSummary(attack,preview,resource="Ready"){
+  const damage=attack.spell?0:Math.max(0,Math.round((preview.rawPrimaryDamage||0)*(preview.elementMultiplier||1)));
+  const effect=attack.selfEffect||attack.effect;
+  const duration=attack.duration||DUNGEON_RULES.getEffectDefinition(effect)?.duration;
+  return [attack.spell?"Effect spell":`${damage} damage`,effect?`${effect}${duration?` · ${duration}t`:""}`:null,attack.aoe?"All foes":null,resource].filter(Boolean).join(" · ");
+}
 function getActions() {
   if(state.runEnded)return `<p class="prompt-note">This run has ended. Return to the title to start another run.</p>`;
   const room = currentRoom();
@@ -983,9 +1010,11 @@ function getActions() {
       const cooldown = DUNGEON_RULES.isAttackOnCooldown(state.attackCooldowns,attack.command) ? state.attackCooldowns[attack.command] : 0;
       const preview = attackPreview(attack);
       const disabled = cooldown > 0 || (!attack.spell && usesMana && spellBlocked) || state.mana < preview.manaCost || (preview.ammoCost > 0 && state.arrows < preview.ammoCost);
-      const hint=actionHint(cooldown,preview.manaCost,preview.ammoCost,!attack.spell&&usesMana&&spellBlocked);
+      const statusHint=actionHint(cooldown,preview.manaCost,preview.ammoCost,!attack.spell&&usesMana&&spellBlocked);
+      const percentCost=attack.spell&&attack.manaPercent?`${Math.round(attack.manaPercent*(attack.offClass?1.5:1)*100)}% mana · ${preview.manaCost}`:null;
+      const hint=percentCost?`${statusHint} · ${percentCost}`:statusHint;
       const kind=attack.spell?"magic":attack.aoe?"area":["Bow","Crossbow"].includes(weapon?.type)?"ranged":"weapon";
-      return combatActionButton(attack.name,hint,{kind,command:attack.command,className:"special-action",disabled,title:disabled?hint:""});
+      return combatActionButton(attack.name,attackButtonSummary(attack,preview,hint),{kind,command:attack.command,className:"special-action",disabled,title:disabled?hint:""});
     }).join("");
     const selectedEnemy=state.combat.enemies[state.target];
     const disruptable=DUNGEON_RULES.hasDisruptibleIntent(selectedEnemy);
@@ -1002,7 +1031,8 @@ function getActions() {
     const healthCount=state.items.filter(item=>item.type==="health"&&item.quantity>0).reduce((sum,item)=>sum+item.quantity,0);
     const manaCount=state.items.filter(item=>item.type==="mana"&&item.quantity>0).reduce((sum,item)=>sum+item.quantity,0);
     const basicKind=weaponClass==="mage"?"magic":weaponClass==="archer"?"ranged":"weapon";
-    return `<div class="action-grid">${combatActionButton(basicFallback?basicFallbackName:basicLabel,basicResource,{kind:basicKind,command:"basic",className:"action-primary",disabled:basicDisabled,title:basicResource})}${state.class==="warrior"?combatActionButton("Heavy attack",state.cooldown?`Cooldown · ${state.cooldown}t`:"Ready",{kind:"heavy",command:"heavy",className:"action-heavy",disabled:state.cooldown>0,title:"A stronger melee attack; 2-turn cooldown"}):""}${specials}${disruptAction}${defenseAction}${combatActionButton("Health potion",healthCount?`×${healthCount} available`:"None available",{kind:"health",attribute:"action",command:"heal",className:"action-item",disabled:!healthCount})}${combatActionButton("Mana potion",manaCount?`×${manaCount} available`:"None available",{kind:"mana",attribute:"action",command:"mana",className:"action-mana",disabled:!manaCount})}${combatActionButton(cannotFlee?"Flee unavailable":"Flee",cannotFlee?"Boss fight":"40% chance",{kind:"escape",attribute:"action",command:"flee",className:"action-escape",disabled:cannotFlee,title:cannotFlee?"Fleeing is unavailable during a boss fight":""})}</div>`;
+    const basicAttack={name:basicFallback?basicFallbackName:basicLabel,multiplier:basicFallback?0.5:1,critBonus:0,effect:weapon?.effect}; const basicPreview=attackPreview(basicAttack,1,state.combat.enemies[state.target]); const basicHint=attackButtonSummary(basicAttack,basicPreview,basicResource); const heavyAttack={name:"Heavy attack",multiplier:1.5,critBonus:0.1,cooldown:2}; const heavyPreview=attackPreview(heavyAttack,1,state.combat.enemies[state.target]);
+    return `<div class="action-grid">${combatActionButton(basicFallback?basicFallbackName:basicLabel,basicHint,{kind:basicKind,command:"basic",className:"action-primary",disabled:basicDisabled,title:basicResource})}${state.class==="warrior"?combatActionButton("Heavy attack",attackButtonSummary(heavyAttack,heavyPreview,state.cooldown?`Cooldown · ${state.cooldown}t`:"Ready"),{kind:"heavy",command:"heavy",className:"action-heavy",disabled:state.cooldown>0,title:"A stronger melee attack; 2-turn cooldown"}):""}${specials}${disruptAction}${defenseAction}${combatActionButton("Health potion",healthCount?`×${healthCount} available`:"None available",{kind:"health",attribute:"action",command:"heal",className:"action-item",disabled:!healthCount})}${combatActionButton("Mana potion",manaCount?`×${manaCount} available`:"None available",{kind:"mana",attribute:"action",command:"mana",className:"action-mana",disabled:!manaCount})}${combatActionButton(cannotFlee?"Flee unavailable":"Flee",cannotFlee?"Boss fight":"40% chance",{kind:"escape",attribute:"action",command:"flee",className:"action-escape",disabled:cannotFlee,title:cannotFlee?"Fleeing is unavailable during a boss fight":""})}</div>`;
   }
   if (room.type === "boss" && room.cleared) {
     if(state.milestonePending)return `<p class="prompt-note">The milestone boss is defeated. Choose whether this run ends here or continues into the next region.</p><div class="action-grid"><button class="action-button" data-milestone-end>End run · record ${state.floorsCleared} floors</button><button class="action-button secondary" data-milestone-continue>Continue to floor ${state.floor+1}</button></div>`;
@@ -1274,7 +1304,10 @@ function renderCombat(enemies) {
   const attackInfo = state.showWeaponInfo ? `<div class="weapon-attack-info">${listedAttacks.map(attack => {
     const preview = attackPreview(attack, targetCount);
     const matchup = ` · elemental ${preview.elementRelation}${previewModifiers(preview)}`;
-    return `<article><strong>${elementBadge(attack.element||state.weapon?.element||"Physical")} ${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${preview.primaryDamage} damage / ${preview.criticalDamage} crit${attack.aoe ? ` / ${preview.secondaryDamage} secondary · ${preview.targetCount} targets` : " · single target"} · ${Math.round(preview.critChance * 100)}% crit${preview.offClass?" · off-class ×0.75":""}${matchup} · ${preview.cooldown ? `${preview.cooldown} turn cooldown` : "No cooldown"}${preview.effect ? ` · ${escapeHtml(preview.effect)}` : ""}${preview.manaCost ? ` · ${preview.manaCost} mana` : ""}${preview.ammoCost ? ` · ${preview.ammoCost} arrow${preview.ammoCost === 1 ? "" : "s"}` : ""}${preview.manaGain ? ` · restores ${preview.manaGain} mana on hit` : ""}${attack.healOnHit ? ` · heals ${Math.round(attack.healOnHit * 100)}% of damage` : ""}</small></article>`;
+    const baseDamage=attack.spell?0:Math.max(0,Math.round((preview.rawPrimaryDamage||0)*(preview.elementMultiplier||1)));
+    const effect=attack.selfEffect||attack.effect;
+    const effectLength=attack.duration||DUNGEON_RULES.getEffectDefinition(effect)?.duration;
+    return `<article><strong>${elementBadge(attack.element||state.weapon?.element||"Physical")} ${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${attack.spell?"Effect spell":`${baseDamage} damage`}${attack.aoe?" · all foes":" · one target"}${effect?` · ${escapeHtml(effect)}${effectLength?` ${effectLength}t`:""}`:""}${preview.cooldown?` · ${preview.cooldown}t cooldown`:""}${preview.manaCost?` · ${attack.spell?classSpellCostLabel(equippedSpell):`${preview.manaCost} mana`}`:""}${preview.ammoCost?` · ${preview.ammoCost} arrow${preview.ammoCost===1?"":"s"}`:""}</small></article>`;
   }).join("")}</div>` : "";
   return `<div class="combat-view"><div class="combat-header"><div><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><span class="turn-indicator">${state.combat?.bonusAttackPending?"Bonus action":"Your turn"}</span></div><div class="enemy-list">${enemyCards}</div>${renderPlayerCombatStatuses()}<div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}${state.combat?.bonusAttackPending?`<p class="bonus-action-prompt">You’re too fast! Choose one attack before the enemies act.</p>`:""}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>Your turn</h3>${getActions()}</div></div>`;
 }
@@ -1434,7 +1467,7 @@ function chooseRoute(safe){
   if(!room?.routeChoice||room.routeChoiceMade||room.type!=="enemy")return;
   room.routeChoiceMade=true;
   if(safe){
-    const reward=8+state.floor*2;
+    const reward=12+state.floor*5;
     state.gold+=reward;room.type="empty";room.cleared=true;
     message(`You take the quiet route and find ${reward} gold. No fight, and no further reward.` ,"reward");render();return;
   }
@@ -1453,18 +1486,19 @@ function inspectChest(room) {
     if(outcome===0){const speed=effectiveStat("speed")+Math.max(0,(state.weapon?.speed||10)-10)+DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).speed;const difficulty=24+Math.floor(Math.max(0,state.floor-1)/4);const check=randomInt(20)+1+speed;if(check>=difficulty)message("You move quickly and slip past the chest’s hidden blade. It snaps shut against the stone.","story");else{const damage=Math.min(Math.max(0,state.hp-1),Math.max(1,Math.round(state.maxHp*0.15)));state.hp-=damage;state.runStats.damageTaken+=damage;message(`You are too slow to avoid the chest’s hidden blade. It cuts away ${damage} health, but leaves you standing.`,"danger");}}
     else if(outcome===1){const stolen=Math.min(state.gold,Math.ceil(state.gold/2));state.gold-=stolen;message(`The trapped chest springs. A hidden mechanism steals ${stolen} gold.`,"danger");}
     else {const loot=makeLoot();grantLoot(loot);message(`You avoid the mechanism and find ${loot.kind==="weapon"?`${loot.value.rarity} ${loot.value.name}`:loot.kind==="armor"?`${loot.value.rarity} ${loot.value.name}`:itemNameWithRarity(loot.value)}.`);}
-  } else if(room.type==="weapon") { const weapon=makeLootWeapon(null,"Rare");state.weapons.push(weapon);state.inventoryNotice=true;addInventoryItem({name:"Rare Health Potion",type:"health",amount:60,quantity:1,rarity:"Rare"});message(`Inside: ${weapon.rarity} ${weapon.name} (${weapon.type}) and a Rare Health Potion.`); }
+  } else if(room.type==="weapon") { const weapon=makeLootWeapon(null,"Rare");if(weapon){state.weapons.push(weapon);state.inventoryNotice=true;message(`Inside, you find a ${lootRewardName(weapon)} (${weapon.type}).`);}else message("The weapon cache is empty; you already own every design it held."); }
   else {
-    state.gold+=15;
+    const goldFound=35+state.floor*12;
+    state.gold+=goldFound;
     const foundPotion=Math.random()<0.35;
     if(foundPotion)addInventoryItem({name:"Common Health Potion",type:"health",amount:25,quantity:1,rarity:"Common"});
     let foundSpell=null;
-    if(state.class&&Math.random()<0.2){foundSpell=createClassSpellScroll(state.class,DUNGEON_RULES.rollLootRarity(1,false,Math.random()));grantLoot({kind:"classSpell",value:foundSpell});}
-    let chestMessage=foundPotion?"Inside the chest, you find a Common Health Potion and 15 gold coins.":"The chest holds 15 gold coins; its healing supplies have long since been taken.";
+    if(state.class&&Math.random()<0.1){foundSpell=createClassSpellScroll(state.class,DUNGEON_RULES.rollFloorLootRarity(state.floor,false,Math.random),false,(state.spells||[]).map(spell=>spell.spellId).filter(Boolean));if(foundSpell)grantLoot({kind:"classSpell",value:foundSpell});}
+    let chestMessage=foundPotion?`Inside the chest, you find a Common Health Potion and ${goldFound} gold coins.`:`The chest holds ${goldFound} gold coins; its healing supplies have long since been taken.`;
     if(foundSpell)chestMessage+=` You also find a ${foundSpell.rarity} ${foundSpell.spellName} scroll.`;
     message(chestMessage);
   }
-  if(room.type==="trap"&&state.class&&Math.random()<0.2){const scroll=createClassSpellScroll(state.class,DUNGEON_RULES.rollLootRarity(1,false,Math.random()));grantLoot({kind:"classSpell",value:scroll});message(`Among the chest's contents, you find a ${scroll.rarity} ${scroll.spellName} scroll.`,"reward");}
+  if(room.type==="trap"&&state.class&&Math.random()<0.1){const scroll=createClassSpellScroll(state.class,DUNGEON_RULES.rollFloorLootRarity(state.floor,false,Math.random),false,(state.spells||[]).map(spell=>spell.spellId).filter(Boolean));if(scroll){grantLoot({kind:"classSpell",value:scroll});message(`Among the chest's contents, you find ${lootRewardName(scroll)}.`,"reward");}}
 }
 
 function roomTypeForFloor(room) {
@@ -1504,7 +1538,9 @@ function startCombat(boss) {
 
 function getEquippedClassSpell(command){const spell=state?.spells?.find(item=>item.id===state.equippedSpellId&&item.command===command);return classSpellAttack(spell);}
 
-function classSpellAttack(spell){if(!spell)return null;const offClass=Boolean(state.class&&spell.className!==state.class);return{...spell,name:spell.spellName,spell:true,element:spell.element||"Arcane",offClass,multiplier:(spell.multiplier||1)*(offClass?0.75:1),manaCost:Math.ceil((spell.manaCost||0)*(offClass?1.5:1))};}
+function classSpellManaCost(spell){const base=spell.manaPercent?Math.ceil(state.maxMana*spell.manaPercent):(spell.manaCost||0);return Math.ceil(base*(state.class&&spell.className!==state.class?1.5:1));}
+function classSpellCostLabel(spell){return spell.manaPercent?`${Math.round(spell.manaPercent*100)}% max mana${state.class&&spell.className!==state.class?" · off-class cost +50%":""}`:`${spell.manaCost} mana${state.class&&spell.className!==state.class?" · off-class cost +50%":""}`;}
+function classSpellAttack(spell){if(!spell)return null;const offClass=Boolean(state.class&&spell.className!==state.class);return{...spell,name:spell.spellName,spell:true,element:spell.element||"Arcane",offClass,multiplier:0,manaCost:classSpellManaCost(spell),duration:spell.duration||SPELL_RARITY_DURATION[spell.rarity]||1};}
 
 function combatAction(action) {
   const fight=state.combat; if(!fight)return;
@@ -1602,7 +1638,7 @@ function combatAction(action) {
     const spellStat=state.class==="mage"?effectiveStat("int"):state.class==="archer"?effectiveStat("dex"):effectiveStat("str");
     const rawDamage=(spellStat+(isSpellCast?0:weapon.damage+(weapon.damageUpgrade||0)))*multiplier*(isSpellCast?1:passiveBonus*momentumBonus)*crippleScale*classPenalty*(target===enemy?1:special.secondaryMultiplier||0.5)*matchup.multiplier;
     const armorReduction=Math.max(0,target.damageReduction||0);
-    let damage=Math.max(1,Math.round(rawDamage-(target.damageReduction||0)*(1-defensePierce)));
+    let damage=isSpellCast?0:Math.max(1,Math.round(rawDamage-(target.damageReduction||0)*(1-defensePierce)));
     const guardReduced=target.intent?.key==="guard";
     const wardReduced=target.intent?.key==="ward";
     if(guardReduced)damage=DUNGEON_RULES.guardDamage(damage,isHeavy);
@@ -1617,12 +1653,12 @@ function combatAction(action) {
     if(wardReduced)reasons.push("Ward");
     if(classPenalty<1)reasons.push("off-class damage penalty");
     const detail=reasons.length?` (${reasons.join("; ")})`:"";
-    const dealt=applyEnemyDamage(target,damage,`${attack.name} hits ${target.name}${isCrit?" critically":""}${detail}`);
+    const dealt=damage?applyEnemyDamage(target,damage,`${attack.name} hits ${target.name}${isCrit?" critically":""}${detail}`):0;
     attackDamageDealt+=dealt;
     let applied=isSpellCast?null:weapon.effect||null;
     if(!isSpellCast&&weapon.effect==="Thorns")state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},"Thorns",damage);
     else if(!isSpellCast&&weapon.effect)applyWeaponEffect(target,weapon.effect,damage,!special?.aoe);
-    if(special?.effect&&(isSpellCast||special.effect!==weapon.effect)){const upgradeBonus=isSpellCast?0:Math.max(0,(weapon.effectChance??0.2)-0.2);const chance=Math.min(1,(special.effectChance??0.2)+upgradeBonus);if(Math.random()<chance){applyWeaponEffect(target,special.effect,damage,!special.aoe);applied=special.effect;}else message(`${special.effect} did not trigger.`);}
+    if(special?.effect&&(isSpellCast||special.effect!==weapon.effect)){const upgradeBonus=isSpellCast?0:Math.max(0,(weapon.effectChance??0.2)-0.2);const chance=Math.min(1,(special.effectChance??0.2)+upgradeBonus);if(Math.random()<chance){applyWeaponEffect(target,special.effect,damage,!special.aoe,isSpellCast?special.duration:null);applied=special.effect;}else message(`${special.effect} did not trigger.`);}
     if((!isSpellCast&&weapon.effect==="LifeSteal")||special?.effect==="LifeSteal")state.hp=Math.min(state.maxHp,state.hp+Math.max(1,Math.round(damage*0.05)));
     if((!isSpellCast&&weapon.effect==="ManaSteal")||special?.effect==="ManaSteal")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.05)));
     if(!isSpellCast&&weapon.effect==="ManaSurge")state.mana=Math.min(state.maxMana,state.mana+Math.max(1,Math.round(damage*0.08)));
@@ -1632,7 +1668,7 @@ function combatAction(action) {
     if(!isSpellCast&&["SpellEcho","Conjure"].includes(weapon.effect)&&target.hp>0){const echo=Math.max(1,Math.round(damage*(weapon.effect==="Conjure"?0.2:0.3)));applyEnemyDamage(target,echo,`${weapon.effect==="Conjure"?"Conjured wisp":"Spell Echo"} adds damage to ${target.name}`);}
     if(applied)message(`Effect applied: ${applied}${matchup.relation!=="neutral"?` · elemental ${matchup.relation}`:""}.`);
   }
-  if(isSpellCast&&special?.selfEffect){state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},special.selfEffect,attackDamageDealt);message(`${special.selfEffect} surrounds you.`,"reward");}
+  if(isSpellCast&&special?.selfEffect){state.playerEffects=DUNGEON_RULES.applyCombatEffect(state.playerEffects||{},special.selfEffect,attackDamageDealt,special.duration);message(`${special.selfEffect} surrounds you for ${special.duration||1} turn${special.duration===1?"":"s"}.`,"reward");}
   if(landed&&special?.healOnHit&&attackDamageDealt){const restored=Math.min(state.maxHp-state.hp,Math.max(1,Math.round(attackDamageDealt*special.healOnHit)));if(restored){state.hp+=restored;message(`${attack.name} restores ${restored} health.`,"reward");}}
   const manaGain=basicFallback||isSpellCast?0:Math.max(0,Math.floor(Number(attack.manaGain)||(state.class==="mage"&&isBasic?5:state.class==="archer"&&weaponFamily(weapon)==="archer"&&isBasic?1:0)));
   if(arrowCost)message(`You spend ${arrowCost} arrow${arrowCost===1?"":"s"}. ${state.arrows} shared arrow${state.arrows===1?" remains":"s remain"}.`);
@@ -1670,8 +1706,9 @@ function enemyTurn() {
     if(enemy.intent?.key==="guard"){message(`${enemy.name} holds its guard and waits for an opening.`);continue;}
     if(enemy.intent?.key==="ward"){message(`${enemy.name}'s ward fades after absorbing part of your attack.`);continue;}
     if(enemy.intent?.key==="summon"||enemy.intent?.key==="buff"){
-      const summonLimit=state.combat.boss?4:2;
-      if(enemy.intent.key==="summon"&&state.combat.summonedCount<summonLimit){
+      const summonLimit=state.combat.boss?Math.min(4,1+Math.floor(state.floor/10)):Math.min(3,1+Math.floor(state.floor/8));
+      const livingLimit=state.combat.boss?Math.min(7,4+Math.floor(state.floor/10)):Math.min(5,2+Math.floor(state.floor/8));
+      if(enemy.intent.key==="summon"&&state.combat.summonedCount<summonLimit&&state.combat.enemies.filter(item=>item.hp>0).length<livingLimit){
         const summon=makeEnemy(state.floor,false,0);if(enemy.race==="skeleton"){summon.name="Lesser Skeleton";summon.race="skeleton";summon.klass="Warrior";summon.element="Earth";}summon.maxHp=Math.max(8,Math.round(summon.maxHp*0.35));summon.hp=summon.maxHp;summon.damage=Math.max(1,Math.round(summon.damage*0.45));summon.gold=0;summon.xp=0;summon.summoned=true;summon.intent=DUNGEON_RULES.chooseEnemyIntent(summon.klass,summon.race);state.combat.enemies.push(summon);state.combat.summonedCount++;message(`${enemy.name} calls ${summon.name.toLowerCase()} into the fight!`,"danger");
       }else if(enemy.intent.key==="buff"){
         for(const ally of state.combat.enemies.filter(item=>item.hp>0))ally.damage=Math.round(ally.damage*1.15);
@@ -1737,9 +1774,9 @@ function tickPlayerCombatEffects(){
   return true;
 }
 
-function applyWeaponEffect(enemy,effect,damage,allowChain=true){
+function applyWeaponEffect(enemy,effect,damage,allowChain=true,duration=null){
   enemy.effects ||= {};
-  enemy.effects=DUNGEON_RULES.applyCombatEffect(enemy.effects,effect,damage);
+  enemy.effects=DUNGEON_RULES.applyCombatEffect(enemy.effects,effect,damage,duration);
   if(allowChain&&["Shock","Chain","Ricochet","RicochetShot","PiercingShot"].includes(effect)){
     const other=state.combat.enemies.find(item=>item!==enemy&&item.hp>0);if(other){const arc=Math.max(1,Math.round(damage*0.35));applyEnemyDamage(other,arc,`${effect} arcs to ${other.name}`);}
   }
@@ -1799,7 +1836,7 @@ function winFight() {
   if(room.riskyChoice){totalGold=Math.round(totalGold*1.5);totalXp=Math.round(totalXp*1.5);}
   state.gold+=totalGold;totalXp+=Math.round(totalXp*0.35);const levels=gainXp(totalXp);
   let rewards=`Victory. +${totalGold} gold and +${totalXp} XP.`;
-  if(room.riskyChoice||Math.random()<0.8){const lootRarity=DUNGEON_RULES.rollLootRarity(room.enemyCount||1,fight.boss,Math.random());const loot=makeLoot(lootRarity,fight);if(loot.kind==="bundle"){for(const reward of loot.items){grantLoot(reward);rewards+=` Loot: ${reward.value.rarity} ${reward.value.name}.`;}}else{grantLoot(loot);rewards+=` Loot: ${loot.value.rarity} ${loot.value.name}${loot.kind==="weapon"?` (${loot.value.type})`:loot.kind==="armor"?` (${loot.value.slot})`:""}.`;}if((loot.kind!=="item"&&loot.kind!=="bundle")||loot.kind==="bundle"){if(Math.random()<0.6){const potion=makePotionLoot(lootRarity);grantLoot(potion);rewards+=` Bonus: ${potion.value.rarity} ${potion.value.name}.`;}}}
+  if(fight.boss||room.riskyChoice||Math.random()<0.8){const lootRarity=DUNGEON_RULES.rollFloorLootRarity(state.floor,fight.boss,Math.random,room.enemyCount||1);const loot=makeLoot(lootRarity,fight);if(loot.kind==="bundle"){for(const reward of loot.items){grantLoot(reward);rewards+=` Loot: ${lootRewardName(reward.value)}.`;}}else{grantLoot(loot);rewards+=` Loot: ${lootRewardName(loot.value)}${loot.kind==="weapon"?` (${loot.value.type})`:loot.kind==="armor"?` (${loot.value.slot})`:""}.`;}if((loot.kind==="weapon"||loot.kind==="armor")&&Math.random()<0.15){const primaryRarity=loot.value.rarity||lootRarity;const potionTier=Math.max(0,RARITIES.indexOf(primaryRarity)-1);const potion=makePotionLoot(RARITIES[potionTier]);grantLoot(potion);rewards+=` Bonus: ${lootRewardName(potion.value)}.`;}}
   if(state.weapons.some(weapon=>["Bow","Crossbow"].includes(weapon.type))&&Math.random()<0.45){const recovered=changeArrowCount(6);if(recovered)rewards+=` +${recovered} arrows.`;}
   if(fight.enemies.some(enemy=>["Archer","Sharpshooter"].includes(enemy.klass))){const recovered=changeArrowCount(4);if(recovered)rewards+=` Archer dropped ${recovered} arrows.`;}
   if(levels)rewards+=` You leveled up! Current skillpoints: ${state.skillPoints}.`;
@@ -1815,33 +1852,128 @@ function winFight() {
 function gainXp(amount){state.xp+=amount;let count=0;while(state.xp>=xpToNext()){state.xp-=xpToNext();state.level++;state.skillPoints++;state.baseMaxHp=(state.baseMaxHp||state.maxHp)+20;state.maxHp=state.baseMaxHp+Object.values(state.equippedArmor||{}).reduce((sum,armor)=>sum+(armor.healthBonus||0),0);state.maxMana+=10;state.hp=Math.min(state.maxHp,state.hp+Math.ceil(state.maxHp*0.5));state.mana=state.maxMana;count++;}return count;}
 function xpToNext(){const normal=state.level<9?200+(state.level-1)*100:Math.round(1000*Math.pow(1.3,state.level-9));return Math.round(normal*(DIFFICULTIES[state.difficulty]?.xpRequirement||1));}
 
-function makeLootWeapon(forcedRarity=null,minimumRarity="Common"){
+function makeLootWeapon(forcedRarity=null,minimumRarity="Common",extraExcludedNames=[]){
   const room=currentRoom();
-  let rarity=forcedRarity||DUNGEON_RULES.rollLootRarity(room.enemyCount||1,Boolean(state.combat?.boss),Math.random());
+  let rarity=forcedRarity||DUNGEON_RULES.rollFloorLootRarity(state.floor,Boolean(state.combat?.boss),Math.random,room.enemyCount||1);
   if(RARITIES.indexOf(rarity)<RARITIES.indexOf(minimumRarity))rarity=minimumRarity;
   if(state.devMode&&Math.random()<0.6)rarity=choice(RARITIES.slice(2));
-  const ownedDivines=[...state.weapons,...state.armor,...state.items].filter(item=>item.rarity==="Divine").map(item=>item.name);
-  let family=DUNGEON_RULES.rollWeaponFamily(Math.random,state.chosenClass||state.class);
-  if(rarity==="Divine"&&!GAME_INDEX_DATA.weapons[family].some(entry=>entry.rarity==="Divine"&&!ownedDivines.includes(entry.name))){
-    const alternatives=["warrior","archer","mage"].filter(candidate=>GAME_INDEX_DATA.weapons[candidate].some(entry=>entry.rarity==="Divine"&&!ownedDivines.includes(entry.name)));
-    if(alternatives.length)family=choice(alternatives);else rarity="Mythic";
+  const ownedNames=new Set([...(state.weapons||[]).map(item=>item.name),...extraExcludedNames]);
+  const preferredFamily=DUNGEON_RULES.rollWeaponFamily(Math.random,state.chosenClass||state.class);
+  const families=[preferredFamily,...["warrior","archer","mage"].filter(family=>family!==preferredFamily)];
+  let candidates=families.flatMap(family=>(GAME_INDEX_DATA.weapons[family]||[]).filter(entry=>entry.rarity===rarity&&!ownedNames.has(entry.name)).map(entry=>({...entry,family})));
+  if(!candidates.length){
+    candidates=families.flatMap(family=>(GAME_INDEX_DATA.weapons[family]||[]).filter(entry=>!ownedNames.has(entry.name)).map(entry=>({...entry,family})));
+    if(candidates.length){
+      const targetTier=RARITIES.indexOf(rarity);
+      const nearest=Math.min(...candidates.map(entry=>Math.abs(RARITIES.indexOf(entry.rarity)-targetTier)));
+      candidates=candidates.filter(entry=>Math.abs(RARITIES.indexOf(entry.rarity)-targetTier)===nearest);
+    }
   }
-  const entry=DUNGEON_RULES.chooseCatalogWeapon(family,rarity,GAME_INDEX_DATA.weapons,Math.random,ownedDivines);
+  if(!candidates.length)return null;
+  const weaponScore=weapon=>(Number(weapon.damage)||0)*(1+(Number(weapon.crit)||0))*
+    (1+Math.min(0.25,(weapon.attacks?.length||0)*0.025));
+  const bestByFamily=new Map();
+  for(const owned of state.weapons||[]){
+    const family=weaponFamily(owned);if(!family)continue;
+    bestByFamily.set(family,Math.max(bestByFamily.get(family)||0,weaponScore(owned)));
+  }
+  const upgrades=candidates.filter(entry=>{
+    const candidate=DUNGEON_RULES.createCatalogWeapon(entry,state.floor);
+    return !bestByFamily.has(entry.family)||weaponScore(candidate)>bestByFamily.get(entry.family);
+  });
+  if(upgrades.length)candidates=upgrades;
+  const entry=choice(candidates);
   const weapon=DUNGEON_RULES.createCatalogWeapon(entry,state.floor);
   if(weapon.arrows&&state.arrows==null)state.arrows=0;
   return weapon;
 }
 
+function lootArmorOwned(){
+  return [...new Set([...(state.armor||[]),...Object.values(state.equippedArmor||{})].filter(Boolean))];
+}
+
+function armorLootScore(armor){
+  return (Number(armor.defense)||0)+(Number(armor.damageReduction)||0)*2+(Number(armor.healthBonus)||0)*0.1;
+}
+
+function makeLootArmor(rarity,allowNonUpgrade=false,extraExcludedNames=[]){
+  const owned=lootArmorOwned();
+  const ownedNames=new Set([...owned.map(item=>item.name),...extraExcludedNames]);
+  const available=ARMOR_INDEX.filter(entry=>!ownedNames.has(entry.name));
+  if(!available.length)return null;
+  const targetTier=RARITIES.indexOf(rarity);
+  const nearestRarity=entries=>{
+    if(entries.some(entry=>entry.rarity===rarity))return entries.filter(entry=>entry.rarity===rarity);
+    const distance=Math.min(...entries.map(entry=>Math.abs(RARITIES.indexOf(entry.rarity)-targetTier)));
+    return entries.filter(entry=>Math.abs(RARITIES.indexOf(entry.rarity)-targetTier)===distance);
+  };
+  const slotFor=entry=>({"Head Armor":"head","Chest Armor":"chest","Legs Armor":"legs","Feet Armor":"feet","Shield Armor":"shield"})[entry.type];
+  const ownedBySlot=new Map();
+  for(const armor of owned){
+    const slot=armor.slot;if(!slot)continue;
+    ownedBySlot.set(slot,Math.max(ownedBySlot.get(slot)||0,armorLootScore(armor)));
+  }
+  const missingSlots=["head","chest","legs","feet","shield"].filter(slot=>!ownedBySlot.has(slot));
+  let candidates=[];
+  if(missingSlots.length){
+    candidates=nearestRarity(available.filter(entry=>missingSlots.includes(slotFor(entry))));
+  }
+  if(!candidates.length){
+    const upgrades=available.filter(entry=>{
+      const armor=DUNGEON_RULES.createCatalogArmor(entry,state.floor);
+      return armorLootScore(armor)>(ownedBySlot.get(armor.slot)||0);
+    });
+    candidates=upgrades.length?nearestRarity(upgrades):allowNonUpgrade?nearestRarity(available):[];
+  }
+  if(!candidates.length)return null;
+  return DUNGEON_RULES.createCatalogArmor(choice(candidates),state.floor);
+}
+
+function lootNeedWeights(){
+  let weapon=45,armor=40,item=15;
+  const ownedBySlot=new Set(lootArmorOwned().map(piece=>piece.slot).filter(Boolean));
+  const missingSlots=5-ownedBySlot.size;
+  const armorCatchup=Math.min(20,missingSlots*4);
+  armor+=armorCatchup;
+  weapon-=Math.min(15,armorCatchup);
+  const ownedNames=new Set((state.weapons||[]).map(piece=>piece.name));
+  const weaponScore=piece=>(Number(piece.damage)||0)*(1+(Number(piece.crit)||0))*(1+Math.min(0.25,(piece.attacks?.length||0)*0.025));
+  const hasWeaponUpgrade=(state.weapons||[]).length===0||Object.entries(GAME_INDEX_DATA.weapons).some(([family,entries])=>{
+    const owned=(state.weapons||[]).filter(piece=>weaponFamily(piece)===family);
+    const best=Math.max(0,...owned.map(weaponScore));
+    return entries.some(entry=>{
+      if(ownedNames.has(entry.name))return false;
+      const candidate=DUNGEON_RULES.createCatalogWeapon(entry,state.floor);
+      return !owned.length||weaponScore(candidate)>best;
+    });
+  });
+  if(!hasWeaponUpgrade){const reduced=weapon*0.55;item+=weapon-reduced;weapon=reduced;}
+  return{weapon,armor,item};
+}
+
 function makeLoot(rarity=null,fight=state.combat){
-  rarity=rarity||DUNGEON_RULES.rollLootRarity(currentRoom().enemyCount||1,Boolean(state.combat?.boss),Math.random());
+  rarity=rarity||DUNGEON_RULES.rollFloorLootRarity(state.floor,Boolean(fight?.boss),Math.random,currentRoom().enemyCount||1);
   const eligibleMages=(fight?.enemies||[]).filter(enemy=>["Mage","Quick Caster"].includes(enemy.klass)||/\bMage\b/i.test(enemy.name));
   const mageChance=fight?.boss?0.12:0.025;
-  if(state.class&&(eligibleMages.length||fight?.boss)&&Math.random()<mageChance){const scroll={kind:"classSpell",value:createClassSpellScroll(state.class,rarity)};if(fight?.boss)return{kind:"bundle",items:[scroll,Math.random()<0.5?{kind:"weapon",value:makeLootWeapon(rarity)}:makePotionLoot(rarity)]};return scroll;}
-  const lootKind=DUNGEON_RULES.rollLootKind(Math.random,state.chosenClass||state.class);
-  if(lootKind==="weapon")return{kind:"weapon",value:makeLootWeapon(rarity)};
-  if(lootKind==="armor"){
-    const pool=available.length?available:ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");
-    return{kind:"armor",value:DUNGEON_RULES.createCatalogArmor(choice(pool),state.floor)};
+  if(state.class&&(eligibleMages.length||fight?.boss)&&Math.random()<mageChance){
+    const scroll=createClassSpellScroll(state.class,rarity,false,(state.spells||[]).map(spell=>spell.spellId).filter(Boolean));
+    if(scroll){
+      if(fight?.boss){
+        const partner=Math.random()<0.5?makeLootWeapon(rarity):null;
+        return{kind:"bundle",items:[{kind:"classSpell",value:scroll},partner?{kind:"weapon",value:partner}:makePotionLoot(rarity)]};
+      }
+      return{kind:"classSpell",value:scroll};
+    }
+  }
+  const weights=lootNeedWeights();
+  const first=DUNGEON_RULES.rollLootKind(Math.random,state.chosenClass||state.class,weights);
+  const order=[first,...["armor","weapon","item"].filter(kind=>kind!==first)];
+  for(const kind of order){
+    if(kind==="weapon"){
+      const weapon=makeLootWeapon(rarity);if(weapon)return{kind:"weapon",value:weapon};
+    }else if(kind==="armor"){
+      const armor=makeLootArmor(rarity);if(armor)return{kind:"armor",value:armor};
+    }else return makePotionLoot(rarity);
   }
   return makePotionLoot(rarity);
 }
@@ -1850,6 +1982,13 @@ function makePotionLoot(rarity="Common"){
   const type=DUNGEON_RULES.rollPotionType(Math.random,state.chosenClass||state.class);
   rarity=DUNGEON_RULES.avoidDuplicateDivine(rarity,state.items.some(item=>item.rarity==="Divine"&&item.type===type));
   return{kind:"item",value:{name:`${rarity} ${type==="mana"?"Mana":"Health"} Potion`,type,amount:0,quantity:1,rarity}};
+}
+
+function lootRewardName(item){
+  const rarity=item?.rarity||"Common";
+  let name=item?.spellName?`${item.spellName} Scroll`:item?.name||"Loot";
+  if(name.startsWith(`${rarity} `))name=name.slice(rarity.length+1);
+  return `${rarity} ${name}`;
 }
 
 function grantLoot(loot){
@@ -1877,7 +2016,7 @@ function openInventory(){
 }
 function equipWeapon(index){const weapon=state.weapons[index];if(!weapon)return;const family=weaponFamily(weapon);if(!family){message("That weapon type cannot be equipped.");modal="inventory";render();return;}state.weapon=weapon;state.class=state.chosenClass||state.class;weapon.attacks ||= DUNGEON_RULES.createWeaponAttacks(family,weapon.rarity,weapon.type,weapon.element||"Physical",weapon.manaCost||0);const offClass=family!==state.class;message(`${weapon.name} equipped${offClass?". Off-class attacks deal 25% less damage.":"."}`);modal="inventory";if(!refreshInventoryModal())render();}
 function equipArmor(index){const armor=state.armor[index];if(!armor)return;state.equippedArmor=DUNGEON_RULES.equipArmor(state.equippedArmor||{},armor);updateArmorBonuses();message(`${armor.name} equipped in the ${armor.slot} slot.`);modal="inventory";if(!refreshInventoryModal())render();}
-function equipSpell(index){const spell=state.spells[index];if(!spell)return;state.equippedSpellId=spell.id;const profile=classSpellAttack(spell);message(`${spell.spellName} equipped${profile.offClass?` as an off-class spell: ${Math.ceil(spell.manaCost*1.5)} mana and 25% reduced power`:` for ${spell.manaCost} mana`}.`);modal="inventory";if(!refreshInventoryModal())render();}
+function equipSpell(index){const spell=state.spells[index];if(!spell)return;state.equippedSpellId=spell.id;const profile=classSpellAttack(spell);message(`${spell.spellName} equipped · ${classSpellCostLabel(spell)}.`);modal="inventory";if(!refreshInventoryModal())render();}
 function equipBestArmor(){
   const candidates=[...state.armor,...Object.values(state.equippedArmor||{})];
   const equipped={...(state.equippedArmor||{})};
@@ -1911,7 +2050,7 @@ function weaponShopStats(weapon){
 }
 function renderShopGearItem(item,index){
   const value=item.value;
-  if(item.kind==="classSpell")return `<article class="shop-item ${rarityClass(value.rarity)}">${itemArt(`Images/Items/Spells/${value.file}`,value.name)}<div><span class="item-meta">${escapeHtml(value.rarity)} · ${escapeHtml(CLASS_NAMES[value.className])} class spell</span><strong>${escapeHtml(value.spellName)}</strong><p>${escapeHtml(value.description)} · ${value.manaCost} mana · ${item.price} gold</p></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`;
+  if(item.kind==="classSpell")return `<article class="shop-item ${rarityClass(value.rarity)}">${itemArt(`Images/Items/Spells/${value.file}`,value.name)}<div><span class="item-meta">${escapeHtml(value.rarity)} · ${escapeHtml(CLASS_NAMES[value.className])} class spell</span><strong>${escapeHtml(value.spellName)}</strong><p>${escapeHtml(value.description)} · ${classSpellCostLabel(value)} · ${item.price} gold</p></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`;
   const isWeapon=item.kind==="weapon";
   const current=isWeapon?state.weapon:state.equippedArmor?.[value.slot];
   const offered=isWeapon?weaponShopStats(value):`${escapeHtml(value.slot)} · ${value.defense||0} defense · ${value.damageReduction||0} damage reduction · +${value.healthBonus||0} max HP`;
@@ -2117,7 +2256,7 @@ function renderInventoryItems(tab){
   if(tab==="class-spells"){
     const equipped=state.spells?.find(spell=>spell.id===state.equippedSpellId);
     const header=`<p class="armor-set-summary">Equipped class spell (one slot): <strong>${escapeHtml(equipped?.spellName||"None")}</strong> · Class spells cost mana and use your combat turn. Weapon attacks remain listed with your weapon.</p>`;
-    const cards=(state.spells||[]).map((spell,index)=>`<article class="inventory-item ${rarityClass(spell.rarity)}">${itemArt(`Images/Items/Spells/${spell.file||"spell-scroll.svg"}`,spell.name)}<div class="item-copy"><span class="item-meta">${escapeHtml(spell.rarity)} · ${escapeHtml(CLASS_NAMES[spell.className]||"Adventurer")} class spell</span><strong>${escapeHtml(spell.spellName||spell.name)}</strong><span class="item-stats">${escapeHtml(spell.description)} · ${spell.manaCost} mana · ${spell.cooldown?`${spell.cooldown} turn cooldown`:"No cooldown"}${spell.aoe?" · Hits all enemies":" · One target"}${spell.className!==state.class?" · Off-class: 25% reduced power, 50% more mana":""}</span></div><div class="inventory-item-actions">${spell.id===state.equippedSpellId?`<span class="equipped-tag">Equipped</span><button class="small-button" data-unequip-spell>Unequip</button>`:`<button class="small-button" data-equip-spell="${index}">Equip</button>`}<button class="small-button" data-inventory-sell="spell" data-sell-index="${index}" ${spell.id===state.equippedSpellId?"disabled title=\"Unequip this class spell before selling it\"":""}>Sell · ${sellValue(spell,"spell")}g</button></div></article>`).join("");
+    const cards=(state.spells||[]).map((spell,index)=>`<article class="inventory-item ${rarityClass(spell.rarity)}">${itemArt(`Images/Items/Spells/${spell.file||"spell-scroll.svg"}`,spell.name)}<div class="item-copy"><span class="item-meta">${escapeHtml(spell.rarity)} · ${escapeHtml(CLASS_NAMES[spell.className]||"Adventurer")} class spell</span><strong>${escapeHtml(spell.spellName||spell.name)}</strong><span class="item-stats">${escapeHtml(spell.description)} · ${classSpellCostLabel(spell)} · ${spell.duration||1} turn effect · ${spell.cooldown?`${spell.cooldown} turn cooldown`:"No cooldown"}${spell.aoe?" · Hits all enemies":" · One target"}${spell.className!==state.class?" · Off-class power reduced":""}</span></div><div class="inventory-item-actions">${spell.id===state.equippedSpellId?`<span class="equipped-tag">Equipped</span><button class="small-button" data-unequip-spell>Unequip</button>`:`<button class="small-button" data-equip-spell="${index}">Equip</button>`}<button class="small-button" data-inventory-sell="spell" data-sell-index="${index}" ${spell.id===state.equippedSpellId?"disabled title=\"Unequip this class spell before selling it\"":""}>Sell · ${sellValue(spell,"spell")}g</button></div></article>`).join("");
     return `${header}${cards||"<p class=\"empty-list\">No class spell scrolls collected. Find one in loot or buy one from a shop.</p>"}`;
   }
   if(tab==="items"){
@@ -2210,15 +2349,29 @@ function bindUseItem(){screen.querySelectorAll("[data-use-item]").forEach(button
 function openShop(){
   modalReturnFocusSelector='[data-action="shop"]';
   shopTab="weapons";
-  if(!Array.isArray(state.shopStock)){state.shopStock=[...Array.from({length:5},()=>shopItem()),shopClassSpellOffer()];}else{state.shopStock=state.shopStock.filter((item,index,items)=>item.kind!=="classSpell"||items.findIndex(candidate=>candidate.kind==="classSpell")===index);if(!state.shopStock.some(item=>item.kind==="classSpell"))state.shopStock.push(shopClassSpellOffer());}state.shopScrollAdded=true;if(!Array.isArray(state.shopPotions))state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();
+  if(!Array.isArray(state.shopStock))state.shopStock=generateShopStock();else{state.shopStock=state.shopStock.filter((item,index,items)=>item.kind!=="classSpell"||items.findIndex(candidate=>candidate.kind==="classSpell")===index);if(!state.shopStock.some(item=>item.kind==="classSpell")){const offer=shopClassSpellOffer();if(offer)state.shopStock.push(offer);}}state.shopScrollAdded=true;if(!Array.isArray(state.shopPotions))state.shopPotions=[shopPotion()].filter(Boolean);else state.shopPotions=state.shopPotions.slice(0,1);modal="shop";render();
 }
-function shopClassSpellOffer(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const value=createClassSpellScroll(state.chosenClass||state.class||"warrior",rarity);return{kind:"classSpell",value,price:priceFor(24+state.floor*4+value.manaCost*2,rarity)};}
+function generateShopStock(){
+  state.shopStock=[];
+  for(let index=0;index<5;index++){const offer=shopItem();if(offer)state.shopStock.push(offer);}
+  const spell=shopClassSpellOffer();if(spell)state.shopStock.push(spell);
+  return state.shopStock;
+}
+function shopClassSpellOffer(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0,Math.random(),state.floor);const value=createClassSpellScroll(state.chosenClass||state.class||"warrior",rarity,false,(state.spells||[]).map(spell=>spell.spellId).filter(Boolean));if(!value)return null;return{kind:"classSpell",value,price:priceFor(24+state.floor*4+classSpellManaCost(value)*2,value.rarity)};}
 function shopItem(){
-  let rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const kind=Math.random()<0.6?"weapon":"armor";
-  if(kind==="weapon"){const value=makeLootWeapon(rarity);rarity=value.rarity;return{kind:"weapon",value,price:priceFor(value.goldValue||value.damage*5,rarity)};}
-  let entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);if(rarity==="Divine")entries=entries.filter(entry=>![...state.armor,...state.weapons,...state.items].some(item=>item.name===entry.name));if(!entries.length)entries=ARMOR_INDEX.filter(entry=>entry.rarity!=="Divine");const value=DUNGEON_RULES.createCatalogArmor(choice(entries),state.floor);const armorBaseValue=Math.max(value.goldValue||0,Math.round((value.defense*4+value.damageReduction*6+(value.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return{kind:"armor",value,price:priceFor(armorBaseValue,rarity)};
+  const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0,Math.random(),state.floor);
+  const weights=lootNeedWeights();const kind=DUNGEON_RULES.rollLootKind(Math.random,state.chosenClass||state.class,{weapon:weights.weapon,armor:weights.armor,item:0});
+  const existingNames=(state.shopStock||[]).map(offer=>offer?.value?.name).filter(Boolean);
+  if(kind==="weapon"){
+    const value=makeLootWeapon(rarity,"Common",existingNames);
+    if(value)return{kind:"weapon",value,price:priceFor(value.goldValue||value.damage*5,value.rarity)};
+  }
+  const armor=makeLootArmor(rarity,true,existingNames);
+  if(armor){const armorBaseValue=Math.max(armor.goldValue||0,Math.round((armor.defense*4+armor.damageReduction*6+(armor.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return{kind:"armor",value:armor,price:priceFor(armorBaseValue,armor.rarity)};}
+  const weapon=makeLootWeapon(rarity,"Common",existingNames);
+  return weapon?{kind:"weapon",value:weapon,price:priceFor(weapon.goldValue||weapon.damage*5,weapon.rarity)}:null;
 }
-function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const value=makePotionLoot(rarity).value;return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};}
+function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0,Math.random(),state.floor);const value=makePotionLoot(rarity).value;return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};}
 function priceFor(base,rarity="Common"){const rarityScale=[1,1.35,1.9,2.8,4.5,8,15][Math.max(0,RARITIES.indexOf(rarity))];return Math.max(1,Math.round(base*rarityScale*(DIFFICULTIES[state.difficulty]?.shopCost||1)*(1-Math.max(0,effectiveStat("cha")-10)*0.02)));}
 function shopRerollCost(){const floorScale=1+Math.max(0,(state.floor||1)-1)*0.08;const upgradeScale=1+Math.max(0,state.shopLootUpgradeLevel||0)*0.12;return Math.round(30*floorScale*upgradeScale*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function shopUpgradeCost(){return Math.round(125*Math.pow(2,state.shopLootUpgradeLevel||0)*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
@@ -2252,8 +2405,8 @@ function upgradeWeapon(upgrade){
 }
 function buyItem(index){const item=state.shopStock[index];if(!item||state.gold<item.price)return;state.gold-=item.price;if(item.kind==="weapon"){state.weapons.push(item.value);state.inventoryNotice=true;}else if(item.kind==="classSpell"){state.spells||=[];state.spells.push(item.value);state.inventoryNotice=true;}else{state.armor.push(item.value);state.inventoryNotice=true;equipCollectedArmor(item.value);}state.shopStock.splice(index,1);if(item.value.rarity==="Divine"){state.shopStock=state.shopStock.filter(offer=>offer.kind!==item.kind||offer.value.name!==item.value.name);}message(`Purchased ${item.value.name}.`);modal="shop";render();}
 function buyPotion(index){const item=state.shopPotions?.[index];if(!item||state.gold<item.price)return;state.gold-=item.price;addInventoryItem(item.value);state.shopPotions.splice(index,1);message(`Purchased ${item.value.name}.`);modal="shop";render();}
-function rerollShop(){const cost=shopRerollCost();if(state.gold<cost){message(`Rerolling costs ${cost} gold.`);modal="shop";render();return;}state.gold-=cost;state.shopStock=[...Array.from({length:5},()=>shopItem()),shopClassSpellOffer()];state.shopScrollAdded=true;state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();}
-function upgradeShopLoot(){if((state.shopLootUpgradeLevel||0)>=5)return;const cost=shopUpgradeCost();if(state.gold<cost)return;state.gold-=cost;state.shopLootUpgradeLevel=(state.shopLootUpgradeLevel||0)+1;state.shopStock=[...Array.from({length:5},()=>shopItem()),shopClassSpellOffer()];state.shopScrollAdded=true;state.shopPotions=Array.from({length:2},()=>shopPotion());message(`Permanent shop stock upgrade increased to level ${state.shopLootUpgradeLevel} for this run.`);modal="shop";render();}
+function rerollShop(){const cost=shopRerollCost();if(state.gold<cost){message(`Rerolling costs ${cost} gold.`);modal="shop";render();return;}state.gold-=cost;state.shopStock=generateShopStock();state.shopScrollAdded=true;state.shopPotions=[shopPotion()].filter(Boolean);modal="shop";render();}
+function upgradeShopLoot(){if((state.shopLootUpgradeLevel||0)>=5)return;const cost=shopUpgradeCost();if(state.gold<cost)return;state.gold-=cost;state.shopLootUpgradeLevel=(state.shopLootUpgradeLevel||0)+1;state.shopStock=generateShopStock();state.shopScrollAdded=true;state.shopPotions=[shopPotion()].filter(Boolean);message(`Permanent shop stock upgrade increased to level ${state.shopLootUpgradeLevel} for this run.`);modal="shop";render();}
 
 function sellValue(item,kind){
   const rarityIndex=Math.max(0,RARITIES.indexOf(item.rarity||"Common"));
