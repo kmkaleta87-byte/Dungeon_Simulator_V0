@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="The Ashen Twin">
+<defs><radialGradient id="aura"><stop stop-color="#c5a18b" stop-opacity=".62"/><stop offset="1" stop-color="#5f514a" stop-opacity="0"/></radialGradient><linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c5a18b"/><stop offset=".55" stop-color="#5f514a"/><stop offset="1" stop-color="#34343a"/></linearGradient><linearGradient id="crown" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#db7545"/><stop offset="1" stop-color="#896744"/></linearGradient></defs>
+<ellipse cx="82" cy="61" rx="61" ry="57" fill="url(#aura)"/>
+<path d="M24 91 Q13 63 28 39 M133 90 Q147 61 132 36" fill="none" stroke="#c5a18b" stroke-width="2" opacity=".7"/>
+<path d="M38 106 47 67 61 58 62 36 74 25 95 29 105 43 101 63 118 75 126 108 102 100 82 110 59 100Z" fill="url(#body)" stroke="#3f3531" stroke-width="4"/><path d="M64 45Q82 34 100 46L97 65 82 73 66 64Z" fill="#bda993" stroke="#3f3531" stroke-width="3"/><path d="M72 50h7m12 0h7" stroke="#df7545" stroke-width="4" stroke-linecap="round"/><path d="m79 59 5 7 5-7" fill="none" stroke="#3f3531" stroke-width="3"/><path d="M46 58 33 40 40 73 28 91 M117 55l14-18-8 35 12 17" fill="none" stroke="#db7545" stroke-width="5" stroke-linecap="round"/><path d="m65 30 8-16 11 12 13-15 9 26" fill="none" stroke="#aa8871" stroke-width="4"/>
+<path d="m24 28 3-7 3 7 7 3-7 3-3 7-3-7-7-3Z M131 24l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z" fill="#db7545" opacity=".88"/>
+<circle cx="31" cy="80" r="2.3" fill="#c5a18b"/><circle cx="135" cy="78" r="2" fill="#c5a18b"/>
+</svg>

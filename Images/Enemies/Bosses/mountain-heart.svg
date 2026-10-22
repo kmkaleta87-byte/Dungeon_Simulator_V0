@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="The Mountain Heart">
+<defs><radialGradient id="aura"><stop stop-color="#c6bfa9" stop-opacity=".62"/><stop offset="1" stop-color="#77776e" stop-opacity="0"/></radialGradient><linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c6bfa9"/><stop offset=".55" stop-color="#77776e"/><stop offset="1" stop-color="#34343a"/></linearGradient><linearGradient id="crown" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#de8f55"/><stop offset="1" stop-color="#896744"/></linearGradient></defs>
+<ellipse cx="82" cy="61" rx="61" ry="57" fill="url(#aura)"/>
+<path d="M24 91 Q13 63 28 39 M133 90 Q147 61 132 36" fill="none" stroke="#c6bfa9" stroke-width="2" opacity=".7"/>
+<path d="M36 104 42 62 55 49 54 29 67 21 80 31 94 19 108 31 108 52 121 66 126 105 105 112 80 104 57 112Z" fill="url(#body)" stroke="#45433c" stroke-width="4"/><path d="M59 51 80 44 101 52 104 77 80 88 56 77Z" fill="#55574f" stroke="#45433c" stroke-width="3"/><path d="m80 53 12 13-12 17-12-17Z" fill="url(#crown)" stroke="#453528" stroke-width="3"/><path d="m80 58 5 8-5 10-5-10Z" fill="#fff1bd"/><path d="M46 67 59 75 M114 67 101 75 M64 93h32" stroke="#a9a392" stroke-width="3"/><path d="m55 31 9-11 7 15m23-1 7-15 8 12" fill="none" stroke="#d0c6b0" stroke-width="4"/>
+<path d="m24 28 3-7 3 7 7 3-7 3-3 7-3-7-7-3Z M131 24l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z" fill="#de8f55" opacity=".88"/>
+<circle cx="31" cy="80" r="2.3" fill="#c6bfa9"/><circle cx="135" cy="78" r="2" fill="#c6bfa9"/>
+</svg>

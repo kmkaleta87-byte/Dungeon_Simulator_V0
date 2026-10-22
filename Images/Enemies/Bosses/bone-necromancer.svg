@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="The Bone Necromancer">
+<defs><radialGradient id="aura"><stop stop-color="#c9c6d5" stop-opacity=".62"/><stop offset="1" stop-color="#59585f" stop-opacity="0"/></radialGradient><linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c9c6d5"/><stop offset=".55" stop-color="#59585f"/><stop offset="1" stop-color="#34343a"/></linearGradient><linearGradient id="crown" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#87a2c0"/><stop offset="1" stop-color="#896744"/></linearGradient></defs>
+<ellipse cx="82" cy="61" rx="61" ry="57" fill="url(#aura)"/>
+<path d="M24 91 Q13 63 28 39 M133 90 Q147 61 132 36" fill="none" stroke="#c9c6d5" stroke-width="2" opacity=".7"/>
+<path d="M40 108 49 70 62 60 61 40 72 29 95 29 106 42 104 62 119 75 129 108 101 100 82 111 61 100Z" fill="url(#body)" stroke="#393744" stroke-width="4"/><path d="M65 47Q82 36 101 47 L98 65 82 74 66 64Z" fill="#ddd9ce" stroke="#393744" stroke-width="3"/><ellipse cx="74" cy="51" rx="4" ry="6" fill="#292833"/><ellipse cx="92" cy="51" rx="4" ry="6" fill="#292833"/><path d="M78 59 83 64 88 59 M74 67v5m9-5v5m9-5v5" fill="none" stroke="#393744" stroke-width="2.4"/><path d="M122 34v72m-9-61 9-14 10 14Z" fill="none" stroke="#554b43" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="122" cy="24" r="10" fill="url(#crown)" stroke="#393744" stroke-width="3"/><path d="m122 15 3 8-3 8-4-8Z" fill="#f3e6b7"/>
+<path d="m24 28 3-7 3 7 7 3-7 3-3 7-3-7-7-3Z M131 24l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z" fill="#87a2c0" opacity=".88"/>
+<circle cx="31" cy="80" r="2.3" fill="#c9c6d5"/><circle cx="135" cy="78" r="2" fill="#c9c6d5"/>
+</svg>

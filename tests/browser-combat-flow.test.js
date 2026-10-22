@@ -52,6 +52,49 @@ test("a warrior can use a basic attack during cooldown and the final kill exits 
   assert.equal(vm.runInContext("state.currentFloor.rooms[0].cleared", context), true);
 });
 
+test("the floor map shows real connections and only makes adjacent rooms clickable", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    state={floor:1,currentFloor:{rooms:[
+      {id:"r0",type:"start",x:3,y:3,visited:true,connections:[{id:"r1",direction:"east"}]},
+      {id:"r1",type:"shop",x:4,y:3,visited:false,connections:[{id:"r0",direction:"west"},{id:"r2",direction:"north"}]},
+      {id:"r2",type:"boss",x:4,y:2,visited:false,connections:[{id:"r1",direction:"south"}]}
+    ],currentId:"r0"}};
+  `, context);
+  const map=String(vm.runInContext("renderMap()",context));
+  assert.match(map,/map-link-east/);
+  assert.match(map,/class="map-cell room-shop unvisited available" data-move="r1"/);
+  assert.match(map,/<span class="map-cell room-boss unvisited/);
+  assert.doesNotMatch(map,/data-room=/);
+  assert.doesNotMatch(map,/data-move="r2"/);
+});
+
+test("combat actions use clear category icons, requirements, and disabled affordances", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`
+    newRun("Tester"); chooseClass("warrior");
+    state.items=[]; state.combat={boss:false,enemies:[{name:"Guard",hp:80,maxHp:80,damage:4,dodge:0,element:"Earth",intent:{key:"attack",label:"Strike"}}]};
+    state.target=0;state.attackCooldowns={};state.defenseCooldowns={block:0,aegis:0,dodge:0};
+  `,context);
+  const actions=String(vm.runInContext("getActions()",context));
+  assert.match(actions,/class="action-icon"/);
+  assert.match(actions,/action-glyph/);
+  assert.match(actions,/data-attack="heavy"/);
+  assert.match(actions,/Health potion/);
+  assert.match(actions,/disabled/);
+});
+
+test("a cleared encounter gets a concise victory summary with level-up feedback", () => {
+  const context = loadBrowserGame();
+  vm.runInContext(`state={skillPoints:2,log:[{text:"Victory. +14 gold and +72 XP. Loot: Rare Ashen Blade. You leveled up! Current skillpoints: 2."}]};`,context);
+  const banner=String(vm.runInContext("renderEncounterResult({type:'enemy',cleared:true})",context));
+  assert.match(banner,/result-stamp">Victory/);
+  assert.match(banner,/\+14 gold/);
+  assert.match(banner,/\+72 XP/);
+  assert.match(banner,/Level up · 2 skill points/);
+  assert.equal(vm.runInContext("renderEncounterResult({type:'enemy',cleared:false})",context),"");
+});
+
 test("difficulty scales enemy pressure, XP requirements, and shop prices", () => {
   const context = loadBrowserGame();
   vm.runInContext(`newRun("Tester", false, "slot1", "easy")`, context);
@@ -153,7 +196,7 @@ test("health and mana potions scale by rarity and their maximum resource", () =>
   assert.match(itemMarkup, /Restores 50% max MP \(101 MP now\)/);
 });
 
-test("Mage basic spells are free at full or empty mana, while their special spells keep costs", () => {
+test("Mage basic spells are free and restore mana, while their special spells keep costs", () => {
   const context = loadBrowserGame();
   vm.runInContext(`newRun("Mage Tester"); chooseClass("mage");
     state.weapon={name:"Test Wand",type:"Wand",rarity:"Common",damage:12,manaCost:7,element:"Fire",attacks:[{name:"Paid Spell",command:"paidspell",multiplier:1.5,critBonus:0,cooldown:0,manaCost:9}]};
@@ -162,9 +205,9 @@ test("Mage basic spells are free at full or empty mana, while their special spel
     state.mana=0; combatAction("basic"); var afterEmptyMana=state.mana;
     state.mana=40; combatAction("paidspell"); var afterSpecial=state.mana;
   `, context);
-  assert.match(vm.runInContext("previewMarkup", context), /No mana needed/);
-  assert.equal(vm.runInContext("afterFullMana", context), 40);
-  assert.equal(vm.runInContext("afterEmptyMana", context), 0);
+  assert.match(vm.runInContext("previewMarkup", context), /data-attack="basic"[^>]*><span class="action-icon"[\s\S]*?<strong>Basic spell<\/strong><small>Free/);
+  assert.equal(vm.runInContext("afterFullMana", context), 45);
+  assert.equal(vm.runInContext("afterEmptyMana", context), 5);
   assert.equal(vm.runInContext("afterSpecial", context), 31);
 });
 
@@ -421,8 +464,8 @@ test("Mage basic spell is free after Aegis and staff strike remains available th
     var manaAfterShieldStrike=state.mana, hpAfterShieldStrike=enemy.hp;
   `, context);
   assert.match(vm.runInContext("actionsAfterAegis", context), /data-attack="basic"(?! disabled)/);
-  assert.match(vm.runInContext("actionsAtZeroMana", context), /data-attack="basic"(?! disabled)[^>]*>Basic spell/);
-  assert.match(vm.runInContext("actionsWithShield", context), /data-attack="basic"(?! disabled)[^>]*>Staff strike/);
+  assert.match(vm.runInContext("actionsAtZeroMana", context), /data-attack="basic"(?! disabled)[^>]*>[\s\S]*?<strong>Basic spell<\/strong><small>Free/);
+  assert.match(vm.runInContext("actionsWithShield", context), /data-attack="basic"(?! disabled)[^>]*>[\s\S]*?<strong>Staff strike<\/strong><small>Reduced damage/);
   assert.match(vm.runInContext("actionsWithShield", context), /data-attack="magicbolt" disabled/);
   assert.equal(vm.runInContext("manaAfterShieldStrike", context), vm.runInContext("manaBeforeShieldStrike", context));
   assert.ok(vm.runInContext("hpAfterShieldStrike", context)<vm.runInContext("hpBeforeShieldStrike", context));
@@ -452,7 +495,7 @@ test("a floor-two Legendary Warrior charge does not one-shot a normal floor-five
   assert.ok(vm.runInContext("attackPreviewResult.primaryDamage < enemyMaxHp", context), `charge damage ${vm.runInContext("attackPreviewResult.primaryDamage", context)} vs ${vm.runInContext("enemyMaxHp", context)} HP`);
 });
 
-test("weapon forge applies per-weapon upgrades, limits, floor resets, and permits off-class weapons", () => {
+test("weapon forge upgrades scale without a per-floor cap, reset by floor, and permit off-class weapons", () => {
   const context = loadBrowserGame();
   vm.runInContext(`
     newRun("Tester"); chooseClass("warrior"); state.gold=10000;
@@ -466,9 +509,11 @@ test("weapon forge applies per-weapon upgrades, limits, floor resets, and permit
   assert.equal(vm.runInContext("state.weapon.critUpgrade", context), 0.01);
   assert.ok(Math.abs(vm.runInContext("state.weapon.effectChance", context)-0.24)<1e-12);
   assert.equal(vm.runInContext("state.weapon.upgradesThisFloor", context), 3);
-  const goldAfterLimit = vm.runInContext("state.gold", context);
+  const goldAfterThree = vm.runInContext("state.gold", context);
+  const fourthUpgradeCost = vm.runInContext("weaponUpgradeCost(state.weapon)", context);
   vm.runInContext("upgradeWeapon('speed')", context);
-  assert.equal(vm.runInContext("state.gold", context), goldAfterLimit);
+  assert.equal(vm.runInContext("state.gold", context), goldAfterThree-fourthUpgradeCost);
+  assert.equal(vm.runInContext("state.weapon.upgradesThisFloor", context), 4);
   vm.runInContext("state.floor=2; upgradeWeapon('damage')", context);
   assert.equal(vm.runInContext("state.weapon.damageUpgrade", context), 3);
   assert.equal(vm.runInContext("state.weapon.upgradesThisFloor", context), 1);
@@ -712,7 +757,8 @@ test("shop has six gear offers and a separate two-potion selection", () => {
   const context = loadBrowserGame();
   vm.runInContext(`newRun('Tester'); chooseClass('mage'); state.gold=100000; openShop();`, context);
   assert.equal(vm.runInContext("state.shopStock.length", context), 6);
-  assert.ok(vm.runInContext("state.shopStock.every(item => item.kind === 'weapon' || item.kind === 'armor')", context));
+  assert.equal(vm.runInContext("state.shopStock.filter(item => item.kind === 'classSpell').length", context), 1);
+  assert.equal(vm.runInContext("state.shopStock.filter(item => item.kind === 'weapon' || item.kind === 'armor').length", context), 5);
   assert.equal(vm.runInContext("state.shopPotions.length", context), 2);
   vm.runInContext("buyPotion(0)", context);
   assert.equal(vm.runInContext("state.shopPotions.length", context), 1);
@@ -908,7 +954,7 @@ test("boss fights expose usable combat and inventory choices while disabling fle
   const actions = vm.runInContext("bossActions", context);
   assert.match(actions, /data-attack="basic"(?! disabled)/);
   assert.match(vm.runInContext("combatInventoryButton", context), /data-open-inventory/);
-  assert.match(actions, /Use health potion/);
+  assert.match(actions, /data-action="heal"/);
   assert.match(actions, /data-action="flee" disabled/);
 });
 
@@ -934,7 +980,7 @@ test("archer arrows are one visible shared resource with explicit costs and safe
   assert.equal(vm.runInContext("afterShot", context), 1);
   assert.match(vm.runInContext("arrowLog", context), /spend 1 arrow\. 1 shared arrow remains/);
   assert.match(vm.runInContext("zeroArrowInventory", context), /0 shared arrows/);
-  assert.match(vm.runInContext("exhaustedActions", context), /data-attack="basic"(?! disabled)[^>]*>Unarmed jab/);
+  assert.match(vm.runInContext("exhaustedActions", context), /data-attack="basic"(?! disabled)[^>]*>[\s\S]*?<strong>Unarmed jab<\/strong><small>Reduced damage/);
   assert.equal(vm.runInContext("lowerBound", context), 0);
   assert.equal(vm.runInContext("upperBound", context), 30);
 });
@@ -1071,14 +1117,16 @@ test("Update V1.2 notes document the tactical additions without campaign story",
   assert.doesNotMatch(source, /campaign story|new lore/i);
 });
 
-test("regions rotate every five floors, use bounded race pools, and repeat after twenty", () => {
+test("regions rotate every five floors, use bounded race pools, and repeat after thirty-five", () => {
   const context = loadBrowserGame();
-  const boundaries = vm.runInContext(`[1,5,6,10,11,15,16,20,21].map(floor=>{const region=regionForFloor(floor);return [floor,region.id,region.cycle,region.regionStart,region.regionEnd]})`, context);
+  const boundaries = vm.runInContext(`[1,5,6,10,11,15,16,20,21,25,26,30,31,35,36].map(floor=>{const region=regionForFloor(floor);return [floor,region.id,region.cycle,region.regionStart,region.regionEnd]})`, context);
   assert.deepEqual(Array.from(boundaries, row=>Array.from(row)), [
     [1,"undead",1,1,5],[5,"undead",1,1,5],[6,"warrens",1,6,10],[10,"warrens",1,6,10],
-    [11,"haunted",1,11,15],[15,"haunted",1,11,15],[16,"feral-stone",1,16,20],[20,"feral-stone",1,16,20],[21,"undead",2,21,25]
+    [11,"haunted",1,11,15],[15,"haunted",1,11,15],[16,"feral-stone",1,16,20],[20,"feral-stone",1,16,20],
+    [21,"ironfang",1,21,25],[25,"ironfang",1,21,25],[26,"skyfang",1,26,30],[30,"skyfang",1,26,30],
+    [31,"verdant-veil",1,31,35],[35,"verdant-veil",1,31,35],[36,"undead",2,36,40]
   ]);
-  const pools = vm.runInContext(`Array.from({length:40},(_,i)=>{const floor=i+1;const enemy=makeEnemy(floor);return regionForFloor(floor).races.includes(enemy.race)})`, context);
+  const pools = vm.runInContext(`Array.from({length:70},(_,i)=>{const floor=i+1;const enemy=makeEnemy(floor);return regionForFloor(floor).races.includes(enemy.race)})`, context);
   assert.ok(Array.from(pools).every(Boolean));
   assert.equal(vm.runInContext("makeEnemy(20,true).name", context), "The Threshold Warden");
   assert.equal(vm.runInContext("makeEnemy(20,true).milestoneBoss", context), true);
@@ -1107,7 +1155,7 @@ test("V1.2 patch notes include regions and milestone bosses", () => {
   const notes = fs.readFileSync("patch-notes.js", "utf8");
   const page = fs.readFileSync("index.html", "utf8");
   assert.match(notes, /"v1\.2"[\s\S]*?four five-floor regions[\s\S]*?own regular-enemy and boss pool[\s\S]*?Threshold Warden[\s\S]*?global leaderboard/);
-  assert.match(page, /data-patch="v1\.4"[^>]*>Update V1\.4 <span>Current<\/span>/);
+  assert.match(page, /data-patch="v1\.6"[^>]*>Update V1\.6 <span>Current<\/span>/);
   assert.match(page, /data-patch="v1\.4"[\s\S]*data-patch="v1\.3"[\s\S]*data-patch="v1\.2"[\s\S]*data-patch="v1\.1"[\s\S]*data-patch="v1"/);
   assert.match(fs.readFileSync("Images/ART_ASSET_CHECKLIST.txt", "utf8"), /Floors\/HauntedHollows\/environment-background\.png[\s\S]*?floor-20-milestone-boss\.png - The Threshold Warden/);
 });

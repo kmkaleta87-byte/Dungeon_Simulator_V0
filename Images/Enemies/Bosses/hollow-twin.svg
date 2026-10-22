@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="The Hollow Twin">
+<defs><radialGradient id="aura"><stop stop-color="#a9b3d2" stop-opacity=".62"/><stop offset="1" stop-color="#48495d" stop-opacity="0"/></radialGradient><linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a9b3d2"/><stop offset=".55" stop-color="#48495d"/><stop offset="1" stop-color="#34343a"/></linearGradient><linearGradient id="crown" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#657fae"/><stop offset="1" stop-color="#896744"/></linearGradient></defs>
+<ellipse cx="82" cy="61" rx="61" ry="57" fill="url(#aura)"/>
+<path d="M24 91 Q13 63 28 39 M133 90 Q147 61 132 36" fill="none" stroke="#a9b3d2" stroke-width="2" opacity=".7"/>
+<path d="M43 107 50 69 61 57 58 37 73 20 94 20 108 39 103 60 119 74 126 107 101 99 82 111 62 98Z" fill="url(#body)" fill-opacity=".94" stroke="#343746" stroke-width="4"/><path d="M63 47Q80 31 100 47L96 66 82 77 66 64Z" fill="#242838" stroke="#343746" stroke-width="3"/><path d="M69 51 79 55 M88 55l9-4" stroke="#9ee1e3" stroke-width="4" stroke-linecap="round"/><circle cx="83" cy="62" r="5" fill="#6a82b0"/><path d="M49 35Q31 51 47 68M110 33q20 17 4 36" fill="none" stroke="#a9b3d2" stroke-width="3"/><path d="M72 86q10 8 20 0" fill="none" stroke="#7188b4" stroke-width="3"/>
+<path d="m24 28 3-7 3 7 7 3-7 3-3 7-3-7-7-3Z M131 24l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z" fill="#657fae" opacity=".88"/>
+<circle cx="31" cy="80" r="2.3" fill="#a9b3d2"/><circle cx="135" cy="78" r="2" fill="#a9b3d2"/>
+</svg>

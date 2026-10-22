@@ -1,4 +1,25 @@
 window.GAME_PATCH_NOTES = {
+  "v1.6": {
+    title: "Update V1.6",
+    subtitle: "UI Overhaul",
+    sections: [
+      {
+        heading: "UI Overhaul",
+        items: [
+          "A parchment-and-stone UI refresh adds clearer combat feedback, readable effects and targets, improved maps and meters, and smoother menus with reduced-motion support.",
+          "Combat and room navigation use a tighter layout, with enemies side by side when space allows and attack details kept easy to find.",
+          "Menus are easier to navigate: popups scroll within a consistent size, inventory updates in place, and the shop has separate gear, forge, and potions-and-spells tabs.",
+          "New art includes distinct weapon and armor icons, high-rarity potion designs, elemental icons, and portraits for active enemies and bosses."
+        ]
+      },
+      {
+        heading: "Menu Fixes",
+        items: [
+          "End Run asks for confirmation before ending the expedition; popups support Escape and keep keyboard focus in the menu."
+        ]
+      }
+    ]
+  },
   "v1.5": {
     title: "Update V1.5",
     subtitle: "New enemy roles, races, and regions",

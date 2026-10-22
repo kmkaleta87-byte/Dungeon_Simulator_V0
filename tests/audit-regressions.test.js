@@ -121,9 +121,9 @@ test("patch notes are ordered newest to oldest", () => {
   const context = { window: {} };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync("patch-notes.js", "utf8"), context);
-  assert.deepEqual(Object.keys(context.window.GAME_PATCH_NOTES), ["v1.4", "v1.3", "v1.2", "v1.1", "v1"]);
+  assert.deepEqual(Object.keys(context.window.GAME_PATCH_NOTES), ["v1.6", "v1.5", "v1.4", "v1.3", "v1.2", "v1.1", "v1"]);
   const html = fs.readFileSync("index.html", "utf8");
-  assert.match(html, /data-patch="v1\.4"[^>]*>Update V1\.4 <span>Current<\/span>/);
+  assert.match(html, /data-patch="v1\.6"[^>]*>Update V1\.6 <span>Current<\/span>/);
   assert.match(html, /data-patch="v1\.4"[\s\S]*data-patch="v1\.3"[\s\S]*data-patch="v1\.2"[\s\S]*data-patch="v1\.1"[\s\S]*data-patch="v1"/);
-  assert.match(fs.readFileSync("script.js", "utf8"), /renderPatchNotes\("v1\.4"\)/);
+  assert.match(fs.readFileSync("script.js", "utf8"), /renderPatchNotes\("v1\.6"\)/);
 });

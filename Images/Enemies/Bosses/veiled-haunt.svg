@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="The Veiled Haunt">
+<defs><radialGradient id="aura"><stop stop-color="#c7c2ef" stop-opacity=".62"/><stop offset="1" stop-color="#77729a" stop-opacity="0"/></radialGradient><linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c7c2ef"/><stop offset=".55" stop-color="#77729a"/><stop offset="1" stop-color="#34343a"/></linearGradient><linearGradient id="crown" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#8e9eb4"/><stop offset="1" stop-color="#896744"/></linearGradient></defs>
+<ellipse cx="82" cy="61" rx="61" ry="57" fill="url(#aura)"/>
+<path d="M24 91 Q13 63 28 39 M133 90 Q147 61 132 36" fill="none" stroke="#c7c2ef" stroke-width="2" opacity=".7"/>
+<path d="M46 105 Q53 81 49 56 Q44 22 81 13 Q119 20 113 57 Q108 81 122 104 L105 96 94 108 81 96 67 108 57 97Z" fill="url(#body)" fill-opacity=".9" stroke="#49465f" stroke-width="4"/><path d="M54 57 Q55 22 82 23 Q108 26 108 58 L99 70 63 70Z" fill="#35334b" stroke="#49465f" stroke-width="3"/><path d="M68 51 78 54 M88 54 98 51" stroke="#b5dded" stroke-width="4" stroke-linecap="round"/><path d="M74 72q8 5 16 0" fill="none" stroke="#c8d9e6" stroke-width="2.5"/><path d="M49 34Q29 51 43 68 M115 35q17 17 4 34" fill="none" stroke="#c7c2ef" stroke-width="3" opacity=".8"/>
+<path d="m24 28 3-7 3 7 7 3-7 3-3 7-3-7-7-3Z M131 24l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z" fill="#8e9eb4" opacity=".88"/>
+<circle cx="31" cy="80" r="2.3" fill="#c7c2ef"/><circle cx="135" cy="78" r="2" fill="#c7c2ef"/>
+</svg>

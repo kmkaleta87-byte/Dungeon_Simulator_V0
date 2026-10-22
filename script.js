@@ -241,6 +241,7 @@ const BOSS_RACES = {"The Slime Sovereign":"slime","The Bone Regent":"skeleton","
 
 let state = null;
 let modal = null;
+let shopTab = "weapons";
 let indexCategory = "warrior";
 let selectedIndexItem = null;
 let inventoryWeaponFamily = "warrior";
@@ -251,12 +252,39 @@ let leaderboardDifficulty = "normal";
 let leaderboardEntries = [];
 let leaderboardStatus = "idle";
 let leaderboardRequest = 0;
+let pendingCombatAction = null;
+let lastFocusedModalName = null;
+let modalReturnFocusSelector = null;
 
-indexButton.addEventListener("click", () => { modal = "index"; selectedIndexItem = null; showModal(); });
-document.querySelector("#leaderboard-button").addEventListener("click", () => { modal = "leaderboard"; showModal(); });
+screen.addEventListener("keydown", event => {
+  const dialog=screen.querySelector('.modal[role="dialog"]');
+  if(!dialog)return;
+  if(event.key==="Escape"){
+    const close=dialog.querySelector("[data-close-modal]");
+    if(close){event.preventDefault();close.click();}
+    return;
+  }
+  if(event.key!=="Tab")return;
+  const focusable=[...dialog.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],[tabindex]:not([tabindex="-1"])')].filter(element=>element.offsetParent!==null);
+  if(!focusable.length)return;
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+});
+
+indexButton.addEventListener("click", () => { modalReturnFocusSelector="#index-button"; modal = "index"; selectedIndexItem = null; showModal(); });
+document.querySelector("#leaderboard-button").addEventListener("click", () => { modalReturnFocusSelector="#leaderboard-button"; modal = "leaderboard"; showModal(); });
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+}
+
+function animateMenuSwap(element) {
+  if (!element || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  element.classList.remove("menu-content-swap");
+  void element.offsetWidth;
+  element.classList.add("menu-content-swap");
+  element.addEventListener("animationend", () => element.classList.remove("menu-content-swap"), { once: true });
 }
 
 function slug(value) {
@@ -431,7 +459,10 @@ function updateLeaderboardView() {
   if (!backdrop || modal !== "leaderboard") return;
   const markup = renderLeaderboard();
   const board = backdrop.querySelector(".leaderboard-board");
-  if (board) board.innerHTML = markup.match(/<div class="leaderboard-board">([\s\S]*)<\/div>$/)?.[1] || "";
+  if (board) {
+    board.innerHTML = markup.match(/<div class="leaderboard-board">([\s\S]*)<\/div>$/)?.[1] || "";
+    animateMenuSwap(board);
+  }
   const notice = backdrop.querySelector(".leaderboard-note");
   const newNotice = markup.match(/<p class="leaderboard-note">([\s\S]*?)<\/p>/)?.[1];
   if (notice && !newNotice) notice.remove();
@@ -735,11 +766,11 @@ function startScreen() {
   titleButton.hidden = true;
   indexButton.hidden = false;
   const slots = loadSaveSlots();
-  screen.innerHTML = `<div class="title-screen"><div class="title-copy"><p class="eyebrow">A dungeon adventure</p><h2>Every room<br>is a choice.</h2><p>Explore a shifting dungeon, search what you find, and fight your way toward the next floor.</p><button class="secondary-button" data-open-leaderboard>View highest floors</button>${renderPersonalBests()}</div><div class="start-form"><label for="player-name">Character name for a new run</label><input id="player-name" maxlength="22" placeholder="Adventurer" autocomplete="off"><label for="difficulty-choice">Difficulty</label><select id="difficulty-choice"><option value="easy">Easy · gentler enemies, faster leveling, lower prices</option><option value="normal" selected>Normal · standard balance</option><option value="hard">Hard · tougher enemies, slower leveling, higher prices</option></select><div class="save-slots">${SAVE_SLOT_IDS.map(slot=>{const saved=slots[slot];const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;return `<article class="save-slot"><div><strong>${label}</strong><span>${escapeHtml(DUNGEON_RULES.describeSaveSlot(slots,slot))}${saved?` · ${DIFFICULTIES[saved.difficulty]?.label||"Normal"}`:""}</span></div><div class="save-slot-actions">${saved?`<button class="small-button" data-continue-slot="${slot}">Continue</button>`:""}<button class="small-button" data-new-slot="${slot}">${saved?"New run":"Start run"}</button>${saved?`<button class="text-button" data-delete-slot="${slot}">Delete</button>`:""}</div></article>`;}).join("")}</div><p class="fine-print">Run saves are stored in this browser. Global leaderboard records are separate; Dev-slot runs do not count.</p></div></div>`;
-  screen.querySelector("[data-open-leaderboard]")?.addEventListener("click", () => { modal = "leaderboard"; showModal(); });
+  screen.innerHTML = `<div class="title-screen"><div class="title-copy"><p class="eyebrow">A dungeon adventure</p><h2>Every room<br>is a choice.</h2><p>Explore a shifting dungeon, search what you find, and fight your way toward the next floor.</p><button class="secondary-button" data-open-leaderboard>View highest floors</button>${renderPersonalBests()}</div><div class="start-form"><p class="form-kicker">Begin an expedition</p><label for="player-name">Character name</label><input id="player-name" maxlength="22" placeholder="Adventurer" autocomplete="off"><label for="difficulty-choice">Difficulty</label><select id="difficulty-choice"><option value="easy">Easy · gentler enemies, faster leveling, lower prices</option><option value="normal" selected>Normal · standard balance</option><option value="hard">Hard · tougher enemies, slower leveling, higher prices</option></select><div class="save-slots">${SAVE_SLOT_IDS.map(slot=>{const saved=slots[slot];const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;return `<article class="save-slot ${saved?"save-slot-filled":"save-slot-empty"}"><div><strong>${label}</strong><span>${escapeHtml(DUNGEON_RULES.describeSaveSlot(slots,slot))}${saved?` · ${DIFFICULTIES[saved.difficulty]?.label||"Normal"}`:""}</span></div><div class="save-slot-actions">${saved?`<button class="small-button continue-button" data-continue-slot="${slot}">Continue</button>`:""}<button class="small-button start-run-button" data-new-slot="${slot}">${saved?"New run":"Start run"}</button>${saved?`<button class="text-button" data-delete-slot="${slot}">Delete</button>`:""}</div></article>`;}).join("")}</div><p class="fine-print">Run saves are stored in this browser. Global leaderboard records are separate; Dev-slot runs do not count.</p></div></div>`;
+  screen.querySelector("[data-open-leaderboard]")?.addEventListener("click", () => { modalReturnFocusSelector="[data-open-leaderboard]"; modal = "leaderboard"; showModal(); });
   screen.querySelectorAll("[data-new-slot]").forEach(button=>button.addEventListener("click",()=>{
     const slot=button.dataset.newSlot;const slotLabel=slot==="dev"?"dev":slot.slice(-1);const existing=slots[slot];
-    if(existing&&(prompt(`Starting over replaces this save. Type exactly: overwrite slot ${slotLabel}`)!==`overwrite slot ${slotLabel}`||prompt(`This will replace ${DUNGEON_RULES.describeSaveSlot(slots,slot)}. Type OVERWRITE to confirm.`)!=="OVERWRITE"))return;
+    if(existing&&!window.confirm(`Start a new run in ${slotLabel==="dev"?"the dev slot":`slot ${slotLabel}`}? This will replace ${DUNGEON_RULES.describeSaveSlot(slots,slot)}.`))return;
     newRun(screen.querySelector("#player-name").value.trim(),slot==="dev",slot,screen.querySelector("#difficulty-choice").value);
   }));
   screen.querySelectorAll("[data-continue-slot]").forEach(button=>button.addEventListener("click",()=>{state=slots[button.dataset.continueSlot];state.saveSlot=button.dataset.continueSlot;state.runStats ||= {enemiesDefeated:0,damageDealt:0,damageTaken:0,fights:[]};modal=state.runEnded?"run-end":state.milestonePending?"milestone":null;render();}));
@@ -784,7 +815,20 @@ function renderMap() {
   const floor = state.currentFloor;
   const region=regionForFloor(state.floor);
   const byCoord = new Map(floor.rooms.map(room => [`${room.x},${room.y}`, room]));
-  let html = `<div class="map-area"><img class="region-map-overlay" src="Images/Floors/${escapeHtml(region.folder)}/map-overlay.png" alt="" aria-hidden="true"><div class="map-grid" aria-label="Dungeon map">`;
+  const byId = new Map(floor.rooms.map(room => [room.id, room]));
+  const available = new Set(getConnected().map(({room}) => room.id));
+  const directions = ["north", "east", "south", "west"];
+  const connectionsFor = room => {
+    const recorded = Array.isArray(room.connections) ? room.connections.filter(connection => byId.has(connection.id)) : [];
+    if (recorded.length) return recorded;
+    const offsets = { north:[0,-1], east:[1,0], south:[0,1], west:[-1,0] };
+    return directions.flatMap(direction => {
+      const [dx,dy] = offsets[direction];
+      const neighbor = byCoord.get(`${room.x+dx},${room.y+dy}`);
+      return neighbor ? [{id:neighbor.id,direction}] : [];
+    });
+  };
+  let html = `<div class="map-area"><img class="region-map-overlay" src="Images/Floors/${escapeHtml(region.folder)}/map-overlay.png" alt="" aria-hidden="true"><div class="map-grid" role="group" aria-label="Floor map. Highlighted rooms are reachable from your current location.">`;
   for (let y=0; y<7; y++) for (let x=0; x<7; x++) {
     const room = byCoord.get(`${x},${y}`);
     if (!room) html += `<span class="map-cell void" aria-hidden="true"></span>`;
@@ -792,10 +836,17 @@ function renderMap() {
       const current = room.id === floor.currentId;
       const revealed = room.visited || current;
       const title = revealed ? ROOM_LABELS[room.type] : "Unexplored room";
-      html += `<button class="map-cell ${revealed ? "visited" : "unvisited"} ${current ? "current" : ""} ${revealed && room.type === "boss" ? "boss-cell" : ""}" data-room="${room.id}" ${current ? "aria-current='location'" : ""} aria-label="${escapeHtml(title)}" title="${escapeHtml(title)}">${revealed ? `<img class="room-tile-art" src="${mapRoomImage(room)}" alt="" aria-hidden="true">` : ""}${current ? `<img class="player-marker" src="Images/player.png" alt="" aria-hidden="true">` : ""}</button>`;
+      const isAvailable = available.has(room.id);
+      const connectors = (room.visited || current) ? connectionsFor(room).map(connection => `<i class="map-link map-link-${escapeHtml(connection.direction)}" aria-hidden="true"></i>`).join("") : "";
+      const classes = ["map-cell",`room-${slug(room.type)}`,revealed?"visited":"unvisited",current?"current":"",isAvailable?"available":"",revealed&&room.type==="boss"?"boss-cell":""].filter(Boolean).join(" ");
+      const art = revealed ? `<img class="room-tile-art" src="${mapRoomImage(room)}" alt="" aria-hidden="true">` : "";
+      const marker = current ? `<img class="player-marker" src="Images/player.png" alt="" aria-hidden="true">` : "";
+      if (current) html += `<span class="${classes}" aria-current="location" aria-label="Current room: ${escapeHtml(title)}" title="You are here · ${escapeHtml(title)}">${connectors}${art}${marker}</span>`;
+      else if (isAvailable) html += `<button class="${classes}" data-move="${escapeHtml(room.id)}" aria-label="Move to ${escapeHtml(title)}" title="Reachable · ${escapeHtml(title)}">${connectors}${art}</button>`;
+      else html += `<span class="${classes}" aria-label="${escapeHtml(title)}" title="${escapeHtml(title)}">${connectors}${art}</span>`;
     }
   }
-  return html + `</div><div class="map-legend"><span><i class="legend-marker player-key"></i>You</span><span><i class="legend-marker room-key"></i>Known room</span><span><i class="legend-marker fog-key"></i>Unexplored</span></div></div>`;
+  return html + `</div><div class="map-legend"><span><i class="legend-marker player-key"></i>You</span><span><i class="legend-marker route-key"></i>Reachable</span><span><i class="legend-marker room-key"></i>Visited</span><span><i class="legend-marker fog-key"></i>Unexplored</span></div></div>`;
 }
 
 function weaponArt(weapon, large = false) {
@@ -812,18 +863,29 @@ function enemyArt(enemy) {
   const bossArt = {
     "The Slime Sovereign": "slime-sovereign", "The Bone Regent": "bone-regent", "The Goblin King": "goblin-king",
     "The Veiled Haunt": "veiled-haunt", "The Crimson Count": "crimson-count", "The Moonfang Alpha": "moonfang-alpha",
-    "The Mountain Heart": "mountain-heart", "The Bone Necromancer": "bone-necromancer", "The Ashen Twin": "ashen-twin", "The Hollow Twin": "hollow-twin"
+    "The Mountain Heart": "mountain-heart", "The Bone Necromancer": "bone-necromancer", "The Ashen Twin": "ashen-twin", "The Hollow Twin": "hollow-twin",
+    "The Orc Warchief": "orc-warchief", "The Lizard Matriarch": "lizard-matriarch", "The Kobold Skyking": "kobold-skyking",
+    "The Harpy Tempest": "harpy-tempest", "The Fae Queen": "fae-queen", "The Mycelium Heart": "mycelium-heart"
   };
-  const file = enemy.boss ? `${enemy.name===MILESTONE_BOSS_NAME?"floor-20-milestone-boss":bossArt[enemy.name] || slug(enemy.name)}.png` : `${slug(enemy.name)}.png`;
+  const regularFile = enemy.summoned ? "summoned-skeleton.svg" : `${slug(enemy.race || enemy.name)}-${slug(enemy.klass || "warrior")}.svg`;
+  const file = enemy.boss ? `${enemy.name===MILESTONE_BOSS_NAME?"floor-20-milestone-boss":bossArt[enemy.name] || slug(enemy.name)}.svg` : regularFile;
   const folder = enemy.boss ? "Bosses" : "Races";
-  return itemArt(`Images/Enemies/${folder}/${file}`, enemy.name);
+  const portraitLabel=enemy.boss?"Boss":enemy.race?enemy.race[0].toUpperCase()+enemy.race.slice(1):enemy.klass;
+  return `<div class="item-art enemy-portrait"><img src="Images/Enemies/${folder}/${escapeHtml(file)}" alt="${escapeHtml(enemy.name)}"><span><b>${escapeHtml(portraitLabel)}</b><small>${escapeHtml(enemy.klass)}</small></span></div>`;
 }
 
 function potionArt(item) {
   const mana=item.type==="mana"||/mana/i.test(item.name);
-  const file = mana ? "mana-potion.png" : "small-health-potion.png";
   const rarity=(item.rarity||"common").toLowerCase();
+  const type=mana?"mana":"health";
+  const file = ["mythic","divine"].includes(rarity) ? `${rarity}-${type}-potion.svg` : mana ? "mana-potion.png" : "small-health-potion.png";
   return `<div class="item-art potion-art potion-${rarity}"><img src="Images/Items/Potions/${file}" alt="${escapeHtml(item.name)}"><span>${escapeHtml(item.name)}</span></div>`;
+}
+
+function elementBadge(element) {
+  const label=element && element!=="None" ? element : "Physical";
+  const file=slug(label);
+  return `<span class="element-badge element-${file}"><img src="Images/UI/Elements/${file}.svg" alt="" aria-hidden="true"><span>${escapeHtml(label)}</span></span>`;
 }
 
 function bindArtFallbacks(root = screen) {
@@ -851,7 +913,7 @@ function weaponCard(weapon, index, equipped = false) {
   const offClass=Boolean(state.chosenClass && family!==state.chosenClass);
   const equippedLabel = equipped ? `<span class="equipped-tag">Equipped</span>` : `<button class="small-button" data-equip-weapon="${index}">Equip</button>`;
   const ammo = ["Bow","Crossbow"].includes(weapon.type) ? ` · ${state.arrows ?? 0} shared arrows` : "";
-  return `<article class="inventory-item ${rarityClass(weapon.rarity)}">${weaponArt(weapon)}<div class="item-copy"><span class="item-meta">${escapeHtml(weapon.rarity)} ${escapeHtml(weapon.type)} · ${escapeHtml(weapon.element)}</span><strong>${escapeHtml(weapon.name)}</strong><span class="item-stats">${weapon.damage+(weapon.damageUpgrade||0)} weapon damage · ${Math.round(((weapon.crit||0)+(weapon.critUpgrade||0))*100)}% weapon crit${ammo}${weapon.level>1?` · Lv ${weapon.level}`:""}${offClass?" · Off-class damage: 75%":""}</span></div><div class="inventory-item-actions">${equippedLabel}<button class="small-button" data-inventory-sell="weapon" data-sell-index="${index}" ${equipped?"disabled title=\"Equip another weapon before selling this one\"":""}>Sell · ${sellValue(weapon,"weapon")}g</button></div></article>`;
+  return `<article class="inventory-item ${rarityClass(weapon.rarity)}">${weaponArt(weapon)}<div class="item-copy"><span class="item-meta">${escapeHtml(weapon.rarity)} ${escapeHtml(weapon.type)} · ${elementBadge(weapon.element)}</span><strong>${escapeHtml(weapon.name)}</strong><span class="item-stats">${weapon.damage+(weapon.damageUpgrade||0)} weapon damage · ${Math.round(((weapon.crit||0)+(weapon.critUpgrade||0))*100)}% weapon crit${ammo}${weapon.level>1?` · Lv ${weapon.level}`:""}${offClass?" · Off-class damage: 75%":""}</span></div><div class="inventory-item-actions">${equippedLabel}<button class="small-button" data-inventory-sell="weapon" data-sell-index="${index}" ${equipped?"disabled title=\"Equip another weapon before selling this one\"":""}>Sell · ${sellValue(weapon,"weapon")}g</button></div></article>`;
 }
 
 function getConnected() {
@@ -883,6 +945,24 @@ function renderMovement() {
 function inventoryButtonMarkup() {
   return `<button class="inventory-button" data-open-inventory type="button">Inventory ${state.inventoryNotice?'<span class="inventory-notice" aria-label="New equipment">!</span>':""}</button>`;
 }
+function combatActionIcon(kind) {
+  const icons = {
+    weapon:'<path d="m5 19 10-10m-2-2 2-2 4 4-2 2M4 20l3-1-2-2-1 3Z"/><path d="m9 15 2 2"/>',
+    heavy:'<path d="m5 19 10-10m-2-2 2-2 4 4-2 2M4 20l3-1-2-2-1 3Z"/><path d="M17 2v3m4-1-2 2m2 2h-3"/>',
+    ranged:'<path d="M5 3c8 3 8 15 0 18M5 3l14 9-14 9M19 12h3"/>',
+    magic:'<path d="m5 19 9-9m-2-2 2-2 4 4-2 2M4 20l3-1-2-2-1 3Z"/><path d="m18 3 .6 1.6L20 5l-1.4.5L18 7l-.6-1.5L16 5l1.4-.4L18 3Z"/>',
+    area:'<circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9 7 7m10 10 2.1 2.1m0-14.2L17 7M7 17l-2.1 2.1"/>',
+    control:'<path d="M4 5h16v11h-8l-5 4v-4H4z"/><path d="M8 9h8m-8 3h5"/>',
+    defense:'<path d="M12 2 20 5v6c0 5-3 8-8 11-5-3-8-6-8-11V5l8-3Z"/><path d="m8 12 3 3 5-6"/>',
+    health:'<path d="M20.8 8.5c0 5-8.8 11-8.8 11s-8.8-6-8.8-11a4.6 4.6 0 0 1 8.8-1.7 4.6 4.6 0 0 1 8.8 1.7Z"/><path d="M12 9v6m-3-3h6"/>',
+    mana:'<path d="M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/><path d="M9 14h6m-3-3v6"/>',
+    escape:'<path d="M4 20V4h10v16M14 12h7m-3-3 3 3-3 3"/><circle cx="10" cy="12" r=".8" fill="currentColor" stroke="none"/>'
+  };
+  return `<svg class="action-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[kind]||icons.weapon}</svg>`;
+}
+function combatActionButton(label, hint, {kind="weapon", attribute="attack", command="basic", className="", disabled=false, title=""}={}) {
+  return `<button class="action-button ${className}" data-${attribute}="${escapeHtml(command)}" ${disabled?`disabled${title?` title="${escapeHtml(title)}"`:""}`:""}><span class="action-icon">${combatActionIcon(kind)}</span><span class="action-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hint)}</small></span></button>`;
+}
 function getActions() {
   if(state.runEnded)return `<p class="prompt-note">This run has ended. Return to the title to start another run.</p>`;
   const room = currentRoom();
@@ -894,39 +974,35 @@ function getActions() {
     const spellBlocked = usesMana && state.equippedArmor?.shield;
     const noArrows=["Bow","Crossbow"].includes(weapon?.type)&&state.arrows<(weapon?.effect==="Overdraw"?2:1);
     const basicFallback = spellBlocked ? "shield" : (usesMana&&!freeMageBasic?DUNGEON_RULES.basicAttackFallback(state.class,weapon?.type,state.mana,state.arrows,(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0)):null)||(noArrows?"arrows":null);
-    const basicManaGain=freeMageBasic&&!basicFallback?5:0;
     const basicLabel = weaponClass === "mage" ? "Basic spell" : weaponClass === "archer" ? "Basic shot" : "Basic attack";
     const arrowsOut = ["Bow", "Crossbow"].includes(weapon?.type) && state.arrows < (weapon?.effect==="Overdraw"?2:1) && !basicFallback;
     const manaCost = freeMageBasic?0:usesMana?(weapon?.manaCost||5)+(weapon?.effect==="Overcast"?2:0):0;
-    const basicPreview=attackPreview({multiplier:basicFallback?0.5:1,critBonus:0,manaCost:0,manaGain:basicManaGain||(state.class==="archer"?1:0),freeBasic:freeMageBasic,aoe:false});
-    const heavyPreview=attackPreview({multiplier:1.5,critBonus:0.1,cooldown:2,aoe:false});
     const equippedSpell=state.spells?.find(spell=>spell.id===state.equippedSpellId);
+    const actionHint=(cooldown, manaCost, ammoCost, blocked=false)=>cooldown?`Cooldown · ${cooldown}t`:blocked?"Blocked by shield":state.mana<manaCost?`Need ${manaCost} mana`:state.arrows<ammoCost?"Need arrows":manaCost?`Ready · ${manaCost} mana`:ammoCost?`Ready · ${ammoCost} arrow${ammoCost===1?"":"s"}`:"Ready";
     const specials = [...(weapon?.attacks || []), ...(equippedSpell?[classSpellAttack(equippedSpell)]:[])].map(attack => {
       const cooldown = DUNGEON_RULES.isAttackOnCooldown(state.attackCooldowns,attack.command) ? state.attackCooldowns[attack.command] : 0;
       const preview = attackPreview(attack);
       const disabled = cooldown > 0 || (!attack.spell && usesMana && spellBlocked) || state.mana < preview.manaCost || (preview.ammoCost > 0 && state.arrows < preview.ammoCost);
-      const aoePreview=attack.aoe?` · AoE secondary ~${preview.secondaryDamage}`:"";
-      const chargeLabel=attack.chargesNextAttack?`Next hit: ~${preview.primaryDamage} dmg / ${preview.criticalDamage} crit · ${Math.round(preview.critChance*100)}% crit${aoePreview}`:`~${preview.primaryDamage} dmg / ${preview.criticalDamage} crit · ${Math.round(preview.critChance*100)}% crit${aoePreview}`;
-      const matchup=` · elemental ${preview.elementRelation}${previewModifiers(preview)}`;
-      const classPenalty=attack.offClass?" · off-class spell: ×0.75 power, +50% mana":preview.offClass?" · off-class ×0.75":"";
-      const targetLabel=attack.aoe?` · ${preview.targetCount} targets`:` · single target`;
-      const resources=`${preview.manaCost?` · ${preview.manaCost} mana`:""}${preview.ammoCost?` · ${preview.ammoCost} arrow${preview.ammoCost===1?"":"s"} · ${state.arrows||0} shared remaining`:""}${preview.manaGain?` · +${preview.manaGain} mana on hit`:""}${attack.healOnHit?` · heals ${Math.round(attack.healOnHit*100)}% of damage`:""}`;
-      const cooldownLabel=` · ${preview.cooldown?`${preview.cooldown} turn cooldown`:"no cooldown"}`;
-      return `<button class="action-button special-action" data-attack="${escapeHtml(attack.command)}" ${disabled?"disabled":""}>${escapeHtml(attack.name)}<small>${cooldown?`Cooldown ${cooldown}`:`${chargeLabel}${classPenalty}${matchup}${targetLabel}${attack.effect?` · ${effectIcon(attack.effect)}`:""}${resources}${cooldownLabel}`}</small></button>`;
+      const hint=actionHint(cooldown,preview.manaCost,preview.ammoCost,!attack.spell&&usesMana&&spellBlocked);
+      const kind=attack.spell?"magic":attack.aoe?"area":["Bow","Crossbow"].includes(weapon?.type)?"ranged":"weapon";
+      return combatActionButton(attack.name,hint,{kind,command:attack.command,className:"special-action",disabled,title:disabled?hint:""});
     }).join("");
     const selectedEnemy=state.combat.enemies[state.target];
     const disruptable=DUNGEON_RULES.hasDisruptibleIntent(selectedEnemy);
     const disruptCooldown=state.disruptCooldown||0;
     const defense=classDefenseOption();
-    const defenseAction=defense?`<button class="action-button secondary" data-attack="${defense.action}" ${defense.disabled?"disabled":""}>${defense.label}<small>${defense.description}</small></button>`:"";
-    const disruptAction=disruptable?`<button class="action-button secondary" data-attack="disrupt" ${!DUNGEON_RULES.canDisrupt(selectedEnemy,disruptCooldown)?"disabled":""}>Disrupt<small>${disruptCooldown?`Cooldown ${disruptCooldown}`:`Cancel ${escapeHtml(selectedEnemy.intent.label)}`}</small></button>`:"";
+    const defenseCooldown=defense?(state.defenseCooldowns?.[defense.action]||0):0;
+    const defenseHint=!defense?"":defenseCooldown?`Cooldown · ${defenseCooldown}t`:defense.action==="aegis"&&state.equippedArmor?.shield?"Blocked by shield":defense.action==="aegis"&&state.mana<8?"Need 8 mana":"Ready";
+    const defenseAction=defense?combatActionButton(defense.label,defenseHint,{kind:"defense",command:defense.action,className:"action-defense",disabled:defense.disabled,title:defenseHint}):"";
+    const disruptAction=disruptable?combatActionButton("Disrupt",disruptCooldown?`Cooldown · ${disruptCooldown}t`:"Cancel intent",{kind:"control",command:"disrupt",className:"action-control",disabled:!DUNGEON_RULES.canDisrupt(selectedEnemy,disruptCooldown),title:"Cancel the telegraphed action"}):"";
     const basicDisabled=(usesMana&&!freeMageBasic&&state.mana<manaCost&&!basicFallback)||arrowsOut;
     const basicFallbackName=usesMana?"Staff strike":"Unarmed jab";
-    const basicResource=usesMana?(freeMageBasic?`No mana needed${basicManaGain?" · +5 mana on hit":""}${basicFallback?" · reduced damage":""}`:basicFallback?"No mana needed · reduced damage":`${manaCost} mana`):["Bow","Crossbow"].includes(weapon?.type)?(basicFallback?"No arrows · reduced-damage jab":`1 arrow · ${state.arrows||0} shared remaining${state.class==="archer"?" · +1 mana on hit":""}${basicManaGain?" · +5 mana on hit":""}`):`Always available${basicManaGain?" · +5 mana on hit":""}`;
-    const basicPenalty=DUNGEON_RULES.weaponDamageMultiplier(state.class,weapon);
-    const basicMatchup=` · elemental ${basicPreview.elementRelation}${previewModifiers(basicPreview)}`;
+    const basicResource=basicFallback?"Reduced damage":basicDisabled?(arrowsOut?"Need arrows":`Need ${manaCost} mana`):freeMageBasic?"Free · +5 mana on hit":["Bow","Crossbow"].includes(weapon?.type)?`Ready · 1 arrow · ${state.arrows||0} left`:"Ready";
     const cannotFlee=state.combat.boss;
-    return `<div class="action-grid"><button class="action-button" data-attack="basic" ${basicDisabled?"disabled":""}>${basicFallback?basicFallbackName:basicLabel}<small>~${basicPreview.primaryDamage} dmg / ${basicPreview.criticalDamage} crit · ${Math.round(basicPreview.critChance*100)}% crit${basicPenalty<1?" · off-class ×0.75":""}${basicMatchup}${basicPreview.effect?` · ${effectIcon(basicPreview.effect)}`:""} · ${basicResource}</small></button>${state.class==="warrior"?`<button class="action-button" data-attack="heavy" ${state.cooldown>0?"disabled":""}>Heavy attack<small>${state.cooldown?`Cooldown ${state.cooldown}`:`~${heavyPreview.primaryDamage} dmg / ${heavyPreview.criticalDamage} crit · ${Math.round(heavyPreview.critChance*100)}% crit${DUNGEON_RULES.weaponDamageMultiplier(state.class,weapon)<1?" · off-class ×0.75":""} · elemental ${heavyPreview.elementRelation}${previewModifiers(heavyPreview)} · 2 turn cooldown`}</small></button>`:""}${specials}${disruptAction}${defenseAction}<button class="action-button" data-action="heal">Use health potion</button><button class="action-button" data-action="mana">Use mana potion</button><button class="action-button secondary" data-action="flee" ${cannotFlee?"disabled title=\"Fleeing is unavailable during a boss fight\"":""}>${cannotFlee?"Flee unavailable":"Flee"}</button></div>`;
+    const healthCount=state.items.filter(item=>item.type==="health"&&item.quantity>0).reduce((sum,item)=>sum+item.quantity,0);
+    const manaCount=state.items.filter(item=>item.type==="mana"&&item.quantity>0).reduce((sum,item)=>sum+item.quantity,0);
+    const basicKind=weaponClass==="mage"?"magic":weaponClass==="archer"?"ranged":"weapon";
+    return `<div class="action-grid">${combatActionButton(basicFallback?basicFallbackName:basicLabel,basicResource,{kind:basicKind,command:"basic",className:"action-primary",disabled:basicDisabled,title:basicResource})}${state.class==="warrior"?combatActionButton("Heavy attack",state.cooldown?`Cooldown · ${state.cooldown}t`:"Ready",{kind:"heavy",command:"heavy",className:"action-heavy",disabled:state.cooldown>0,title:"A stronger melee attack; 2-turn cooldown"}):""}${specials}${disruptAction}${defenseAction}${combatActionButton("Health potion",healthCount?`×${healthCount} available`:"None available",{kind:"health",attribute:"action",command:"heal",className:"action-item",disabled:!healthCount})}${combatActionButton("Mana potion",manaCount?`×${manaCount} available`:"None available",{kind:"mana",attribute:"action",command:"mana",className:"action-mana",disabled:!manaCount})}${combatActionButton(cannotFlee?"Flee unavailable":"Flee",cannotFlee?"Boss fight":"40% chance",{kind:"escape",attribute:"action",command:"flee",className:"action-escape",disabled:cannotFlee,title:cannotFlee?"Fleeing is unavailable during a boss fight":""})}</div>`;
   }
   if (room.type === "boss" && room.cleared) {
     if(state.milestonePending)return `<p class="prompt-note">The milestone boss is defeated. Choose whether this run ends here or continues into the next region.</p><div class="action-grid"><button class="action-button" data-milestone-end>End run · record ${state.floorsCleared} floors</button><button class="action-button secondary" data-milestone-continue>Continue to floor ${state.floor+1}</button></div>`;
@@ -1010,7 +1086,20 @@ function classDefenseOption() {
   return null;
 }
 
-function renderLog() { return `<section class="context-box" aria-label="Recent events"><div class="context-heading">Context <span>Recent events</span></div><div class="context-output" role="log" aria-live="polite">${state.log.map(entry => `<p class="${escapeHtml(entry.tone || "")}">${escapeHtml(entry.text)}</p>`).join("")}</div></section>`; }
+function renderLog() { return `<section class="context-box" aria-label="Recent events"><div class="context-heading">Recent events <span>Expedition log</span></div><div class="context-output" role="log" aria-live="polite">${state.log.map((entry,index) => `<p class="${escapeHtml(entry.tone || "")} ${index===0?"latest":""}">${escapeHtml(entry.text)}</p>`).join("")}</div></section>`; }
+
+function renderEncounterResult(room) {
+  const latest=state.log?.[0]?.text||"";
+  const reward=latest.match(/^Victory\. \+(\d+) gold and \+(\d+) XP\./);
+  if(!room?.cleared||room.type!=="enemy"||!reward)return "";
+  const leveled=latest.includes("You leveled up!");
+  return `<aside class="encounter-result ${leveled?"level-up":""}" role="status"><span class="result-stamp">Victory</span><strong>+${reward[1]} gold <i>·</i> +${reward[2]} XP</strong>${leveled?`<span class="level-up-note">Level up · ${state.skillPoints} skill point${state.skillPoints===1?"":"s"} to spend</span>`:""}<small>Loot details are in the expedition log.</small></aside>`;
+}
+
+function renderPlayerIdentity() {
+  const kind=state.class==="mage"?"magic":state.class==="archer"?"ranged":"weapon";
+  return `<div class="player-identity"><span class="player-role-mark">${combatActionIcon(kind)}</span><div><span class="section-kicker">Your character</span><strong>${escapeHtml(state.name||"Adventurer")}</strong><small>${escapeHtml(CLASS_NAMES[state.class]||"Adventurer")}${state.weapon?` · ${escapeHtml(state.weapon.name)}`:""}</small></div></div>`;
+}
 
 function captureModalView(){
   const element=screen.querySelector(".modal");
@@ -1040,8 +1129,85 @@ function restoreModalView(view){
   if(view.inventoryCategory&&typeof requestAnimationFrame==="function")requestAnimationFrame(restoreScroll);
 }
 
+function captureUiVitals() {
+  return {
+    inCombat: Boolean(state?.combat),
+    enemies: Array.from(screen.querySelectorAll(".enemy-card[data-enemy-index]")).map(card => ({ index: Number(card.dataset.enemyIndex), name: card.dataset.enemyName || "", hp: Number(card.dataset.hp), effects: card.dataset.effects || "" })),
+    health: Number(screen.querySelector('[data-resource="health"]')?.dataset.value),
+    mana: Number(screen.querySelector('[data-resource="mana"]')?.dataset.value),
+    log: Array.from(screen.querySelectorAll(".context-output p")).map(entry => entry.textContent || "")
+  };
+}
+
+function appendImpact(element, text, className) {
+  if (!element || typeof document.createElement !== "function") return;
+  const impact = document.createElement("span");
+  impact.className = `impact-number ${className}`;
+  impact.setAttribute("aria-hidden", "true");
+  impact.textContent = text;
+  element.appendChild(impact);
+}
+
+function applyUiFeedback(previous) {
+  if (!previous?.inCombat || !state?.combat) { pendingCombatAction = null; return; }
+  const recentEvents = (state.log || []).filter(entry => !previous.log.includes(entry.text)).slice(0, 8);
+  const critical = recentEvents.some(entry => /hits .* critically|uses .* critically|strikes .* critically/i.test(entry.text));
+  const action = pendingCombatAction || "attack";
+  const spellAction = (state.spells || []).some(spell => spell.command === action) || (state.weapon?.attacks || []).some(attack => attack.command === action && attack.spell);
+  for (const card of screen.querySelectorAll(".enemy-card[data-enemy-index]")) {
+    const old = previous.enemies.find(enemy => enemy.index === Number(card.dataset.enemyIndex));
+    const current = Number(card.dataset.hp);
+    if (!old) continue;
+    if (Number.isFinite(old.hp) && Number.isFinite(current) && current < old.hp) {
+      const amount = old.hp - current;
+      card.classList.add("impact", action === "heavy" ? "impact-heavy" : spellAction ? "impact-magic" : "impact-weapon");
+      const enemyCritical = recentEvents.some(entry => entry.text.includes(old.name) && /critically/i.test(entry.text));
+      appendImpact(card, enemyCritical ? `CRIT −${amount}` : `−${amount}`, `impact-damage ${enemyCritical ? "is-critical" : ""}`);
+    }
+    if (old.effects !== (card.dataset.effects || "")) card.querySelector(".status-list")?.classList.add("status-updated");
+  }
+  const hpRow = screen.querySelector('[data-resource="health"]');
+  const manaRow = screen.querySelector('[data-resource="mana"]');
+  const nowHealth = Number(hpRow?.dataset.value);
+  const nowMana = Number(manaRow?.dataset.value);
+  if (hpRow && Number.isFinite(previous.health) && Number.isFinite(nowHealth) && nowHealth !== previous.health) {
+    const amount = Math.abs(nowHealth - previous.health);
+    const gain = nowHealth > previous.health;
+    hpRow.classList.add(gain ? "resource-gain" : "resource-loss");
+    appendImpact(hpRow, `${gain ? "+" : "−"}${amount}`, gain ? "impact-heal" : "impact-damage");
+  }
+  if (manaRow && Number.isFinite(previous.mana) && Number.isFinite(nowMana) && nowMana !== previous.mana) {
+    const amount = Math.abs(nowMana - previous.mana);
+    const gain = nowMana > previous.mana;
+    manaRow.classList.add(gain ? "resource-gain" : "resource-loss");
+    appendImpact(manaRow, `${gain ? "+" : "−"}${amount}`, "impact-mana");
+  }
+  const avoidance = recentEvents.find(entry => /evade|dodges the attack|misses|disrupted|frozen solid|silenced and cannot/i.test(entry.text));
+  if (avoidance) {
+    const target = screen.querySelectorAll(".enemy-card[data-enemy-index]");
+    const namedEnemy = Array.from(target).find(card => avoidance.text.includes(card.dataset.enemyName || ""));
+    if (namedEnemy && /dodges the attack|reads your movement|misses/i.test(avoidance.text)) {
+      namedEnemy.classList.add("enemy-evaded");
+      appendImpact(namedEnemy, "EVADE", "impact-evade");
+    } else if (/You evade/i.test(avoidance.text)) {
+      hpRow?.classList.add("resource-evade");
+      appendImpact(hpRow, "EVADE", "impact-evade");
+    } else if (namedEnemy) {
+      namedEnemy.classList.add("enemy-interrupted");
+      appendImpact(namedEnemy, "STOPPED", "impact-block");
+    }
+  }
+  const blocked = recentEvents.find(entry => /shield absorbs|Aegis absorbs|You brace behind your shield/i.test(entry.text));
+  if (blocked) {
+    hpRow?.classList.add("resource-block");
+    appendImpact(hpRow, "BLOCK", "impact-block");
+  }
+  pendingCombatAction = null;
+}
+
 function render() {
   if (!state) return startScreen();
+  const previousVitals = captureUiVitals();
   const modalView=captureModalView();
   migrateBrowserSave();
   ensureSkillStats();
@@ -1050,6 +1216,7 @@ function render() {
   state.runEnded=Boolean(state.runEnded);
   if(state.runEnded)modal="run-end";
   else if(state.milestonePending&&!modal)modal="milestone";
+  if(!modal)lastFocusedModalName=null;
   const region=regionForFloor(state.floor);
   titleButton.hidden = false;
   indexButton.hidden = modal === "death";
@@ -1058,23 +1225,30 @@ function render() {
   screen.innerHTML = `<div class="run-topline"><span>Floor ${state.floor} · ${escapeHtml(region.name)}</span><span>${escapeHtml(state.name)}</span><span>${DIFFICULTIES[state.difficulty]?.label||"Normal"} · Level ${state.level}${state.skillPoints ? ` · ${state.skillPoints} skill point${state.skillPoints === 1 ? "" : "s"}` : ""}</span><div class="run-shortcuts"><button class="small-button" data-open-recap>Run record</button><button class="small-button" data-open-leaderboard>Leaderboard</button><button class="small-button" data-end-run ${state.floorsCleared<1||state.runEnded?"disabled":""}>End run</button></div></div>
     <div class="game-layout">
       <aside class="player-panel">
+        ${state.combat?renderPlayerIdentity():""}
         <div class="player-stats">
-          <div class="stat-row"><div class="stat-label"><span>Health</span><b>${state.hp} / ${state.maxHp}</b></div><div class="meter"><i class="hp-fill" style="width:${Math.max(0,state.hp/state.maxHp*100)}%"></i></div></div>
-          <div class="stat-row"><div class="stat-label"><span>Mana</span><b>${state.mana} / ${state.maxMana}</b></div><div class="meter"><i class="mana-fill" style="width:${Math.max(0,state.mana/state.maxMana*100)}%"></i></div></div>
-          <div class="resource-line"><span class="xp-color">XP ${state.xp} / ${xpToNext()}</span><span class="gold-color">${state.gold} gold</span></div>
+          <div class="stat-row" data-resource="health" data-value="${state.hp}"><div class="stat-label"><span>Health</span><b>${state.hp} / ${state.maxHp}</b></div><div class="meter"><i class="hp-fill" style="width:${Math.max(0,state.hp/state.maxHp*100)}%"></i></div></div>
+          <div class="stat-row" data-resource="mana" data-value="${state.mana}"><div class="stat-label"><span>Mana</span><b>${state.mana} / ${state.maxMana}</b></div><div class="meter"><i class="mana-fill" style="width:${Math.max(0,state.mana/state.maxMana*100)}%"></i></div></div>
+          <div class="resource-line"><span class="xp-color">XP ${state.xp} / ${xpToNext()}<i class="xp-meter"><b style="width:${Math.min(100,state.xp/xpToNext()*100)}%"></b></i></span><span class="gold-color">${state.gold} <small>gold</small></span></div>
         </div>
-        ${state.weapon ? `<div class="equipped-weapon">${weaponArt(state.weapon,true)}<div><span class="item-meta">${escapeHtml(state.class)} · ${escapeHtml(state.weapon.rarity)} ${escapeHtml(state.weapon.type)}</span><strong>${escapeHtml(state.weapon.name)}</strong><span>${state.weapon.damage+(state.weapon.damageUpgrade||0)} damage · ${state.weapon.element}</span>${["Bow","Crossbow"].includes(state.weapon.type) ? `<span>${state.arrows ?? 0} arrows</span>` : ""}</div></div>` : `<p class="no-weapon">No weapon equipped</p>`}
+        ${state.weapon ? `<div class="equipped-weapon">${weaponArt(state.weapon,true)}<div><span class="item-meta">${escapeHtml(state.class)} · ${escapeHtml(state.weapon.rarity)} ${escapeHtml(state.weapon.type)}</span><strong>${escapeHtml(state.weapon.name)}</strong><span>${state.weapon.damage+(state.weapon.damageUpgrade||0)} damage · ${elementBadge(state.weapon.element)}</span>${["Bow","Crossbow"].includes(state.weapon.type) ? `<span>${state.arrows ?? 0} arrows</span>` : ""}</div></div>` : `<p class="no-weapon">No weapon equipped</p>`}
         <div class="equipped-armor">${["head","chest","legs","feet","shield"].map(slot=>`<span>${slot}: ${state.equippedArmor[slot]?escapeHtml(state.equippedArmor[slot].name):"empty"}</span>`).join("")}<span class="armor-bonus">${armorSummaryText()}</span></div>
         ${renderLog()}
       </aside>
-      <section class="play-panel">${renderRegionBriefing(region)}${state.combat ? renderCombat(aliveEnemies) : `<div class="room-heading"><div><p class="section-kicker">Floor ${state.floor} · ${room.type === "start" ? "Beginning" : "Room"}</p><h2>${escapeHtml(room.visited ? (room.type === "trap" && !room.trapRevealed ? "Treasure Room" : ROOM_LABELS[room.type]) : "Unknown Room")}</h2></div><span class="room-index">${room.x+1}.${room.y+1}</span></div>${renderMap()}${renderMovement()}<div class="room-actions"><h3>Actions</h3>${getActions()}</div>`}</section>
+      <section class="play-panel">${renderRegionBriefing(region)}${state.combat ? renderCombat(aliveEnemies) : renderRoomView(room)}</section>
     </div>`;
-  screen.querySelector("[data-open-leaderboard]")?.addEventListener("click", () => { modal = "leaderboard"; showModal(); });
+  applyUiFeedback(previousVitals);
+  screen.querySelector("[data-open-leaderboard]")?.addEventListener("click", () => { modalReturnFocusSelector="[data-open-leaderboard]"; modal = "leaderboard"; showModal(); });
+  screen.querySelector("[data-end-run]")?.addEventListener("click",endRunEarly);
   bindGameActions();
   bindArtFallbacks();
   if (modal) showModal();
   restoreModalView(modalView);
   save();
+}
+
+function renderRoomView(room) {
+  return `${renderEncounterResult(room)}<div class="exploration-layout"><div class="room-heading"><div><p class="section-kicker">Floor ${state.floor} · ${room.type === "start" ? "Beginning" : "Room"}</p><h2>${escapeHtml(room.visited ? (room.type === "trap" && !room.trapRevealed ? "Treasure Room" : ROOM_LABELS[room.type]) : "Unknown Room")}</h2></div><span class="room-index">${room.x+1}.${room.y+1}</span></div>${renderMap()}${renderMovement()}<div class="room-actions"><h3>Actions</h3>${getActions()}</div></div>`;
 }
 
 function renderCombat(enemies) {
@@ -1095,14 +1269,14 @@ function renderCombat(enemies) {
     const protector=enemy.protectedByIndex===undefined?null:state.combat.enemies[enemy.protectedByIndex];
     const formation=enemy.formationRole?`<p class="formation-note">Vanguard · intercepts single-target attacks on its ally</p>`:protector?.hp>0?`<p class="formation-note">Protected by ${escapeHtml(protector.name)} · single-target attacks are intercepted</p>`:protector?`<p class="formation-note">Vanguard fallen · no longer protected</p>`:"";
     const pattern=enemy.boss?`<p class="boss-pattern">Pattern: ${bossPattern(enemy.name).map(step=>escapeHtml(step.label)).join(" → ")}</p>`:"";
-    return `<article class="enemy-card ${enemy.boss ? "boss-enemy" : ""} ${enemy.elite ? "elite-enemy" : ""}">${enemyArt(enemy)}<div class="enemy-information"><div class="enemy-name"><strong>${escapeHtml(enemy.name)}</strong><span>${escapeHtml(enemy.klass)}</span></div>${eliteBadge}<div class="enemy-health"><span>${enemy.hp} / ${enemy.maxHp} HP</span><i><b style="width:${Math.max(0, enemy.hp / enemy.maxHp * 100)}%"></b></i></div><p>${enemy.damage} base damage · ${Math.round(enemy.dodge * 100)}% dodge · ${escapeHtml(enemy.element || "Neutral")}${enemy.damageReduction?` · ${enemy.damageReduction} defense`:""}</p><p class="enemy-trait">Trait: ${escapeHtml(enemyTrait(enemy))} · weapon matchup: ${escapeHtml(relation)}</p>${formation}${pattern}<p class="enemy-intent">Intent: <strong>${escapeHtml(intent.label)}</strong>${hint}${affinityTelegraph} ${preview}</p>${renderStatusBadges(enemy.effects)}</div><button class="small-button target-button" data-target="${index}">${state.target === index ? "Targeted" : "Target"}</button></article>`;
+    return `<article class="enemy-card ${enemy.boss ? "boss-enemy" : ""} ${enemy.elite ? "elite-enemy" : ""} ${state.target === index ? "target-selected" : ""}" data-enemy-index="${index}" data-enemy-name="${escapeHtml(enemy.name)}" data-effects="${escapeHtml(Object.keys(enemy.effects||{}).sort().join(","))}" data-hp="${enemy.hp}">${enemyArt(enemy)}<div class="enemy-information"><div class="enemy-name"><strong>${escapeHtml(enemy.name)}</strong><span>${escapeHtml(enemy.klass)}</span></div>${eliteBadge}<div class="enemy-health"><span>${enemy.hp} / ${enemy.maxHp} HP</span><i><b style="width:${Math.max(0, enemy.hp / enemy.maxHp * 100)}%"></b></i></div><p>${enemy.damage} damage · ${Math.round(enemy.dodge * 100)}% dodge · ${enemy.element?elementBadge(enemy.element):"Neutral"}${enemy.damageReduction?` · ${enemy.damageReduction} defense`:""}</p><p class="enemy-trait">${escapeHtml(enemyTrait(enemy))} · ${escapeHtml(relation)}</p>${formation}${pattern}<p class="enemy-intent intent-${slug(intent.key||"preparing")}"><span>Intent</span> <strong>${escapeHtml(intent.label)}</strong>${hint}${affinityTelegraph} ${preview}</p>${renderStatusBadges(enemy.effects)}</div><button class="small-button target-button" data-target="${index}">${state.target === index ? "Targeted" : "Target"}</button></article>`;
   }).join("");
   const attackInfo = state.showWeaponInfo ? `<div class="weapon-attack-info">${listedAttacks.map(attack => {
     const preview = attackPreview(attack, targetCount);
     const matchup = ` · elemental ${preview.elementRelation}${previewModifiers(preview)}`;
-    return `<article><strong>${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${preview.primaryDamage} damage / ${preview.criticalDamage} crit${attack.aoe ? ` / ${preview.secondaryDamage} secondary · ${preview.targetCount} targets` : " · single target"} · ${Math.round(preview.critChance * 100)}% crit${preview.offClass?" · off-class ×0.75":""}${matchup} · ${preview.cooldown ? `${preview.cooldown} turn cooldown` : "No cooldown"}${preview.effect ? ` · ${escapeHtml(preview.effect)}` : ""}${preview.manaCost ? ` · ${preview.manaCost} mana` : ""}${preview.ammoCost ? ` · ${preview.ammoCost} arrow${preview.ammoCost === 1 ? "" : "s"}` : ""}${preview.manaGain ? ` · restores ${preview.manaGain} mana on hit` : ""}${attack.healOnHit ? ` · heals ${Math.round(attack.healOnHit * 100)}% of damage` : ""}</small></article>`;
+    return `<article><strong>${elementBadge(attack.element||state.weapon?.element||"Physical")} ${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${preview.primaryDamage} damage / ${preview.criticalDamage} crit${attack.aoe ? ` / ${preview.secondaryDamage} secondary · ${preview.targetCount} targets` : " · single target"} · ${Math.round(preview.critChance * 100)}% crit${preview.offClass?" · off-class ×0.75":""}${matchup} · ${preview.cooldown ? `${preview.cooldown} turn cooldown` : "No cooldown"}${preview.effect ? ` · ${escapeHtml(preview.effect)}` : ""}${preview.manaCost ? ` · ${preview.manaCost} mana` : ""}${preview.ammoCost ? ` · ${preview.ammoCost} arrow${preview.ammoCost === 1 ? "" : "s"}` : ""}${preview.manaGain ? ` · restores ${preview.manaGain} mana on hit` : ""}${attack.healOnHit ? ` · heals ${Math.round(attack.healOnHit * 100)}% of damage` : ""}</small></article>`;
   }).join("")}</div>` : "";
-  return `<div class="combat-header"><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><div class="enemy-list">${enemyCards}</div>${renderPlayerCombatStatuses()}<div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}${state.combat?.bonusAttackPending?`<p class="bonus-action-prompt">You’re too fast! Choose one attack before the enemies act.</p>`:""}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>Your turn</h3>${getActions()}</div>`;
+  return `<div class="combat-view"><div class="combat-header"><div><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><span class="turn-indicator">${state.combat?.bonusAttackPending?"Bonus action":"Your turn"}</span></div><div class="enemy-list">${enemyCards}</div>${renderPlayerCombatStatuses()}<div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}${state.combat?.bonusAttackPending?`<p class="bonus-action-prompt">You’re too fast! Choose one attack before the enemies act.</p>`:""}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>Your turn</h3>${getActions()}</div></div>`;
 }
 
 function attackPreview(attack, targetCount = state.combat?.enemies.filter(enemy=>enemy.hp>0).length || 1, target = state.combat?.enemies[state.target], weaponOverride = state.weapon, chargedOverride = state.chargedAttack) {
@@ -1139,7 +1313,8 @@ function renderStatusBadges(effects = {}, targetSide = "enemy") {
     if (!info) return "";
     const stacks = value.stacks > 1 ? ` ×${value.stacks}` : "";
     const description=targetSide==="player"?(PLAYER_EFFECT_DESCRIPTIONS[key]||info.description):info.description;
-    return `<span class="status-badge" title="${escapeHtml(description)}"><b aria-hidden="true">${escapeHtml(key.slice(0,1))}</b> ${escapeHtml(key)}${stacks} · ${value.turns}t</span>`;
+    const positive=targetSide==="player"&&["LifeSteal","ManaSteal","Momentum","Thorns","Focus","Draw","Overdraw","Afterimage","Teleport","ArcaneCharge","ManaShield"].includes(key);
+    return `<span class="status-badge ${positive?"status-positive":"status-negative"}" title="${escapeHtml(description)}" aria-label="${escapeHtml(`${key}${stacks}, ${value.turns} turns. ${description}`)}">${effectIcon(key)}<span>${escapeHtml(key)}${stacks}</span><small>${value.turns}t</small></span>`;
   }).join("");
   return badges ? `<div class="status-list" aria-label="Active effects">${badges}</div>` : "";
 }
@@ -1172,16 +1347,16 @@ function armorPerkText(armor) {
 }
 
 function bindGameActions() {
-  screen.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>act(button.dataset.action)));
+  screen.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>{pendingCombatAction=state.combat?button.dataset.action:null;act(button.dataset.action);}));
   screen.querySelectorAll("[data-class]").forEach(button=>button.addEventListener("click",()=>chooseClass(button.dataset.class)));
   screen.querySelectorAll("[data-move]").forEach(button=>button.addEventListener("click",()=>moveTo(button.dataset.move)));
   screen.querySelectorAll("[data-target]").forEach(button=>button.addEventListener("click",()=>{state.target=Number(button.dataset.target);render();}));
   screen.querySelectorAll("[data-equip-weapon]").forEach(button=>button.addEventListener("click",()=>equipWeapon(Number(button.dataset.equipWeapon))));
   screen.querySelectorAll("[data-equip-armor]").forEach(button=>button.addEventListener("click",()=>equipArmor(Number(button.dataset.equipArmor))));
-  screen.querySelectorAll("[data-attack]").forEach(button=>button.addEventListener("click",()=>combatAction(button.dataset.attack)));
+  screen.querySelectorAll("[data-attack]").forEach(button=>button.addEventListener("click",()=>{pendingCombatAction=button.dataset.attack;combatAction(button.dataset.attack);}));
   screen.querySelector("[data-toggle-weapon-info]")?.addEventListener("click",()=>{state.showWeaponInfo=!state.showWeaponInfo;render();});
   screen.querySelectorAll("[data-open-skills]").forEach(button=>button.addEventListener("click",openSkills));
-  screen.querySelectorAll("[data-open-recap]").forEach(button=>button.addEventListener("click",()=>{modal="recap";render();}));
+  screen.querySelectorAll("[data-open-recap]").forEach(button=>button.addEventListener("click",()=>{modalReturnFocusSelector="[data-open-recap]";modal="recap";render();}));
   screen.querySelectorAll("[data-spend-stat]").forEach(button=>button.addEventListener("click",()=>spendSkillPoint(button.dataset.spendStat)));
 }
 
@@ -1191,7 +1366,7 @@ function ensureSkillStats() {
   state.critChance ??= 0.05;
 }
 
-function openSkills() { modal = "skills"; render(); }
+function openSkills() { if(modal==="inventory")modalReturnFocusSelector="[data-open-inventory]"; modal = "skills"; render(); }
 
 function spendSkillPoint(stat) {
   const result = DUNGEON_RULES.spendSkillPoint(state, stat);
@@ -1668,19 +1843,17 @@ function itemNameWithRarity(item) {
 function die(){state.hp=0;state.braced=false;state.activeDefense=null;if(state.combat){state.runStats.fights.unshift({floor:state.floor,defeat:true,enemies:state.combat.enemies.map(enemy=>enemy.name),damageDealt:state.combat.damageDealt||0,damageTaken:state.combat.damageTaken||0,log:[...(state.combat.log||[])]});state.runStats.fights=state.runStats.fights.slice(0,20);}state.combat=null;state.deaths++;updatePersonalBest(state);submitCompletedRun(state);message(`${state.name} has fallen. The run is over.`,"danger");modal="death";render();}
 
 function openInventory(){
+  modalReturnFocusSelector="[data-open-inventory]";
   state.inventoryNotice=false;
   inventoryWeaponFamily=state.class||"warrior";
   inventoryCategory="weapons";
   save();
   modal="inventory";render();
 }
-function equipWeapon(index){const weapon=state.weapons[index];if(!weapon)return;const family=weaponFamily(weapon);if(!family){message("That weapon type cannot be equipped.");modal="inventory";render();return;}state.weapon=weapon;state.class=state.chosenClass||state.class;weapon.attacks ||= DUNGEON_RULES.createWeaponAttacks(family,weapon.rarity,weapon.type,weapon.element||"Physical",weapon.manaCost||0);const offClass=family!==state.class;message(`${weapon.name} equipped${offClass?". Off-class attacks deal 25% less damage.":"."}`);modal="inventory";render();}
-function equipArmor(index){const armor=state.armor[index];if(!armor)return;const list=screen.querySelector("#inventory-list");const scrollTop=list?.scrollTop||0;const scrollLeft=list?.scrollLeft||0;state.equippedArmor=DUNGEON_RULES.equipArmor(state.equippedArmor||{},armor);updateArmorBonuses();message(`${armor.name} equipped in the ${armor.slot} slot.`);modal="inventory";if(modal==="inventory"&&list){list.innerHTML=renderInventoryItems("armor");bindInventoryListActions();bindUseItem();bindInventoryControls();list.scrollTop=scrollTop;list.scrollLeft=scrollLeft;updateInventoryEquipmentSummary();save();}else render();}
-function equipSpell(index){const spell=state.spells[index];if(!spell)return;state.equippedSpellId=spell.id;const profile=classSpellAttack(spell);message(`${spell.spellName} equipped${profile.offClass?` as an off-class spell: ${Math.ceil(spell.manaCost*1.5)} mana and 25% reduced power`:` for ${spell.manaCost} mana`}.`);modal="inventory";render();}
+function equipWeapon(index){const weapon=state.weapons[index];if(!weapon)return;const family=weaponFamily(weapon);if(!family){message("That weapon type cannot be equipped.");modal="inventory";render();return;}state.weapon=weapon;state.class=state.chosenClass||state.class;weapon.attacks ||= DUNGEON_RULES.createWeaponAttacks(family,weapon.rarity,weapon.type,weapon.element||"Physical",weapon.manaCost||0);const offClass=family!==state.class;message(`${weapon.name} equipped${offClass?". Off-class attacks deal 25% less damage.":"."}`);modal="inventory";if(!refreshInventoryModal())render();}
+function equipArmor(index){const armor=state.armor[index];if(!armor)return;state.equippedArmor=DUNGEON_RULES.equipArmor(state.equippedArmor||{},armor);updateArmorBonuses();message(`${armor.name} equipped in the ${armor.slot} slot.`);modal="inventory";if(!refreshInventoryModal())render();}
+function equipSpell(index){const spell=state.spells[index];if(!spell)return;state.equippedSpellId=spell.id;const profile=classSpellAttack(spell);message(`${spell.spellName} equipped${profile.offClass?` as an off-class spell: ${Math.ceil(spell.manaCost*1.5)} mana and 25% reduced power`:` for ${spell.manaCost} mana`}.`);modal="inventory";if(!refreshInventoryModal())render();}
 function equipBestArmor(){
-  const list=screen.querySelector("#inventory-list");
-  const scrollTop=list?.scrollTop||0;
-  const scrollLeft=list?.scrollLeft||0;
   const candidates=[...state.armor,...Object.values(state.equippedArmor||{})];
   const equipped={...(state.equippedArmor||{})};
   for(const slot of ["head","chest","legs","feet","shield"]){
@@ -1692,8 +1865,7 @@ function equipBestArmor(){
   updateArmorBonuses();
   message("Equipped the highest-defense armor available in each slot.");
   modal="inventory";
-  if(list){list.innerHTML=renderInventoryItems("armor");bindInventoryListActions();bindUseItem();bindInventoryControls();list.scrollTop=scrollTop;list.scrollLeft=scrollLeft;updateInventoryEquipmentSummary();save();}
-  else render();
+  if(!refreshInventoryModal())render();
 }
 
 function updateInventoryEquipmentSummary(){
@@ -1710,7 +1882,7 @@ function weaponShopStats(weapon){
   const penalty=DUNGEON_RULES.weaponDamageMultiplier(state.class,weapon);
   const basic=Math.max(1,Math.round((stat+(weapon.damage||0)+(weapon.damageUpgrade||0))*penalty));
   const attacks=(weapon.attacks||[]).map(attack=>attack.name).join(", ")||"Basic attack";
-  return `${escapeHtml(weapon.type)} (${family}) · ${weapon.damage+(weapon.damageUpgrade||0)} weapon damage · ${Math.round(((weapon.crit||0)+(weapon.critUpgrade||0))*100)}% crit · ${escapeHtml(weapon.element||"Physical")} · ${escapeHtml(attacks)}${penalty<1?" · off-class ×0.75":""}`;
+  return `${escapeHtml(weapon.type)} (${family}) · ${weapon.damage+(weapon.damageUpgrade||0)} weapon damage · ${Math.round(((weapon.crit||0)+(weapon.critUpgrade||0))*100)}% crit · ${elementBadge(weapon.element||"Physical")} · ${escapeHtml(attacks)}${penalty<1?" · off-class ×0.75":""}`;
 }
 function renderShopGearItem(item,index){
   const value=item.value;
@@ -1720,6 +1892,19 @@ function renderShopGearItem(item,index){
   const offered=isWeapon?weaponShopStats(value):`${escapeHtml(value.slot)} · ${value.defense||0} defense · ${value.damageReduction||0} damage reduction · +${value.healthBonus||0} max HP`;
   const compared=current?(isWeapon?weaponShopStats(current):`${escapeHtml(current.slot)} · ${current.defense||0} defense · ${current.damageReduction||0} damage reduction · +${current.healthBonus||0} max HP`):"None equipped";
   return `<article class="shop-item ${rarityClass(value.rarity)}">${isWeapon?weaponArt(value):itemArt(`Images/Armor/${value.file}`,value.name)}<div><span class="item-meta">${escapeHtml(value.rarity)} ${escapeHtml(item.kind)}</span><strong>${escapeHtml(value.name)}</strong><p>${item.price} gold</p><div class="shop-comparison"><span><b>New:</b> ${offered}</span><span><b>Equipped:</b> ${compared}</span></div></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`;
+}
+function renderShopTabs(upgradeWeapons){
+  const gear=state.shopStock.map((item,index)=>({item,index})).filter(({item})=>item.kind!=="classSpell");
+  const spells=state.shopStock.map((item,index)=>({item,index})).filter(({item})=>item.kind==="classSpell");
+  const tab=(key,label)=>`<button type="button" role="tab" class="tab-button ${shopTab===key?"active":""}" id="shop-tab-${key}" data-shop-tab="${key}" aria-controls="shop-panel-${key}" aria-selected="${shopTab===key}" tabindex="${shopTab===key?0:-1}">${label}</button>`;
+  const panel=(key,contents)=>`<section class="shop-tab-panel" id="shop-panel-${key}" role="tabpanel" tabindex="0" aria-labelledby="shop-tab-${key}" data-shop-panel="${key}" ${shopTab===key?"":"hidden"}>${contents}</section>`;
+  const stockUpgrade=`<div class="shop-upgrade"><div><strong>Stock quality · Level ${state.shopLootUpgradeLevel||0}/5</strong><p>Improve the rarity odds for this run. Next upgrade: ${shopUpgradeCost()} gold.</p></div><button class="small-button" data-upgrade-shop ${(state.shopLootUpgradeLevel||0)>=5||state.gold<shopUpgradeCost()?"disabled":""}>Upgrade</button></div>`;
+  const weapons=`${stockUpgrade}<h3 class="shop-section-title">Weapons &amp; armor</h3><div class="shop-list">${gear.length?gear.map(({item,index})=>renderShopGearItem(item,index)).join(""):`<p class="empty-list">No weapons or armor in stock.</p>`}</div><details class="sell-inventory"><summary>Sell from inventory</summary>${renderSellList()}</details>`;
+  const forge=`<p class="shop-forge-note">Upgrade any weapon you own. Off-class attacks still deal 25% less damage. Upgrade limits reset each floor.</p>${upgradeWeapons.length?`<label class="forge-select-label">Weapon <select data-forge-weapon>${upgradeWeapons.map(({weapon,index})=>`<option value="${index}" ${index===state.upgradeWeaponIndex?"selected":""}>${escapeHtml(weapon.name)} · ${escapeHtml(weapon.rarity)} ${escapeHtml(weapon.type)} · Lv ${weapon.level||1}</option>`).join("")}</select></label>${renderWeaponForge(upgradeWeapons.find(entry=>entry.index===state.upgradeWeaponIndex)?.weapon)}`:`<p class="empty-list">No weapons available to upgrade.</p>`}`;
+  const potionStock=(state.shopPotions||[]).map((item,index)=>`<article class="shop-item">${potionArt(item.value)}<div><span class="item-meta">${escapeHtml(item.value.rarity)} potion</span><strong>${escapeHtml(item.value.name)}</strong><p>${item.price} gold</p></div><button class="small-button" data-buy-potion="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`).join("");
+  const spellsStock=spells.map(({item,index})=>renderShopGearItem(item,index)).join("");
+  const consumables=`<h3 class="shop-section-title">Potions</h3><div class="shop-list shop-potions">${potionStock||`<p class="empty-list">No potions in stock.</p>`}</div><h3 class="shop-section-title">Class spells</h3><div class="shop-list shop-spells">${spellsStock||`<p class="empty-list">No spells in stock.</p>`}</div>`;
+  return `<div class="shop-tabs" role="tablist" aria-label="Shop categories">${tab("weapons","Weapons &amp; Armor")}${tab("forge","Forge")}${tab("consumables","Potions &amp; Spells")}</div><div class="shop-tab-content">${panel("weapons",weapons)}${panel("forge",forge)}${panel("consumables",consumables)}</div>`;
 }
 function showModal(){
   const old=screen.querySelector(".modal-backdrop");if(old)old.remove();
@@ -1737,7 +1922,7 @@ function showModal(){
   } else if(modal==="shop"){
     const upgradeWeapons=state.weapons.map((weapon,index)=>({weapon,index})).filter(({weapon})=>weaponFamily(weapon));
     if(!upgradeWeapons.some(entry=>entry.index===state.upgradeWeaponIndex))state.upgradeWeaponIndex=upgradeWeapons.find(entry=>entry.weapon===state.weapon)?.index??upgradeWeapons[0]?.index??-1;
-    content=`<section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title"><div class="modal-heading"><div><p class="section-kicker">Floor ${state.floor} merchant · ${DIFFICULTIES[state.difficulty]?.label||"Normal"}</p><h2 id="shop-title">Shop</h2></div><button class="icon-close" data-close-modal aria-label="Close shop">×</button></div><div class="shop-upgrade"><div><strong>Stock quality · Level ${state.shopLootUpgradeLevel||0}/5</strong><p>Upgrade shop rarity odds for this run; current stock refreshes. Next upgrade: ${shopUpgradeCost()} gold.</p></div><button class="small-button" data-upgrade-shop ${(state.shopLootUpgradeLevel||0)>=5||state.gold<shopUpgradeCost()?"disabled":""}>Upgrade</button></div><h3 class="shop-section-title">Weapon forge</h3><p class="shop-forge-note">Any weapon can be upgraded. Off-class attacks still deal 25% less damage. Upgrades reset their limit each floor.</p>${upgradeWeapons.length?`<label class="forge-select-label">Weapon <select data-forge-weapon>${upgradeWeapons.map(({weapon,index})=>`<option value="${index}" ${index===state.upgradeWeaponIndex?"selected":""}>${escapeHtml(weapon.name)} · ${escapeHtml(weapon.rarity)} ${escapeHtml(weapon.type)} · Lv ${weapon.level||1}</option>`).join("")}</select></label>${renderWeaponForge(upgradeWeapons.find(entry=>entry.index===state.upgradeWeaponIndex)?.weapon)}`:`<p class="empty-list">No weapons available to upgrade.</p>`}<h3 class="shop-section-title">Weapons &amp; armor</h3><div class="shop-list">${state.shopStock.map(renderShopGearItem).join("")}</div><h3 class="shop-section-title">Potions</h3><div class="shop-list shop-potions">${state.shopPotions.map((item,index)=>`<article class="shop-item">${potionArt(item.value)}<div><span class="item-meta">${escapeHtml(item.value.rarity)} potion</span><strong>${escapeHtml(item.value.name)}</strong><p>${item.price} gold</p></div><button class="small-button" data-buy-potion="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`).join("")}</div><div class="shop-footer"><span>${state.gold} gold</span><button class="small-button" data-reroll ${state.gold<shopRerollCost()?"disabled":""}>Reroll · ${shopRerollCost()} gold</button></div><details class="sell-inventory"><summary>Sell from inventory</summary>${renderSellList()}</details></section>`;
+    content=`<section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title"><div class="modal-heading"><div><p class="section-kicker">Floor ${state.floor} merchant · ${DIFFICULTIES[state.difficulty]?.label||"Normal"}</p><h2 id="shop-title">Shop</h2></div><button class="icon-close" data-close-modal aria-label="Close shop">×</button></div>${renderShopTabs(upgradeWeapons)}<div class="shop-footer"><span>${state.gold} gold</span><button class="small-button" data-reroll ${state.gold<shopRerollCost()?"disabled":""}>Reroll · ${shopRerollCost()} gold</button></div></section>`;
   } else if(modal==="death"){
     content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-title"><p class="section-kicker">Run ended</p><h2 id="death-title">You have fallen.</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:""}${!state.devMode&&state.runSubmissionStatus?.includes("Global submission failed:")?'<button class="small-button" data-retry-score>Retry global submission</button>':""}<div class="action-grid"><button class="action-button" data-restart>Restart run</button><button class="action-button secondary" data-title>Return to title</button></div></section>`;
   } else if(modal==="recap"){
@@ -1750,9 +1935,37 @@ function showModal(){
   }
   if(!content)return;
   screen.insertAdjacentHTML("beforeend",`<div class="modal-backdrop">${content}</div>`);
+  if(lastFocusedModalName!==modal){
+    const dialog=screen.querySelector('.modal[role="dialog"]');
+    const first=dialog?.querySelector("[data-close-modal]")||dialog?.querySelector('button:not(:disabled),input:not(:disabled),select:not(:disabled)');
+    first?.focus?.({preventScroll:true});
+    lastFocusedModalName=modal;
+  }
   bindArtFallbacks();
-  screen.querySelector("[data-close-modal]")?.addEventListener("click",()=>{modal=null;render();});
-  screen.querySelectorAll("[data-tab]").forEach(button=>button.addEventListener("click",()=>{inventoryCategory=button.dataset.tab;screen.querySelectorAll("[data-tab]").forEach(tab=>tab.classList.toggle("active",tab===button));screen.querySelector("#inventory-list").innerHTML=renderInventoryItems(inventoryCategory);bindInventoryListActions();bindUseItem();bindInventoryControls();}));
+  screen.querySelector("[data-close-modal]")?.addEventListener("click",event=>{
+    const backdrop=screen.querySelector(".modal-backdrop");
+    if(backdrop?.classList.contains("modal-closing"))return;
+    const finishClose=()=>{
+    const returnSelector=modalReturnFocusSelector;
+    modal=null;lastFocusedModalName=null;render();
+    modalReturnFocusSelector=null;
+    if(returnSelector){
+      const restoreFocus=()=>{
+        if(modal)return;
+        const returnTarget=screen.querySelector(returnSelector);
+        if(returnTarget?.isConnected)returnTarget.focus?.({preventScroll:true});
+      };
+      if(typeof requestAnimationFrame==="function")requestAnimationFrame(restoreFocus);
+      else restoreFocus();
+    }
+    };
+    const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if(!backdrop||reducedMotion){finishClose();return;}
+    event.currentTarget.blur();
+    backdrop.classList.add("modal-closing");
+    backdrop.addEventListener("animationend",finishClose,{once:true});
+  });
+  screen.querySelectorAll("[data-tab]").forEach(button=>button.addEventListener("click",()=>{inventoryCategory=button.dataset.tab;screen.querySelectorAll("[data-tab]").forEach(tab=>tab.classList.toggle("active",tab===button));refreshInventoryList(inventoryCategory);}));
   bindInventoryListActions();
   screen.querySelectorAll("[data-open-skills]").forEach(button=>button.addEventListener("click",openSkills));
   screen.querySelectorAll("[data-spend-stat]").forEach(button=>button.addEventListener("click",()=>spendSkillPoint(button.dataset.spendStat)));
@@ -1761,7 +1974,30 @@ function showModal(){
   screen.querySelectorAll("[data-buy]").forEach(button=>button.addEventListener("click",()=>buyItem(Number(button.dataset.buy))));
   screen.querySelectorAll("[data-buy-potion]").forEach(button=>button.addEventListener("click",()=>buyPotion(Number(button.dataset.buyPotion))));
   screen.querySelectorAll("[data-sell-type]").forEach(button=>button.addEventListener("click",()=>sellItem(button.dataset.sellType,Number(button.dataset.sellIndex))));
-  screen.querySelectorAll("[data-index-category]").forEach(button=>button.addEventListener("click",()=>{indexCategory=button.dataset.indexCategory;selectedIndexItem=null;screen.querySelectorAll("[data-index-category]").forEach(category=>category.classList.toggle("active",category===button));screen.querySelector("#index-content").innerHTML=renderIndexCategory();bindIndexItems();}));
+  screen.querySelectorAll("[data-shop-tab]").forEach(button=>{
+    button.addEventListener("click",()=>{
+      shopTab=button.dataset.shopTab;
+      screen.querySelectorAll("[data-shop-tab]").forEach(tab=>{
+        const active=tab===button;
+        tab.classList.toggle("active",active);
+        tab.setAttribute("aria-selected",String(active));
+        tab.tabIndex=active?0:-1;
+      });
+      screen.querySelectorAll("[data-shop-panel]").forEach(panel=>{
+        const active=panel.dataset.shopPanel===shopTab;
+        panel.hidden=!active;
+        if(active)animateMenuSwap(panel);
+      });
+    });
+    button.addEventListener("keydown",event=>{
+      const tabs=[...screen.querySelectorAll("[data-shop-tab]")];
+      const current=tabs.indexOf(button);
+      const next=event.key==="ArrowRight"?(current+1)%tabs.length:event.key==="ArrowLeft"?(current-1+tabs.length)%tabs.length:event.key==="Home"?0:event.key==="End"?tabs.length-1:-1;
+      if(next<0)return;
+      event.preventDefault();tabs[next].focus();tabs[next].click();
+    });
+  });
+  screen.querySelectorAll("[data-index-category]").forEach(button=>button.addEventListener("click",()=>{indexCategory=button.dataset.indexCategory;selectedIndexItem=null;screen.querySelectorAll("[data-index-category]").forEach(category=>category.classList.toggle("active",category===button));const content=screen.querySelector("#index-content");content.innerHTML=renderIndexCategory();animateMenuSwap(content);bindIndexItems();}));
   screen.querySelectorAll("[data-leaderboard-difficulty]").forEach(button=>button.addEventListener("click",()=>refreshGlobalLeaderboard(button.dataset.leaderboardDifficulty)));
   screen.querySelector("[data-leaderboard-retry]")?.addEventListener("click",()=>refreshGlobalLeaderboard(leaderboardDifficulty));
   if(modal==="leaderboard") refreshGlobalLeaderboard(leaderboardDifficulty);
@@ -1772,7 +2008,6 @@ function showModal(){
   screen.querySelectorAll("[data-weapon-upgrade]").forEach(button=>button.addEventListener("click",()=>upgradeWeapon(button.dataset.weaponUpgrade)));
   screen.querySelector("[data-restart]")?.addEventListener("click",()=>newRun(state.name,state.devMode,state.saveSlot,state.difficulty));
   screen.querySelector("[data-retry-score]")?.addEventListener("click",()=>submitCompletedRun(state));
-  screen.querySelector("[data-end-run]")?.addEventListener("click",endRunEarly);
   screen.querySelector("[data-title]")?.addEventListener("click",()=>{modal=null;state=null;titleButton.hidden=true;startScreen();});
   screen.querySelector("[data-milestone-end]")?.addEventListener("click",finishMilestoneRun);
   screen.querySelector("[data-milestone-continue]")?.addEventListener("click",()=>{if(!state?.milestonePending)return;state.milestonePending=false;modal=null;advanceFloor();});
@@ -1783,8 +2018,31 @@ function getIndexWeaponEntries(family) {
 }
 
 function effectIcon(effectName) {
-  const normalize=name=>name.replace(/\s/g,"").toLowerCase();
-  return EFFECT_DETAILS.find(([name])=>normalize(name)===normalize(effectName))?.[1]||DUNGEON_RULES.getEffectDefinition(effectName)?.icon||"";
+  const icons={
+    Burn:'<path d="M12 2c1 4-2 5-1 8 1-1 2-2 2-4 4 4 5 7 3 11a6 6 0 0 1-11-2c-1-4 2-7 7-13Z"/><path d="M11 13c-2 2-2 5 1 6 2 0 3-2 2-4"/>',
+    Freeze:'<path d="M12 2v20M4 7l16 10M20 7 4 17M9 4l3 2 3-2M9 20l3-2 3 2M4 10l3-1V6M17 18v-3l3-1M4 14l3 1v3M17 6v3l3 1"/>',
+    Frozen:'<path d="M12 2v20M4 7l16 10M20 7 4 17M9 4l3 2 3-2M9 20l3-2 3 2"/>',
+    Weakness:'<path d="M12 2 20 5v6c0 5-3 8-8 11-5-3-8-6-8-11V5l8-3Z"/><path d="m9 10 3 3 3-3M12 7v6"/>',
+    Silence:'<path d="M4 5h16v11h-8l-5 4v-4H4zM8 9l8 4M16 9l-8 4"/>',
+    Gust:'<path d="M3 7h13c3 0 3-4 0-4M3 12h17c3 0 3 4 0 4M3 17h8"/>',
+    Root:'<path d="M12 21V9m0 5C5 14 5 7 5 7s7 0 7 7Zm0-3c0-6 7-7 7-7s1 7-7 9ZM8 21h8"/>',
+    Poison:'<path d="M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/><path d="m9 13 6 5m0-5-6 5"/>',
+    Bleed:'<path d="M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/><path d="M9 16c1 2 3 3 5 2"/>',
+    Blind:'<path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/><path d="m4 20 16-16"/>',
+    Void:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 1v3M23 12h-3M12 23v-3M1 12h3"/>',
+    Shock:'<path d="m13 2-9 12h7l-1 8 10-13h-7z"/>',
+    LifeSteal:'<path d="M20.8 8.5c0 5-8.8 11-8.8 11s-8.8-6-8.8-11a4.6 4.6 0 0 1 8.8-1.7 4.6 4.6 0 0 1 8.8 1.7Z"/>',
+    ManaSteal:'<path d="M12 2S5 10 5 15a7 7 0 0 0 14 0c0-5-7-13-7-13Z"/><path d="M8 15h8m-4-4v8"/>',
+    Execution:'<path d="M12 2 21 7v10l-9 5-9-5V7l9-5Z"/><path d="m8 10 2 2m6-2-2 2m-4 4c1 1 3 1 4 0"/>',
+    Momentum:'<path d="M3 7h10l-3-3m3 3-3 3M7 12h14l-3-3m3 3-3 3M3 17h10l-3-3m3 3-3 3"/>',
+    Marked:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    Thorns:'<path d="M12 22V4m0 7-5-4 1 6-5 1 9 4m0-7 5-4-1 6 5 1-9 4"/>',
+    Chain:'<path d="m9 15-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m4 2 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0m-5-5h8"/>',
+    default:'<path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M8 12h8"/>'
+  };
+  const key=effectName.replace(/\s/g,"");
+  const path=icons[key]||icons.default;
+  return `<svg class="effect-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
 }
 
 function formatIndexElement(element) { return element === "None" ? "Physical" : element; }
@@ -1793,12 +2051,12 @@ function formatIndexEffect(effect) { return effect.replace(/([a-z])([A-Z])/g,"$1
 function renderIndexCategory() {
   if(selectedIndexItem){
     const item=selectedIndexItem;
-    return `<button class="index-back" data-index-back>← Back to ${escapeHtml(item.categoryLabel)}</button><div class="index-detail">${item.art||""}<p class="item-meta">${escapeHtml(item.rarity||"")}${item.type?` · ${escapeHtml(item.type)}`:""}</p><h3>${escapeHtml(item.name)}</h3>${item.element?`<p>Element: ${escapeHtml(formatIndexElement(item.element))}</p>`:""}${item.damage?`<p>Base damage: ${item.damage}</p>`:""}${item.effect?`<p>Effect: <span aria-hidden="true">${effectIcon(item.effect)}</span> ${escapeHtml(formatIndexEffect(item.effect))}</p>`:""}<p>${escapeHtml(item.description||"")}</p></div>`;
+    return `<button class="index-back" data-index-back>← Back to ${escapeHtml(item.categoryLabel)}</button><div class="index-detail">${item.art||""}<p class="item-meta">${escapeHtml(item.rarity||"")}${item.type?` · ${escapeHtml(item.type)}`:""}</p><h3>${escapeHtml(item.name)}</h3>${item.element?`<p>Element: ${elementBadge(formatIndexElement(item.element))}</p>`:""}${item.damage?`<p>Base damage: ${item.damage}</p>`:""}${item.effect?`<p>Effect: ${effectIcon(item.effect)} ${escapeHtml(formatIndexEffect(item.effect))}</p>`:""}<p>${escapeHtml(item.description||"")}</p></div>`;
   }
   if(["warrior","archer","mage"].includes(indexCategory)){
     const familyLabel=CLASS_NAMES[indexCategory];
     const entries=getIndexWeaponEntries(indexCategory);
-    return `<p class="index-intro">${entries.length} ${familyLabel.toLowerCase()} weapon designs.</p><div class="index-list">${entries.map((item,index)=>`<button class="index-entry ${rarityClass(item.rarity)}" data-index-item="${index}"><span class="index-entry-name">${escapeHtml(item.name)}</span><span class="index-entry-meta">${escapeHtml(item.rarity)} ${escapeHtml(item.type)} · ${escapeHtml(formatIndexElement(item.element))} · <span aria-hidden="true">${effectIcon(item.effect)}</span> ${escapeHtml(formatIndexEffect(item.effect))}</span></button>`).join("")}</div>`;
+    return `<p class="index-intro">${entries.length} ${familyLabel.toLowerCase()} weapon designs.</p><div class="index-list">${entries.map((item,index)=>`<button class="index-entry ${rarityClass(item.rarity)}" data-index-item="${index}"><span class="index-entry-name">${escapeHtml(item.name)}</span><span class="index-entry-meta">${escapeHtml(item.rarity)} ${escapeHtml(item.type)} · ${elementBadge(formatIndexElement(item.element))} · ${effectIcon(item.effect)} ${escapeHtml(formatIndexEffect(item.effect))}</span></button>`).join("")}</div>`;
   }
   if(indexCategory==="armor"||indexCategory==="items"){
     const entries=indexCategory==="armor"?ARMOR_INDEX:ITEM_INDEX;
@@ -1807,7 +2065,7 @@ function renderIndexCategory() {
   if(indexCategory==="regions")return `<p class="index-intro">The dungeon cycles through ${REGION_DEFINITIONS.length} regions, each five floors long, then repeats every ${REGION_CYCLE_FLOORS} floors with deeper scaling. Enemy pools and race traits vary by region. Every ${MILESTONE_BOSS_INTERVAL}th floor ends with the Threshold Warden, whose defeat lets you end the run or continue.</p><div class="region-index-list">${REGION_DEFINITIONS.map((region,index)=>{const live=regionForFloor(state?.floor||1);return `<article class="region-index-entry ${live.id===region.id?"active":""}"><p class="section-kicker">Floors ${index*BIOME_FLOORS+1}–${(index+1)*BIOME_FLOORS} · repeats every ${REGION_CYCLE_FLOORS} floors</p><h3>${escapeHtml(region.name)}</h3><p><strong>Enemy pool:</strong> ${escapeHtml(regionRaceNames(region))}</p><p><strong>Available roles:</strong> ${escapeHtml(regionRaceRoles(region))}</p><p><strong>Regular bosses:</strong> ${region.bosses.map(escapeHtml).join(" · ")}</p><p><strong>Regional rule:</strong> ${escapeHtml(region.rule)}</p><p>${escapeHtml(region.briefing)}</p></article>`;}).join("")}</div>`;
   if(indexCategory==="enemy-types")return `<p class="index-intro">These enemy roles are active in the dungeon. Race and role combinations depend on the current region.</p><div class="region-index-list">${ENEMY_TYPE_PROFILES.map(profile=>`<article class="region-index-entry"><p class="section-kicker">${escapeHtml(profile.family)} · ${escapeHtml(profile.status)}</p><h3>${escapeHtml(profile.name)}</h3><p><strong>Strength:</strong> ${escapeHtml(profile.strengths)}</p><p><strong>Weakness:</strong> ${escapeHtml(profile.weakness)}</p></article>`).join("")}</div>`;
   if(indexCategory==="guide")return `<p class="index-intro">Quick Guide</p><div class="quick-guide"><section><h3>Class roles</h3><p>Warriors focus on melee and strength, Archers on ranged attacks and speed, and Mages on magic and intelligence. Your chosen class stays fixed when you equip another class's weapon.</p></section><section><h3>Mana and arrows</h3><p>Staffs and wands spend mana, even when used off-class. Bows and crossbows spend from one shared arrow supply. If the resource runs out, a weaker fallback attack remains available.</p></section><section><h3>Elements</h3><p>Fire is weak to Water; Water is weak to Earth or Nature; Earth is weak to Wind; Wind is weak to Fire. Advantage and resistance change final damage.</p></section><section><h3>Fountains</h3><p>Inspect a fountain to learn what it is. Drinking restores health, and you can leave and return before using it.</p></section><section><h3>Off-class weapons</h3><p>You can equip any weapon. Attacks made with a weapon outside your chosen class deal 25% less damage, while its attacks, effects, and resource costs still apply.</p></section><section><h3>Regions and milestones</h3><p>Regions change every five floors and define their enemy pool and signature trait. Every 20th-floor milestone boss gives you the option to end the run and record your score or continue.</p></section></div>`;
-  return `<p class="index-intro">Effect glossary</p><div class="index-list effect-list">${EFFECT_DETAILS.map(([name,icon,description])=>`<article class="index-entry effect-entry"><span class="effect-name"><span aria-hidden="true">${icon}</span>${escapeHtml(name)}</span><span class="index-entry-meta">${escapeHtml(description)}</span></article>`).join("")}</div>`;
+  return `<p class="index-intro">Effect glossary</p><div class="index-list effect-list">${EFFECT_DETAILS.map(([name,icon,description])=>`<article class="index-entry effect-entry"><span class="effect-name">${effectIcon(name)}${escapeHtml(name)}</span><span class="index-entry-meta">${escapeHtml(description)}</span></article>`).join("")}</div>`;
 }
 
 function bindIndexItems(){
@@ -1893,20 +2151,40 @@ function bindInventoryListActions(){
   screen.querySelectorAll("#inventory-list [data-equip-armor]").forEach(button=>button.addEventListener("click",()=>equipArmor(Number(button.dataset.equipArmor))));
   screen.querySelector("#inventory-list [data-equip-best]")?.addEventListener("click",equipBestArmor);
   screen.querySelectorAll("#inventory-list [data-equip-spell]").forEach(button=>button.addEventListener("click",()=>equipSpell(Number(button.dataset.equipSpell))));
-  screen.querySelector("#inventory-list [data-unequip-spell]")?.addEventListener("click",()=>{state.equippedSpellId=null;message("Your spell is unequipped.");modal="inventory";render();});
+  screen.querySelector("#inventory-list [data-unequip-spell]")?.addEventListener("click",()=>{state.equippedSpellId=null;message("Your spell is unequipped.");modal="inventory";if(!refreshInventoryModal())render();});
   screen.querySelectorAll("#inventory-list [data-inventory-sell]").forEach(button=>button.addEventListener("click",()=>sellItem(button.dataset.inventorySell,Number(button.dataset.sellIndex),"inventory")));
 }
 
 function refreshInventoryList(tab){
   const list=screen.querySelector("#inventory-list");
   if(!list)return;
+  const scrollTop=list.scrollTop,scrollLeft=list.scrollLeft;
   list.innerHTML=renderInventoryItems(tab);
+  list.scrollTop=scrollTop;list.scrollLeft=scrollLeft;
+  animateMenuSwap(list);
   bindInventoryListActions();bindUseItem();bindInventoryControls();
+}
+
+function refreshInventoryModal(){
+  if(modal!=="inventory")return false;
+  const list=screen.querySelector("#inventory-list");
+  if(!list)return false;
+  const scrollTop=list.scrollTop,scrollLeft=list.scrollLeft;
+  refreshInventoryList(inventoryCategory);
+  list.scrollTop=scrollTop;list.scrollLeft=scrollLeft;
+  screen.querySelectorAll("[data-tab]").forEach(tab=>tab.classList.toggle("active",tab.dataset.tab===inventoryCategory));
+  updateInventoryEquipmentSummary();
+  const gold=screen.querySelector(".inventory-gold");
+  if(gold)gold.textContent=`${state.gold} gold · ${state.class?CLASS_NAMES[state.class]:"Class unchosen"}`;
+  save();
+  return true;
 }
 
 function bindUseItem(){screen.querySelectorAll("[data-use-item]").forEach(button=>button.addEventListener("click",()=>{if(state.combat?.bonusAttackPending){message("Take your extra attack before using an item.");render();return;}const item=state.items[Number(button.dataset.useItem)];if(!item)return;if(item.type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+manaPotionRestore(item));item.quantity--;if(item.quantity<=0)state.items.splice(state.items.indexOf(item),1);message(`Used ${item.name}.${state.combat?" Your turn passes.":""}`);modal="inventory";if(state.combat)enemyTurn();else render();}));}
 
 function openShop(){
+  modalReturnFocusSelector='[data-action="shop"]';
+  shopTab="weapons";
   if(!Array.isArray(state.shopStock)){state.shopStock=[...Array.from({length:5},()=>shopItem()),shopClassSpellOffer()];}else{state.shopStock=state.shopStock.filter((item,index,items)=>item.kind!=="classSpell"||items.findIndex(candidate=>candidate.kind==="classSpell")===index);if(!state.shopStock.some(item=>item.kind==="classSpell"))state.shopStock.push(shopClassSpellOffer());}state.shopScrollAdded=true;if(!Array.isArray(state.shopPotions))state.shopPotions=Array.from({length:2},()=>shopPotion());modal="shop";render();
 }
 function shopClassSpellOffer(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0);const value=createClassSpellScroll(state.chosenClass||state.class||"warrior",rarity);return{kind:"classSpell",value,price:priceFor(24+state.floor*4+value.manaCost*2,rarity)};}
@@ -1971,10 +2249,13 @@ function sellItem(kind,index,returnModal="shop"){
   if(kind==="weapon"&&item===state.weapon)return;
   if(kind==="armor"&&Object.values(state.equippedArmor||{}).includes(item))return;
   if(kind==="spell"&&item.id===state.equippedSpellId)return;
-  state.gold+=sellValue(item,kind);
+  const value=sellValue(item,kind);
+  state.gold+=value;
   if(kind==="item"&&item.quantity>1)item.quantity--;else list.splice(index,1);
-  message(`Sold ${item.name} for ${sellValue(item,kind)} gold.`);
-  modal=returnModal;render();
+  message(`Sold ${item.name} for ${value} gold.`);
+  modal=returnModal;
+  if(returnModal==="inventory"&&refreshInventoryModal())return;
+  render();
 }
 
 function finishMilestoneRun(){
@@ -1983,7 +2264,7 @@ function finishMilestoneRun(){
 }
 
 function endRunEarly(){
-  if(!state||state.runEnded||state.floorsCleared<1||!confirm(`End this run and submit your score for ${state.floorsCleared} floors cleared?`))return;
+  if(!state||state.runEnded||state.floorsCleared<1||!window.confirm(`Are you sure you want to end this run and submit your score for ${state.floorsCleared} floors cleared?`))return;
   state.combat=null;state.milestonePending=false;state.runEnded=true;state.runEndReason="manual";state.activeDefense=null;state.braced=false;
   updatePersonalBest(state);submitCompletedRun(state);modal="run-end";
   message(`You end the run after clearing ${state.floorsCleared} floors. Your score has been recorded.`,"reward");render();
@@ -2011,17 +2292,9 @@ function renderPatchNotes(version){
   const target=document.querySelector("#patch-content");
   if(!patch||!target)return;
   target.innerHTML=`<h3>${escapeHtml(patch.title)}</h3><p class="patch-date">${escapeHtml(patch.subtitle)}</p>${patch.sections.map(section=>`<section><h4>${escapeHtml(section.heading)}</h4><ul>${section.items.map(item=>`<li>${escapeHtml(item)}</li>`).join("")}</ul></section>`).join("")}`;
+  animateMenuSwap(target);
   document.querySelectorAll("[data-patch]").forEach(button=>{const active=button.dataset.patch===version;button.classList.toggle("active",active);if(active)button.setAttribute("aria-current","true");else button.removeAttribute("aria-current");});
 }
 
 document.querySelectorAll?.("[data-patch]").forEach(button=>button.addEventListener("click",()=>renderPatchNotes(button.dataset.patch)));
-renderPatchNotes("v1.4");
-if(typeof fetch==="function")fetch("about.txt").then(response=>{if(!response.ok)throw new Error("About text unavailable");return response.text();}).then(text=>{
-  const target=document.querySelector("#about-copy");
-  if(!target)return;
-  const paragraphs=text.trim().split(/\r?\n\s*\r?\n/).map(value=>value.trim()).filter(Boolean);
-  target.innerHTML=paragraphs.length?paragraphs.map(value=>`<p>${escapeHtml(value).replace(/\r?\n/g,"<br>")}</p>`).join(""):`<p class="about-placeholder">Add your introduction to about.txt.</p>`;
-}).catch(()=>{
-  const target=document.querySelector("#about-copy");
-  if(target)target.innerHTML='<p class="about-placeholder">Add your introduction to about.txt.</p>';
-});
+renderPatchNotes("v1.6");

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="The Moonfang Alpha">
+<defs><radialGradient id="aura"><stop stop-color="#d5d0bb" stop-opacity=".62"/><stop offset="1" stop-color="#6c695d" stop-opacity="0"/></radialGradient><linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d5d0bb"/><stop offset=".55" stop-color="#6c695d"/><stop offset="1" stop-color="#34343a"/></linearGradient><linearGradient id="crown" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#c49152"/><stop offset="1" stop-color="#896744"/></linearGradient></defs>
+<ellipse cx="82" cy="61" rx="61" ry="57" fill="url(#aura)"/>
+<path d="M24 91 Q13 63 28 39 M133 90 Q147 61 132 36" fill="none" stroke="#d5d0bb" stroke-width="2" opacity=".7"/>
+<path d="M43 106 51 72 59 58 51 39 45 17 68 31 80 22 91 31 117 17 109 42 104 61 117 77 122 106 99 97 81 108 61 97Z" fill="url(#body)" stroke="#453e33" stroke-width="4"/><path d="M60 47Q80 34 101 47 L98 68 82 79 64 67Z" fill="#bcb49d" stroke="#453e33" stroke-width="3"/><path d="M68 51 77 54 M88 54l9-3" stroke="#e6c579" stroke-width="5" stroke-linecap="round"/><path d="m80 61 7 5-7 6-7-6Z" fill="#574638"/><path d="m68 70 7 11-5-2m20-9-7 11 5-2" fill="#f2dfbd" stroke="#453e33" stroke-width="2"/><path d="M49 78 34 93 M112 78l14 15" stroke="#d5d0bb" stroke-width="4" stroke-linecap="round"/><path d="M122 20a14 14 0 1 0 12 22 17 17 0 1 1-12-22Z" fill="#d9c47f"/>
+<path d="m24 28 3-7 3 7 7 3-7 3-3 7-3-7-7-3Z M131 24l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z" fill="#c49152" opacity=".88"/>
+<circle cx="31" cy="80" r="2.3" fill="#d5d0bb"/><circle cx="135" cy="78" r="2" fill="#d5d0bb"/>
+</svg>

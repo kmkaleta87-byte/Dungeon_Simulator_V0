@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="The Bone Regent">
+<defs><radialGradient id="aura"><stop stop-color="#f0e2bd" stop-opacity=".62"/><stop offset="1" stop-color="#c7bca0" stop-opacity="0"/></radialGradient><linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f0e2bd"/><stop offset=".55" stop-color="#c7bca0"/><stop offset="1" stop-color="#34343a"/></linearGradient><linearGradient id="crown" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#987c43"/><stop offset="1" stop-color="#896744"/></linearGradient></defs>
+<ellipse cx="82" cy="61" rx="61" ry="57" fill="url(#aura)"/>
+<path d="M24 91 Q13 63 28 39 M133 90 Q147 61 132 36" fill="none" stroke="#f0e2bd" stroke-width="2" opacity=".7"/>
+<path d="M42 108 47 69 61 59 63 38 Q66 20 83 18 Q103 20 105 41 L106 60 121 72 124 108Z" fill="url(#body)" stroke="#463d31" stroke-width="4"/><path d="M63 45 Q64 25 84 25 Q103 26 103 46 L98 62 68 62Z" fill="#eee4cb" stroke="#463d31" stroke-width="3"/><ellipse cx="74" cy="45" rx="5" ry="7" fill="#372f2a"/><ellipse cx="93" cy="45" rx="5" ry="7" fill="#372f2a"/><path d="m80 53 5 8 5-8 M75 62v9m9-9v9m9-9v9" fill="none" stroke="#493f31" stroke-width="2.5"/><path d="m61 26 5-16 11 12 9-16 8 16 12-11 2 19Z" fill="url(#crown)" stroke="#51432f" stroke-width="3"/><path d="M53 78 83 88 113 77 M56 96h55" fill="none" stroke="#887650" stroke-width="5"/>
+<path d="m24 28 3-7 3 7 7 3-7 3-3 7-3-7-7-3Z M131 24l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z" fill="#987c43" opacity=".88"/>
+<circle cx="31" cy="80" r="2.3" fill="#f0e2bd"/><circle cx="135" cy="78" r="2" fill="#f0e2bd"/>
+</svg>

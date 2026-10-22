@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Legendary Dragonforged Feet"><defs><linearGradient id="plate" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ecc17b"/><stop offset=".52" stop-color="#a84e39"/><stop offset="1" stop-color="#4c3028"/></linearGradient><linearGradient id="trim" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ecc17b"/><stop offset="1" stop-color="#a66b38"/></linearGradient></defs>
+<circle cx="80" cy="60" r="48" fill="#a84e39" opacity=".07"/>
+<path d="M39 21 Q53 17 67 21 L66 78 Q66 86 60 92 L76 100 Q80 103 78 108 Q77 111 72 111 H34 Q29 111 28 107 Q27 103 31 99 L45 90 Q39 85 39 78Z" fill="url(#plate)" stroke="#463d31" stroke-width="3" stroke-linejoin="round"/>
+<path d="M91 21 Q105 17 119 21 L118 78 Q118 85 112 90 L128 99 Q132 103 130 107 Q129 111 124 111 H86 Q81 111 80 108 Q78 103 83 100 L97 92 Q91 86 91 78Z" fill="url(#plate)" stroke="#463d31" stroke-width="3" stroke-linejoin="round"/>
+<path d="M45 28q8 4 16 0M97 28q8 4 16 0M45 37v39q0 12-8 18m60-57v39q0 12-8 18" fill="none" stroke="#ecc17b" stroke-width="2.4" stroke-linecap="round"/>
+<path d="M31 103q20 5 47-1m5 0q20 6 44 1" fill="none" stroke="#ecc17b" stroke-width="3" stroke-linecap="round"/>
+</svg>

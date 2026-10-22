@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="Axe">
+<ellipse cx="80" cy="108" rx="46" ry="4" fill="#493f31" opacity=".1"/>
+<path d="M50 105 107 23" stroke="#493f31" stroke-width="14" stroke-linecap="round"/><path d="M50 105 107 23" stroke="#8b6446" stroke-width="8" stroke-linecap="round"/><path d="M91 43 Q95 17 129 15 Q127 40 110 59 L96 62Z" fill="#d7d0c0" stroke="#493f31" stroke-width="4" stroke-linejoin="round"/><path d="m101 39 21-17-12 25" fill="none" stroke="#fff4d7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

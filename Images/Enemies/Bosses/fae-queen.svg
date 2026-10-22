@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120" role="img" aria-label="The Fae Queen">
+<defs><radialGradient id="aura"><stop stop-color="#c9efd7" stop-opacity=".62"/><stop offset="1" stop-color="#648d85" stop-opacity="0"/></radialGradient><linearGradient id="body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c9efd7"/><stop offset=".55" stop-color="#648d85"/><stop offset="1" stop-color="#34343a"/></linearGradient><linearGradient id="crown" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#d8c179"/><stop offset="1" stop-color="#896744"/></linearGradient></defs>
+<ellipse cx="82" cy="61" rx="61" ry="57" fill="url(#aura)"/>
+<path d="M24 91 Q13 63 28 39 M133 90 Q147 61 132 36" fill="none" stroke="#c9efd7" stroke-width="2" opacity=".7"/>
+<path d="M42 109 49 70 63 59 62 39 72 26 94 26 105 41 101 62 117 76 122 108 100 99 82 110 60 99Z" fill="url(#body)" stroke="#394a44" stroke-width="4"/><path d="M64 46Q82 34 101 47L97 66 82 74 67 65Z" fill="#d6d7bd" stroke="#394a44" stroke-width="3"/><path d="M71 50h7m11 0h7" stroke="#526b61" stroke-width="3.5" stroke-linecap="round"/><path d="m76 63 6 4 7-4" fill="none" stroke="#9b6672" stroke-width="2.5"/><path d="m64 32 1-20 15 14 4-20 9 20 15-14-3 24Z" fill="url(#crown)" stroke="#514832" stroke-width="3"/><path d="M49 47Q29 26 27 58L47 80 M113 47Q136 25 138 57L117 80" fill="none" stroke="#a5d6bd" stroke-width="5" stroke-linecap="round"/><circle cx="82" cy="17" r="4" fill="#fff1bd"/>
+<path d="m24 28 3-7 3 7 7 3-7 3-3 7-3-7-7-3Z M131 24l2-5 2 5 5 2-5 2-2 5-2-5-5-2Z" fill="#d8c179" opacity=".88"/>
+<circle cx="31" cy="80" r="2.3" fill="#c9efd7"/><circle cx="135" cy="78" r="2" fill="#c9efd7"/>
+</svg>
