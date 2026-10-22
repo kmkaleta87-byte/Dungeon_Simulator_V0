@@ -1368,10 +1368,34 @@ function ensureSkillStats() {
 
 function openSkills() { if(modal==="inventory")modalReturnFocusSelector="[data-open-inventory]"; modal = "skills"; render(); }
 
+function refreshSkillsModal() {
+  if(modal!=="skills")return false;
+  const skillsModal=screen.querySelector(".skills-modal");
+  if(!skillsModal)return false;
+  const points=skillsModal.querySelector(".skill-points strong");
+  if(points)points.textContent=String(state.skillPoints);
+  for(const stat of DUNGEON_RULES.STAT_DEFINITIONS){
+    const row=skillsModal.querySelector(`[data-skill-row="${stat.key}"]`);
+    if(!row)return false;
+    const value=row.querySelector("strong");
+    const description=row.querySelector("p");
+    const button=row.querySelector("[data-spend-stat]");
+    const cost=DUNGEON_RULES.skillPointCost(state,stat.key);
+    if(value)value.textContent=`${stat.label}: ${statValueLabel(stat)}`;
+    if(description)description.textContent=`${statDescription(stat)}${stat.key==="dex"&&state.class==="archer"&&state.equippedArmor?.shield?" Equipped shield penalty applied.":""}`;
+    if(button){
+      button.textContent=`Improve · ${cost} SP`;
+      button.disabled=state.skillPoints<cost||(stat.key==="critChance"&&state.critChance>=1);
+    }
+  }
+  save();
+  return true;
+}
+
 function spendSkillPoint(stat) {
   const result = DUNGEON_RULES.spendSkillPoint(state, stat);
   message(result.message, result.success ? "reward" : "");
-  render();
+  if(!refreshSkillsModal())render();
 }
 
 function chooseClass(className) {
@@ -1843,10 +1867,11 @@ function itemNameWithRarity(item) {
 function die(){state.hp=0;state.braced=false;state.activeDefense=null;if(state.combat){state.runStats.fights.unshift({floor:state.floor,defeat:true,enemies:state.combat.enemies.map(enemy=>enemy.name),damageDealt:state.combat.damageDealt||0,damageTaken:state.combat.damageTaken||0,log:[...(state.combat.log||[])]});state.runStats.fights=state.runStats.fights.slice(0,20);}state.combat=null;state.deaths++;updatePersonalBest(state);submitCompletedRun(state);message(`${state.name} has fallen. The run is over.`,"danger");modal="death";render();}
 
 function openInventory(){
+  const returningFromSkills=modal==="skills";
   modalReturnFocusSelector="[data-open-inventory]";
   state.inventoryNotice=false;
   inventoryWeaponFamily=state.class||"warrior";
-  inventoryCategory="weapons";
+  if(!returningFromSkills)inventoryCategory="weapons";
   save();
   modal="inventory";render();
 }
@@ -1918,7 +1943,7 @@ function showModal(){
   } else if(modal==="inventory"){
     content=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="inventory-title"><div class="modal-heading"><div><p class="section-kicker">Pack &amp; equipment</p><h2 id="inventory-title">Inventory</h2></div><button class="icon-close" data-close-modal aria-label="Close inventory">×</button></div><div class="inventory-tabs"><button class="tab-button active" data-tab="weapons">Weapons</button><button class="tab-button" data-tab="armor">Armor</button><button class="tab-button" data-tab="items">Items</button><button class="tab-button" data-tab="class-spells">Class Spells</button><button class="tab-button" data-open-skills>Skills${state.skillPoints ? ` (${state.skillPoints} unspent)` : ""}</button></div><div class="equipped-slots">${["head","chest","legs","feet","shield"].map(slot=>`<div><span>${slot}</span><strong>${escapeHtml(state.equippedArmor?.[slot]?.name||"Empty")}</strong></div>`).join("")}</div><p class="armor-set-summary">${escapeHtml(armorSummaryText())}</p><div class="inventory-list" id="inventory-list">${renderInventoryItems("weapons")}</div><p class="inventory-gold">${state.gold} gold · ${state.class?escapeHtml(CLASS_NAMES[state.class]):"Class unchosen"}</p></section>`;
   } else if(modal==="skills"){
-    content=`<section class="modal skills-modal" role="dialog" aria-modal="true" aria-labelledby="skills-title"><div class="modal-heading"><div><p class="section-kicker">Character development</p><h2 id="skills-title">Skills &amp; advanced stats</h2></div><button class="icon-close" data-close-modal aria-label="Close skills">×</button></div><p class="skill-points">Unspent skill points: <strong>${state.skillPoints}</strong></p><div class="skill-list">${DUNGEON_RULES.STAT_DEFINITIONS.map(stat=>{const cost=DUNGEON_RULES.skillPointCost(state,stat.key);return `<article class="skill-row"><div><strong>${stat.label}: ${statValueLabel(stat)}</strong><p>${statDescription(stat)}${stat.key==="dex"&&state.class==="archer"&&state.equippedArmor?.shield?" Equipped shield penalty applied.":""}</p></div><button class="small-button" data-spend-stat="${stat.key}" ${state.skillPoints<cost || (stat.key === "critChance" && state.critChance>=1) ? "disabled" : ""}>Improve · ${cost} SP</button></article>`;}).join("")}</div><button class="secondary-button skill-inventory-link" data-open-inventory type="button">Return to inventory</button></section>`;
+    content=`<section class="modal skills-modal" role="dialog" aria-modal="true" aria-labelledby="skills-title"><div class="modal-heading"><div><p class="section-kicker">Character development</p><h2 id="skills-title">Skills &amp; advanced stats</h2></div><button class="icon-close" data-close-modal aria-label="Close skills">×</button></div><p class="skill-points">Unspent skill points: <strong>${state.skillPoints}</strong></p><div class="skill-list">${DUNGEON_RULES.STAT_DEFINITIONS.map(stat=>{const cost=DUNGEON_RULES.skillPointCost(state,stat.key);return `<article class="skill-row" data-skill-row="${stat.key}"><div><strong>${stat.label}: ${statValueLabel(stat)}</strong><p>${statDescription(stat)}${stat.key==="dex"&&state.class==="archer"&&state.equippedArmor?.shield?" Equipped shield penalty applied.":""}</p></div><button class="small-button" data-spend-stat="${stat.key}" ${state.skillPoints<cost || (stat.key === "critChance" && state.critChance>=1) ? "disabled" : ""}>Improve · ${cost} SP</button></article>`;}).join("")}</div><button class="secondary-button skill-inventory-link" data-open-inventory type="button">Return to inventory</button></section>`;
   } else if(modal==="shop"){
     const upgradeWeapons=state.weapons.map((weapon,index)=>({weapon,index})).filter(({weapon})=>weaponFamily(weapon));
     if(!upgradeWeapons.some(entry=>entry.index===state.upgradeWeaponIndex))state.upgradeWeaponIndex=upgradeWeapons.find(entry=>entry.weapon===state.weapon)?.index??upgradeWeapons[0]?.index??-1;
