@@ -1,6 +1,7 @@
 (function (root) {
   const RARITIES = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Divine"];
   const RARITY_MULTIPLIERS = [1, 1.25, 1.6, 2.1, 2.8, 3.7, 5];
+  const ARMOR_DAMAGE_REDUCTION = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08];
   const STAT_DEFINITIONS = [
     { key: "str", label: "STR", description: "Increases physical attack damage." },
     { key: "dex", label: "DEX", description: "Improves evasion; especially effective for Archers." },
@@ -236,7 +237,7 @@
     return {
       name: entry.name, rarity: entry.rarity, type: entry.type, slot, set: entry.set,
       file: entry.file, defense: Math.max(1, Math.round((2 + floor) * multiplier)),
-      damageReduction: Math.max(1, Math.round((1 + floor / 2) * multiplier)),
+      damageReductionPercent: ARMOR_DAMAGE_REDUCTION[tier],
       healthBonus: Math.max(0, Math.round(floor * 5 * multiplier) - 3),
       speedModifier: tier >= 4 ? 1 : 0,
       slotBonuses: { ...slotBonuses[slot], ...(slot === "chest" ? { healthBonus: Math.max(0, Math.round(floor * 5 * multiplier) - 3) } : {}) },
@@ -254,9 +255,17 @@
     return 2 + Math.max(0, RARITIES.indexOf(pieces[0].rarity));
   }
 
+  function armorPieceDamageReduction(armor) {
+    if (!armor) return 0;
+    if (Number.isFinite(Number(armor.damageReductionPercent))) return Number(armor.damageReductionPercent);
+    return ARMOR_DAMAGE_REDUCTION[Math.max(0, RARITIES.indexOf(armor.rarity || "Common"))];
+  }
+
   function armorDamageReduction(equipped, playerClass) {
-    return Object.entries(equipped).reduce((total, [slot, armor]) =>
-      total + (slot === "shield" && playerClass === "mage" ? 0 : armor?.damageReduction || 0), 0) + armorSetBonus(equipped);
+    return Object.entries(equipped).reduce((total, [slot, armor]) => {
+      if (!armor || (slot === "shield" && playerClass === "mage")) return total;
+      return total + armorPieceDamageReduction(armor);
+    }, 0);
   }
 
   function armorBonuses(equipped = {}, playerClass = "warrior") {
@@ -581,5 +590,5 @@
     return save ? `${save.name || "Adventurer"} · Floor ${save.floor || 1} · Level ${save.level || 1}` : "Empty";
   }
 
-  root.DungeonRules = { STAT_DEFINITIONS, effectiveStat, statSynergy, skillPointCost, entryRoomType, spendSkillPoint, chooseCatalogWeapon, createCatalogWeapon, createWeaponAttacks, createCatalogArmor, equipArmor, armorSetBonus, armorDamageReduction, armorBonuses, getEffectDefinition, applyCombatEffect, tickCombatEffects, createAttackPreview, rollLootRarity, rollFloorLootRarity, rollShopRarity, rollWeaponFamily, rollLootKind, rollPotionType, rollShopOfferKind, getSpecialAttack, isAttackOnCooldown, basicAttackFallback, weaponFamilyForType, weaponDamageMultiplier, weaponUsesMana, allEnemiesDefeated, avoidDuplicateDivine, elementMatchup, chooseEnemyIntent, hasDisruptibleIntent, canDisrupt, disruptEnemy, consumeDisruptedIntent, tickDisruptCooldown, guardDamage, brace, applyBraceToDamage, createSaveSlots, writeSaveSlot, describeSaveSlot };
+  root.DungeonRules = { STAT_DEFINITIONS, effectiveStat, statSynergy, skillPointCost, entryRoomType, spendSkillPoint, chooseCatalogWeapon, createCatalogWeapon, createWeaponAttacks, createCatalogArmor, equipArmor, armorSetBonus, armorPieceDamageReduction, armorDamageReduction, armorBonuses, getEffectDefinition, applyCombatEffect, tickCombatEffects, createAttackPreview, rollLootRarity, rollFloorLootRarity, rollShopRarity, rollWeaponFamily, rollLootKind, rollPotionType, rollShopOfferKind, getSpecialAttack, isAttackOnCooldown, basicAttackFallback, weaponFamilyForType, weaponDamageMultiplier, weaponUsesMana, allEnemiesDefeated, avoidDuplicateDivine, elementMatchup, chooseEnemyIntent, hasDisruptibleIntent, canDisrupt, disruptEnemy, consumeDisruptedIntent, tickDisruptCooldown, guardDamage, brace, applyBraceToDamage, createSaveSlots, writeSaveSlot, describeSaveSlot };
 })(window);

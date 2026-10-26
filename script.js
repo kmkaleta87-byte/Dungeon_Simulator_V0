@@ -562,6 +562,7 @@ function migrateBrowserSave() {
   if (!state) return;
   state.saveSlot ||= state.devMode ? "dev" : "slot1";
   if(!DIFFICULTIES[state.difficulty])state.difficulty="normal";
+  if(state.combat?.enemies)for(const enemy of state.combat.enemies){if((enemy.damageScaleVersion||0)<2){enemy.damage=Math.max(1,Math.round(enemy.damage*floorEnemyScale(state.floor||1,1.28)/floorEnemyScale(state.floor||1,1.1)));enemy.damageScaleVersion=2;}}
   state.inventoryNotice ??= false;
   state.spells ||= [];
   for(const spell of state.spells)refreshClassSpellProfile(spell);
@@ -663,7 +664,7 @@ function makeEnemy(floor, boss = false, index = 0) {
   const typeDefense=klass==="Paladin"?Math.max(1,Math.round((2+floor*0.15)*difficulty.enemyHealth)):0;
   const dodge=Math.min(0.35,(race==="specter"?0.12:race==="kobold"?0.07:0)+(klass==="Assassin"?0.16:klass==="Archer"?0.05:klass==="Sharpshooter"?0.01:0.02));
   const critChance=({Assassin:0.12,Sharpshooter:0.2})[klass]||(race==="werewolf"?0.1:0);
-  return { name:enemyName, race, klass, element, dex:dex+regionDexBonus, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * damageScale * regionDamageBonus * (boss ? 1.5 * (milestoneBoss?1.25:1) : 1) * floorEnemyScale(floor, 1.1) * difficulty.enemyDamage * easyBossDamageScale)), damageReduction:race==="golem"?Math.max(1,Math.round((1+floor*0.35)*difficulty.enemyHealth)):typeDefense, dodge, critChance, lifeSteal:race==="vampire"?0.12:0, boss, milestoneBoss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)) };
+  return { name:enemyName, race, klass, element, dex:dex+regionDexBonus, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * damageScale * regionDamageBonus * (boss ? 1.5 * (milestoneBoss?1.25:1) : 1) * floorEnemyScale(floor, 1.28) * difficulty.enemyDamage * easyBossDamageScale)), damageReduction:race==="golem"?Math.max(1,Math.round((1+floor*0.35)*difficulty.enemyHealth)):typeDefense, dodge, critChance, lifeSteal:race==="vampire"?0.12:0, boss, milestoneBoss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)), damageScaleVersion:2 };
 }
 
 function assignRunChoice(floor,rooms,random=Math.random){
@@ -1080,7 +1081,7 @@ function enemyIncomingDamage(enemy) {
   const scale = enemy.intent?.damageMultiplier || (enemy.intent?.key === "cast" ? 1.15 : enemy.intent?.key === "shoot" ? 0.9 : enemy.intent?.key === "heavy" ? 1.25 : 1);
   const raw = Math.round(enemy.damage * scale);
   const reduction = DUNGEON_RULES.armorDamageReduction(state.equippedArmor || {}, state.class);
-  return Math.max(1, raw - reduction);
+  return Math.max(1, Math.round(raw * (1 - reduction)));
 }
 
 function healthPotionRestore(item) {
@@ -1360,7 +1361,7 @@ function renderPlayerCombatStatuses() {
 
 function armorSummaryText() {
   const bonus=DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class);
-  const details=[`+${bonus.damageReduction} damage reduction`];
+  const details=[`${Math.round(bonus.damageReduction*100)}% damage reduction`];
   if(bonus.healthBonus)details.push(`+${bonus.healthBonus} max HP`);
   if(bonus.critChance)details.push(`+${Math.round(bonus.critChance*100)}% crit`);
   if(bonus.dexterity)details.push(`${bonus.dexterity>0?"+":""}${bonus.dexterity} DEX`);
@@ -1806,7 +1807,7 @@ function takePlayerDamage(damage, sourceEnemy = null) {
   let incoming=damage;
   if(state.weapon?.effect==="ManaShield"&&state.mana>0){const absorbed=Math.min(4,state.mana,incoming);state.mana-=absorbed;incoming-=absorbed;}
   const reduction=DUNGEON_RULES.armorDamageReduction(state.equippedArmor||{},state.class);
-  let afterArmor=Math.max(1,incoming-reduction);
+  let afterArmor=Math.max(1,Math.round(incoming*(1-reduction)));
   const defense=state.activeDefense;
   let fullyBlocked=false;
   if(defense?.type==="dodge")afterArmor=Math.max(1,Math.round(afterArmor*0.5));
@@ -1893,7 +1894,7 @@ function lootArmorOwned(){
 }
 
 function armorLootScore(armor){
-  return (Number(armor.defense)||0)+(Number(armor.damageReduction)||0)*2+(Number(armor.healthBonus)||0)*0.1;
+  return (Number(armor.defense)||0)+DUNGEON_RULES.armorPieceDamageReduction(armor)*100+(Number(armor.healthBonus)||0)*0.1;
 }
 
 function makeLootArmor(rarity,allowNonUpgrade=false,extraExcludedNames=[]){
@@ -2022,7 +2023,7 @@ function equipBestArmor(){
   const equipped={...(state.equippedArmor||{})};
   for(const slot of ["head","chest","legs","feet","shield"]){
     const pieces=candidates.filter(item=>item?.slot===slot);
-    pieces.sort((a,b)=>(Number(b.defense)||0)-(Number(a.defense)||0)||(Number(b.damageReduction)||0)-(Number(a.damageReduction)||0)||(Number(b.healthBonus)||0)-(Number(a.healthBonus)||0));
+    pieces.sort((a,b)=>(Number(b.defense)||0)-(Number(a.defense)||0)||DUNGEON_RULES.armorPieceDamageReduction(b)-DUNGEON_RULES.armorPieceDamageReduction(a)||(Number(b.healthBonus)||0)-(Number(a.healthBonus)||0));
     if(pieces[0])equipped[slot]=pieces[0];
   }
   state.equippedArmor=equipped;
@@ -2053,8 +2054,8 @@ function renderShopGearItem(item,index){
   if(item.kind==="classSpell")return `<article class="shop-item ${rarityClass(value.rarity)}">${itemArt(`Images/Items/Spells/${value.file}`,value.name)}<div><span class="item-meta">${escapeHtml(value.rarity)} · ${escapeHtml(CLASS_NAMES[value.className])} class spell</span><strong>${escapeHtml(value.spellName)}</strong><p>${escapeHtml(value.description)} · ${classSpellCostLabel(value)} · ${item.price} gold</p></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`;
   const isWeapon=item.kind==="weapon";
   const current=isWeapon?state.weapon:state.equippedArmor?.[value.slot];
-  const offered=isWeapon?weaponShopStats(value):`${escapeHtml(value.slot)} · ${value.defense||0} defense · ${value.damageReduction||0} damage reduction · +${value.healthBonus||0} max HP`;
-  const compared=current?(isWeapon?weaponShopStats(current):`${escapeHtml(current.slot)} · ${current.defense||0} defense · ${current.damageReduction||0} damage reduction · +${current.healthBonus||0} max HP`):"None equipped";
+  const offered=isWeapon?weaponShopStats(value):`${escapeHtml(value.slot)} · ${value.defense||0} defense · ${Math.round(DUNGEON_RULES.armorPieceDamageReduction(value)*100)}% damage reduction · +${value.healthBonus||0} max HP`;
+  const compared=current?(isWeapon?weaponShopStats(current):`${escapeHtml(current.slot)} · ${current.defense||0} defense · ${Math.round(DUNGEON_RULES.armorPieceDamageReduction(current)*100)}% damage reduction · +${current.healthBonus||0} max HP`):"None equipped";
   return `<article class="shop-item ${rarityClass(value.rarity)}">${isWeapon?weaponArt(value):itemArt(`Images/Armor/${value.file}`,value.name)}<div><span class="item-meta">${escapeHtml(value.rarity)} ${escapeHtml(item.kind)}</span><strong>${escapeHtml(value.name)}</strong><p>${item.price} gold</p><div class="shop-comparison"><span><b>New:</b> ${offered}</span><span><b>Equipped:</b> ${compared}</span></div></div><button class="small-button" data-buy="${index}" ${state.gold<item.price?"disabled":""}>Buy</button></article>`;
 }
 function renderShopTabs(upgradeWeapons){
@@ -2284,7 +2285,7 @@ function renderInventoryItems(tab){
     const sortButton=(key,label,defaultDirection)=>`<button class="sort-button ${weaponSort.key===key?"active":""}" data-weapon-sort="${key}" aria-label="Sort by ${label} ${weaponSort.key===key?(weaponSort.direction==="desc"?"descending":"ascending"):defaultDirection}">${label} <span>${weaponSort.key===key?(weaponSort.direction==="desc"?"↓":"↑"):"↕"}</span></button>`;
     return `<nav class="weapon-family-tabs" aria-label="Weapon class">${["warrior","archer","mage"].map(family=>`<button class="subtab-button ${inventoryWeaponFamily===family?"active":""}" data-weapon-family="${family}">${CLASS_NAMES[family]}</button>`).join("")}</nav><div class="weapon-sort-controls">${sortButton("rarity","Rarity","desc")}${sortButton("name","Name","asc")}${sortButton("damage","Damage","desc")}</div>${familyWeapons.length?familyWeapons.map(({weapon,index})=>weaponCard(weapon,index,weapon===state.weapon)).join(""):`<p class="empty-list">No ${CLASS_NAMES[inventoryWeaponFamily].toLowerCase()} weapons collected.</p>`}`;
   }
-  if(tab==="armor")return state.armor.length?`<div class="inventory-toolbar"><button class="small-button" data-equip-best>Equip Best</button></div>${state.armor.map((item,index)=>{const equipped=state.equippedArmor?.[item.slot]===item;return `<article class="inventory-item ${rarityClass(item.rarity)}">${itemArt(`Images/Armor/${item.file||`${slug(item.set||"iron")}-${item.slot}.png`}`,item.name)}<div class="item-copy"><span class="item-meta">${escapeHtml(item.rarity)} · ${escapeHtml(item.slot)} · ${escapeHtml(item.set||"")}</span><strong>${escapeHtml(item.name)}</strong><span class="item-stats">${item.defense} defense · ${item.damageReduction} damage reduction · +${item.healthBonus||0} max HP · ${escapeHtml(armorPerkText(item))}</span></div><div class="inventory-item-actions">${equipped?`<span class="equipped-tag">Equipped</span>`:`<button class="small-button" data-equip-armor="${index}">Equip</button>`}<button class="small-button" data-inventory-sell="armor" data-sell-index="${index}" ${equipped?"disabled title=\"Unequip this armor before selling it\"":""}>Sell · ${sellValue(item,"armor")}g</button></div></article>`;}).join("")}`:`<p class="empty-list">No armor collected.</p>`;
+  if(tab==="armor")return state.armor.length?`<div class="inventory-toolbar"><button class="small-button" data-equip-best>Equip Best</button></div>${state.armor.map((item,index)=>{const equipped=state.equippedArmor?.[item.slot]===item;return `<article class="inventory-item ${rarityClass(item.rarity)}">${itemArt(`Images/Armor/${item.file||`${slug(item.set||"iron")}-${item.slot}.png`}`,item.name)}<div class="item-copy"><span class="item-meta">${escapeHtml(item.rarity)} · ${escapeHtml(item.slot)} · ${escapeHtml(item.set||"")}</span><strong>${escapeHtml(item.name)}</strong><span class="item-stats">${item.defense} defense · ${Math.round(DUNGEON_RULES.armorPieceDamageReduction(item)*100)}% damage reduction · +${item.healthBonus||0} max HP · ${escapeHtml(armorPerkText(item))}</span></div><div class="inventory-item-actions">${equipped?`<span class="equipped-tag">Equipped</span>`:`<button class="small-button" data-equip-armor="${index}">Equip</button>`}<button class="small-button" data-inventory-sell="armor" data-sell-index="${index}" ${equipped?"disabled title=\"Unequip this armor before selling it\"":""}>Sell · ${sellValue(item,"armor")}g</button></div></article>`;}).join("")}`:`<p class="empty-list">No armor collected.</p>`;
   const ammunition=renderArrowInventoryItem();
   return `${ammunition}${state.items.length?state.items.map((item,index)=>`<article class="inventory-item ${rarityClass(item.rarity)}">${potionArt(item)}<div class="item-copy"><span class="item-meta">${escapeHtml(item.rarity)} · x${item.quantity}</span><strong>${escapeHtml(item.name)}</strong><span class="item-stats">${item.type==="mana"?`Restores ${MANA_POTION_PERCENT[item.rarity]||20}% max MP (${manaPotionRestore(item)} MP now)`: `Restores ${HEALTH_POTION_PERCENT[item.rarity]||20}% max HP (${healthPotionRestore(item)} HP now)`}</span></div><div class="inventory-item-actions"><button class="small-button" data-use-item="${index}">Use</button><button class="small-button" data-inventory-sell="item" data-sell-index="${index}">Sell · ${sellValue(item,"item")}g</button></div></article>`).join(""):`${ammunition?"":"<p class=\"empty-list\">No items in your pack.</p>"}`}`;
 }
@@ -2367,7 +2368,7 @@ function shopItem(){
     if(value)return{kind:"weapon",value,price:priceFor(value.goldValue||value.damage*5,value.rarity)};
   }
   const armor=makeLootArmor(rarity,true,existingNames);
-  if(armor){const armorBaseValue=Math.max(armor.goldValue||0,Math.round((armor.defense*4+armor.damageReduction*6+(armor.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return{kind:"armor",value:armor,price:priceFor(armorBaseValue,armor.rarity)};}
+  if(armor){const armorBaseValue=Math.max(armor.goldValue||0,Math.round((armor.defense*4+DUNGEON_RULES.armorPieceDamageReduction(armor)*200+(armor.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return{kind:"armor",value:armor,price:priceFor(armorBaseValue,armor.rarity)};}
   const weapon=makeLootWeapon(rarity,"Common",existingNames);
   return weapon?{kind:"weapon",value:weapon,price:priceFor(weapon.goldValue||weapon.damage*5,weapon.rarity)}:null;
 }

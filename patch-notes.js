@@ -23,7 +23,8 @@ window.GAME_PATCH_NOTES = {
         items: [
           "Loot rarity now rises with floor depth, and gear drops favor missing armor slots and useful upgrades over duplicate or weaker equipment.",
           "Bonus potions are less common, and shops offer a smaller potion stock alongside more useful, varied gear.",
-          "Treasure and safe-route gold rewards now grow with floor depth; summons are capped to keep fights readable as enemy groups grow."
+          "Treasure and safe-route gold rewards now grow with floor depth; summons are capped to keep fights readable as enemy groups grow.",
+          "Enemy attack damage scales faster as you descend. Armor now reduces a percentage of incoming damage by rarity (2% per Common piece through 8% per Divine piece), instead of subtracting a floor-scaled flat amount."
         ]
       },
       {
