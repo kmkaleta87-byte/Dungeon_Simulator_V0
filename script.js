@@ -273,6 +273,7 @@ let combatFeedbacks = [];
 let enemyHitFlash = false;
 let lastFocusedModalName = null;
 let modalReturnFocusSelector = null;
+let pendingNewRunSlot = null;
 
 screen.addEventListener("keydown", event => {
   const dialog=screen.querySelector('.modal[role="dialog"]');
@@ -881,12 +882,14 @@ function makeFloor(floor) {
 }
 
 function newRun(name, devMode = false, saveSlot = "slot1", difficulty = "normal") {
+  const playerName=String(name||"").trim();
+  if(!playerName||!DIFFICULTIES[difficulty])return;
   clearCombatResolution();
   combatFeedbacks=[];
   enemyHitFlash=false;
   modal=null;
   state = {
-    name: name || "Adventurer", devMode, saveSlot, difficulty: DIFFICULTIES[difficulty] ? difficulty : "normal", inventoryNotice: false, shopLootUpgradeLevel: 0, floor: 1, level: 1, xp: 0, skillPoints: 0, hp: 100, maxHp: 100,
+    name: playerName, devMode, saveSlot, difficulty, inventoryNotice: false, shopLootUpgradeLevel: 0, floor: 1, level: 1, xp: 0, skillPoints: 0, hp: 100, maxHp: 100,
     mana: 50, maxMana: 50, gold: 0, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10,
     speed: 10, critChance: 0.05, class: null, chosenClass: null, weapon: null, weapons: [], armor: [], items: [], spells: [], equippedSpellId: null,
     currentFloor: makeFloor(1), combat: null, deaths: 0, floorsCleared: 0, milestonePending:false, runEnded:false, log: [],
@@ -905,12 +908,15 @@ function startScreen() {
   document.querySelector("#leaderboard-button").disabled = false;
   document.querySelector("#settings-button").disabled = false;
   const slots = loadSaveSlots();
-  screen.innerHTML = `<div class="title-screen"><div class="title-copy"><p class="eyebrow">A dungeon adventure</p><h2>Every room<br>is a choice.</h2><p>Explore a shifting dungeon, search what you find, and fight your way toward the next floor.</p><button class="secondary-button" data-open-leaderboard>View highest floors</button>${renderPersonalBests()}</div><div class="start-form"><p class="form-kicker">Begin an expedition</p><label for="player-name">Character name</label><input id="player-name" maxlength="22" placeholder="Adventurer" autocomplete="off"><label for="difficulty-choice">Difficulty</label><select id="difficulty-choice"><option value="easy">Easy · gentler enemies, faster leveling, lower prices</option><option value="normal" selected>Normal · standard balance</option><option value="hard">Hard · tougher enemies, slower leveling, higher prices</option></select><div class="save-slots">${SAVE_SLOT_IDS.map(slot=>{const saved=slots[slot];const resumable=isResumableSave(saved);const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;return `<article class="save-slot ${saved?"save-slot-filled":"save-slot-empty"}"><div><strong>${label}</strong><span>${saved&&!resumable?"This save is incomplete or damaged; delete it or start a new run.":escapeHtml(DUNGEON_RULES.describeSaveSlot(slots,slot))}${saved&&resumable?` · ${DIFFICULTIES[saved.difficulty]?.label||"Normal"}`:""}</span></div><div class="save-slot-actions">${resumable?`<button class="small-button continue-button" data-continue-slot="${slot}">Continue</button>`:""}<button class="small-button start-run-button" data-new-slot="${slot}">${saved?"New run":"Start run"}</button>${saved?`<button class="text-button" data-delete-slot="${slot}">Delete</button>`:""}</div></article>`;}).join("")}</div><p class="fine-print">Run saves are stored in this browser. Global leaderboard records are separate; Dev-slot runs do not count.</p></div></div>`;
+  screen.innerHTML = `<div class="title-screen"><div class="title-copy"><p class="eyebrow">A dungeon adventure</p><h2>Every room<br>is a choice.</h2><p>Explore a shifting dungeon, search what you find, and fight your way toward the next floor.</p><button class="secondary-button" data-open-leaderboard>View highest floors</button>${renderPersonalBests()}</div><div class="start-form"><p class="form-kicker">Choose a save slot</p><p class="save-slot-intro">Continue an expedition or start a new run in any slot.</p><div class="save-slots">${SAVE_SLOT_IDS.map(slot=>{const saved=slots[slot];const resumable=isResumableSave(saved);const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;return `<article class="save-slot ${saved?"save-slot-filled":"save-slot-empty"}"><div><strong>${label}</strong><span>${saved&&!resumable?"This save is incomplete or damaged; delete it or start a new run.":escapeHtml(DUNGEON_RULES.describeSaveSlot(slots,slot))}${saved&&resumable?` · ${DIFFICULTIES[saved.difficulty]?.label||"Normal"}`:""}</span></div><div class="save-slot-actions">${resumable?`<button class="small-button continue-button" data-continue-slot="${slot}">Continue</button>`:""}<button class="small-button start-run-button" data-new-slot="${slot}">${saved?"New run":"Start run"}</button>${saved?`<button class="text-button" data-delete-slot="${slot}">Delete</button>`:""}</div></article>`;}).join("")}</div><p class="fine-print">Run saves are stored in this browser. Global leaderboard records are separate; Dev-slot runs do not count.</p></div></div>`;
   screen.querySelector("[data-open-leaderboard]")?.addEventListener("click", () => { modalReturnFocusSelector="[data-open-leaderboard]"; modal = "leaderboard"; showModal(); });
   screen.querySelectorAll("[data-new-slot]").forEach(button=>button.addEventListener("click",()=>{
     const slot=button.dataset.newSlot;const slotLabel=slot==="dev"?"dev":slot.slice(-1);const existing=slots[slot];
     if(existing&&!window.confirm(`Start a new run in ${slotLabel==="dev"?"the dev slot":`slot ${slotLabel}`}? This will replace ${DUNGEON_RULES.describeSaveSlot(slots,slot)}.`))return;
-    newRun(screen.querySelector("#player-name").value.trim(),slot==="dev",slot,screen.querySelector("#difficulty-choice").value);
+    pendingNewRunSlot=slot;
+    modalReturnFocusSelector=`[data-new-slot="${slot}"]`;
+    modal="new-run";
+    showModal();
   }));
   screen.querySelectorAll("[data-continue-slot]").forEach(button=>button.addEventListener("click",()=>{const saved=slots[button.dataset.continueSlot];if(!isResumableSave(saved)){startScreen();return;}state=saved;state.saveSlot=button.dataset.continueSlot;state.runStats ||= {enemiesDefeated:0,damageDealt:0,damageTaken:0,fights:[]};if(state.leaderboardSubmitted&&state.runSubmissionStatus?.startsWith("Submitting final score")){state.leaderboardSubmitted=false;state.runSubmissionStatus="Global submission status is unknown: the previous request did not return before this run was reopened. You can retry the score submission.";}modal=state.runEnded?"run-end":state.milestonePending?"milestone":state.hp<=0?"death":null;render();}));
   screen.querySelectorAll("[data-delete-slot]").forEach(button=>button.addEventListener("click",()=>{
@@ -1426,7 +1432,10 @@ function updateCombatResolutionPresentation() {
   if(["player-windup","player-impact"].includes(combatResolution.phase))view.querySelectorAll(".combat-outcome-effect,.combat-miss-popup").forEach(effect=>effect.remove());
   if(combatResolution.phase==="player-impact"){
     const target=view.querySelector(`.enemy-card[data-enemy-index="${state.target}"]`);
-    if(target)target.insertAdjacentHTML("afterbegin",renderPlayerAttackVfx(state.target));
+    if(target){
+      target.insertAdjacentHTML("afterbegin",renderPlayerAttackVfx(state.target));
+      configureArrowTrajectory(target.querySelector(".player-attack-vfx"),target);
+    }
   }
   return true;
 }
@@ -1551,6 +1560,22 @@ function renderPlayerAttackVfx(targetIndex) {
   }
   const heavy = combatResolution.action === "heavy";
   return `<div class="player-attack-vfx warrior-attack-vfx${heavy ? " heavy" : ""}" style="--attack-color:${color}" aria-hidden="true"><span class="warrior-slashes ${heavy?"single":""}"><i></i>${heavy?"":"<i></i>"}</span></div>`;
+}
+
+function configureArrowTrajectory(effect,target) {
+  const arrow=effect?.querySelector(".flying-arrow");
+  if(!arrow||!target)return;
+  const rect=target.getBoundingClientRect();
+  const centerX=rect.left+rect.width/2;
+  const centerY=rect.top+rect.height/2;
+  const height=window.innerHeight||600;
+  arrow.style.setProperty("--arrow-start-x",`${-centerX}px`);
+  arrow.style.setProperty("--arrow-mid-x",`${-centerX*0.62}px`);
+  arrow.style.setProperty("--arrow-near-x",`${-centerX*0.22}px`);
+  arrow.style.setProperty("--arrow-dive-x",`${-centerX*0.08}px`);
+  arrow.style.setProperty("--arrow-start-y",`${height*0.72-centerY}px`);
+  arrow.style.setProperty("--arrow-peak-y",`${height*0.25-centerY}px`);
+  arrow.style.setProperty("--arrow-dive-y",`${height*0.4-centerY}px`);
 }
 
 function fadeDefeatedEnemyCards() {
@@ -2407,7 +2432,11 @@ function renderShopTabs(upgradeWeapons){
 function showModal(){
   const old=screen.querySelector(".modal-backdrop");if(old)old.remove();
   let content="";
-  if(modal==="milestone"){
+  if(modal==="new-run"){
+    const slot=pendingNewRunSlot||"slot1";
+    const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;
+    content=`<section class="modal new-run-modal" role="dialog" aria-modal="true" aria-labelledby="new-run-title"><div class="modal-heading"><div><p class="section-kicker">New expedition · ${label}</p><h2 id="new-run-title">Create your character</h2></div><button class="icon-close" data-close-modal aria-label="Cancel new run">×</button></div><form class="new-run-form" data-new-run-form><label for="new-run-name">Character name</label><input id="new-run-name" name="name" type="text" maxlength="22" autocomplete="off" required placeholder="Enter a name"><fieldset class="run-difficulty-options"><legend>Choose difficulty <span>(required)</span></legend><label class="run-difficulty-option"><input type="radio" name="new-run-difficulty" value="easy" required><span><strong>Easy</strong><small>Gentler enemies, faster leveling, lower prices.</small></span></label><label class="run-difficulty-option"><input type="radio" name="new-run-difficulty" value="normal" required><span><strong>Normal</strong><small>Standard balance.</small></span></label><label class="run-difficulty-option"><input type="radio" name="new-run-difficulty" value="hard" required><span><strong>Hard</strong><small>Tougher enemies, slower leveling, higher prices.</small></span></label></fieldset><div class="new-run-actions"><button class="action-button" type="submit">Start expedition</button><button class="secondary-button" type="button" data-cancel-new-run>Cancel</button></div></form></section>`;
+  } else if(modal==="milestone"){
     const region=regionForFloor(state.floor);
     content=`<section class="modal milestone-modal" role="dialog" aria-modal="true" aria-labelledby="milestone-title"><p class="section-kicker">Milestone boss defeated · Floor ${state.floor}</p><h2 id="milestone-title">The threshold is yours.</h2><p>You have cleared ${state.floorsCleared} floors and reached the end of ${escapeHtml(region.name)}.</p><p>End the run to record this result, or continue into the next region. You can reach another milestone boss after 20 more floors.</p><div class="action-grid"><button class="action-button" data-milestone-end>End run · record score</button><button class="action-button secondary" data-milestone-continue>Continue to floor ${state.floor+1}</button></div></section>`;
   } else if(modal==="run-end"){
@@ -2437,17 +2466,37 @@ function showModal(){
   screen.insertAdjacentHTML("beforeend",`<div class="modal-backdrop">${content}</div>`);
   if(lastFocusedModalName!==modal){
     const dialog=screen.querySelector('.modal[role="dialog"]');
-    const first=dialog?.querySelector("[data-close-modal]")||dialog?.querySelector('button:not(:disabled),input:not(:disabled),select:not(:disabled)');
+    const first=modal==="new-run"?dialog?.querySelector("#new-run-name"):dialog?.querySelector("[data-close-modal]")||dialog?.querySelector('button:not(:disabled),input:not(:disabled),select:not(:disabled)');
     first?.focus?.({preventScroll:true});
     lastFocusedModalName=modal;
   }
   bindArtFallbacks();
+  screen.querySelector("[data-new-run-form]")?.addEventListener("submit",event=>{
+    event.preventDefault();
+    const nameInput=event.currentTarget.querySelector("#new-run-name");
+    const name=nameInput?.value.trim()||"";
+    const difficulty=event.currentTarget.querySelector('input[name="new-run-difficulty"]:checked')?.value||"";
+    if(!name){nameInput?.setCustomValidity("Enter a character name to start.");nameInput?.reportValidity();return;}
+    nameInput?.setCustomValidity("");
+    if(!DIFFICULTIES[difficulty]){event.currentTarget.reportValidity();return;}
+    const slot=pendingNewRunSlot;
+    if(!slot)return;
+    pendingNewRunSlot=null;
+    modal=null;
+    lastFocusedModalName=null;
+    modalReturnFocusSelector=null;
+    newRun(name,slot==="dev",slot,difficulty);
+  });
+  screen.querySelector("#new-run-name")?.addEventListener("input",event=>event.currentTarget.setCustomValidity(""));
+  screen.querySelector("[data-cancel-new-run]")?.addEventListener("click",()=>screen.querySelector(".modal-backdrop [data-close-modal]")?.click());
+  screen.querySelectorAll("[name='new-run-difficulty']").forEach(input=>input.addEventListener("change",()=>screen.querySelectorAll(".run-difficulty-option").forEach(label=>label.classList.toggle("selected",label.querySelector("input")?.checked))));
   screen.querySelectorAll("[data-pacing]").forEach(input=>input.addEventListener("change",()=>{combatPacing=input.dataset.pacing==="slow"?"slow":"fast";try{localStorage.setItem(COMBAT_PACING_KEY,combatPacing);}catch{};showModal();}));
   screen.querySelector("[data-close-modal]")?.addEventListener("click",event=>{
     const backdrop=screen.querySelector(".modal-backdrop");
     if(backdrop?.classList.contains("modal-closing"))return;
     const finishClose=()=>{
     const returnSelector=modalReturnFocusSelector;
+    if(modal==="new-run")pendingNewRunSlot=null;
     modal=null;lastFocusedModalName=null;render();
     modalReturnFocusSelector=null;
     if(returnSelector){

@@ -29,6 +29,12 @@ window.GAME_PATCH_NOTES = {
         items: [
           "The Floor 20 milestone popup's End Run and Continue buttons now respond correctly."
         ]
+      },
+      {
+        heading: "New Run Setup",
+        items: [
+          "Starting a new run now opens a setup dialog that requires a character name and an explicit difficulty choice before the run begins."
+        ]
       }
     ]
   },
