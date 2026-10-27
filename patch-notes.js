@@ -10,7 +10,9 @@ window.GAME_PATCH_NOTES = {
           "Enemies resolve one at a time, showing each foe's action before the next begins. Combat controls lock during turn resolution to prevent overlapping actions.",
           "New Fast and Slow combat pacing options are available in Settings. Slow adds longer, more immersive action cues; reduced-motion preferences minimize animation and delays.",
           "Enemy attacks now have a clearer wind-up, and combat updates keep the surrounding game interface steady instead of rebuilding it for every hit.",
-          "Warrior strikes and mage spells use distinct impact effects centered on their target. Blocks show a shield, dodges show Miss, and enemy hits add a red edge flash.",
+          "Warrior strikes and mage spells use distinct impact effects centered on their target. Mage casts display an effect symbol, blocks show a plain shield, dodges show Miss, and enemy hits add a red edge flash.",
+          "Archer shots now send a weighted arrow along an arcing flight path, followed by an effect-colored impact symbol.",
+          "Defeated enemies now fade out before the victory screen appears.",
           "Enemy health now grows steadily with floor depth instead of compounding exponentially. Boss health has been retuned separately, and saved active fights are adjusted to the new curve.",
           "Shop gear prices rise more gradually with rarity and floor depth, and shop-quality upgrades cost less at each level."
         ]

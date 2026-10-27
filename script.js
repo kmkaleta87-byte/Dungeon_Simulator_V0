@@ -268,6 +268,7 @@ let pendingCombatAction = null;
 let combatPacing = (() => { try { return localStorage.getItem(COMBAT_PACING_KEY) === "slow" ? "slow" : "fast"; } catch { return "fast"; } })();
 let combatResolution = null;
 let combatResolutionToken = 0;
+let combatVictoryPending = false;
 let combatFeedbacks = [];
 let enemyHitFlash = false;
 let lastFocusedModalName = null;
@@ -299,6 +300,7 @@ function escapeHtml(value) {
 
 function clearCombatResolution() {
   combatResolution=null;
+  combatVictoryPending=false;
   combatResolutionToken++;
 }
 function combatActionLabel(action) {
@@ -311,6 +313,7 @@ function combatActionLabel(action) {
 }
 function combatResolutionLabel() {
   if(!combatResolution)return state?.combat?.bonusAttackPending?"Bonus action":"Your turn";
+  if(combatResolution.phase==="enemy-death")return "Enemy defeated";
   const actionLabel=combatResolution.action?combatActionLabel(combatResolution.action):"";
   return combatResolution.phase==="player-windup"?`Preparing: ${actionLabel}…`:combatResolution.phase==="player-impact"?`Impact: ${actionLabel}.`:combatResolution.phase==="enemy-windup"?`${combatResolution.actor} prepares to act…`:`${combatResolution.actor} acts!`;
 }
@@ -336,7 +339,7 @@ function renderCombatOutcome(targetIndex) {
       const attack=state?.weapon?.attacks?.find(entry=>entry.command===item.action)||getEquippedClassSpell(item.action);
       const spell=state?.class==="mage"||attack?.spell;
       const impact=spell?`<span class="blocked-spell"></span>`:`<span class="blocked-slashes ${item.action==="heavy"?"single":""}"><i></i>${item.action==="heavy"?"":"<i></i>"}</span>`;
-      return `<div class="combat-outcome-effect outcome-blocked" style="--outcome-color:${color};${timing}" aria-hidden="true"><svg class="outcome-shield" viewBox="0 0 100 120"><path d="M50 5 91 20v34c0 27-15 46-41 61C24 100 9 81 9 54V20Z"/><path d="m29 57 14 14 29-31"/></svg>${impact}</div>`;
+      return `<div class="combat-outcome-effect outcome-blocked" style="--outcome-color:${color};${timing}" aria-hidden="true"><svg class="outcome-shield" viewBox="0 0 100 120"><path d="M50 5 91 20v34c0 27-15 46-41 61C24 100 9 81 9 54V20Z"/></svg>${impact}</div>`;
     }
     return "";
   }).join("");
@@ -1418,6 +1421,7 @@ function updateCombatResolutionPresentation() {
   document.querySelector("#settings-button").disabled=true;
   view.querySelectorAll(".enemy-card.resolving-enemy").forEach(card=>card.classList.remove("resolving-enemy"));
   if(Number.isInteger(combatResolution.enemyIndex))view.querySelectorAll(".enemy-card[data-enemy-index]")[combatResolution.enemyIndex]?.classList.add("resolving-enemy");
+  fadeDefeatedEnemyCards();
   view.querySelectorAll(".player-attack-vfx").forEach(effect=>effect.remove());
   if(["player-windup","player-impact"].includes(combatResolution.phase))view.querySelectorAll(".combat-outcome-effect,.combat-miss-popup").forEach(effect=>effect.remove());
   if(combatResolution.phase==="player-impact"){
@@ -1435,10 +1439,12 @@ function refreshCombatResolutionReadout(refreshActions=false) {
   staging.innerHTML=renderCombat(state.combat.enemies.map((enemy,index)=>({enemy,index})).filter(item=>item.enemy.hp>0));
   const nextEnemies=staging.querySelector(".enemy-list");
   const enemyList=view.querySelector(".enemy-list");
+  fadeDefeatedEnemyCards();
   if(nextEnemies&&enemyList){
     const existing=new Map(Array.from(enemyList.querySelectorAll(".enemy-card[data-enemy-index]"),card=>[card.dataset.enemyIndex,card]));
     for(const card of Array.from(enemyList.querySelectorAll(".enemy-card[data-enemy-index]"))){
-      if(!nextEnemies.querySelector(`.enemy-card[data-enemy-index="${card.dataset.enemyIndex}"]`))card.remove();
+      const enemy=state.combat.enemies[Number(card.dataset.enemyIndex)];
+      if(!nextEnemies.querySelector(`.enemy-card[data-enemy-index="${card.dataset.enemyIndex}"]`)&&enemy?.hp>0)card.remove();
     }
     for(const nextCard of nextEnemies.querySelectorAll(".enemy-card[data-enemy-index]")){
       const card=existing.get(nextCard.dataset.enemyIndex);
@@ -1530,17 +1536,34 @@ function renderCombat(enemies) {
 }
 
 function renderPlayerAttackVfx(targetIndex) {
-  if (!combatResolution || combatResolution.phase !== "player-impact" || targetIndex !== state?.target || state?.class === "archer") return "";
+  if (!combatResolution || combatResolution.phase !== "player-impact" || targetIndex !== state?.target) return "";
   const action = combatResolution.action;
   const attack = state.weapon?.attacks?.find(item => item.command === action) || getEquippedClassSpell(action);
   const isEnemyAttack = ["basic", "attack", "heavy"].includes(action) || Boolean(attack && !attack.selfOnly && (attack.effect || attack.multiplier > 0));
   if (!isEnemyAttack) return "";
   const color = combatEffectColor(action);
+  const symbol=attack?.effect||attack?.selfEffect||state.weapon?.effect||"default";
   if (state?.class === "mage" || attack?.spell) {
-    return `<div class="player-attack-vfx mage-attack-vfx" style="--attack-color:${color}" aria-hidden="true"><span></span></div>`;
+    return `<div class="player-attack-vfx mage-attack-vfx" style="--attack-color:${color}" aria-hidden="true"><span class="spell-sigil-ring"></span><span class="spell-sigil-symbol">${effectIcon(symbol)}</span></div>`;
+  }
+  if(state?.class==="archer"){
+    return `<div class="player-attack-vfx archer-attack-vfx" style="--attack-color:${color}" aria-hidden="true"><svg class="flying-arrow" viewBox="0 0 180 42"><path class="arrow-feather" d="M8 15 28 21 8 27 17 21Z"/><path class="arrow-shaft" d="M15 21h139"/><path class="arrow-head" d="m143 12 32 9-32 9 7-9Z"/><path class="arrow-edge" d="m143 12 7 9-7 9"/></svg><span class="arrow-impact-circle"><span>${effectIcon(symbol)}</span></span></div>`;
   }
   const heavy = combatResolution.action === "heavy";
   return `<div class="player-attack-vfx warrior-attack-vfx${heavy ? " heavy" : ""}" style="--attack-color:${color}" aria-hidden="true"><span class="warrior-slashes ${heavy?"single":""}"><i></i>${heavy?"":"<i></i>"}</span></div>`;
+}
+
+function fadeDefeatedEnemyCards() {
+  if(!state?.combat)return;
+  const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  state.combat.enemies.forEach((enemy,index)=>{
+    if(enemy.hp>0)return;
+    const card=screen.querySelector(`.enemy-card[data-enemy-index="${index}"]`);
+    if(!card||card.dataset.deathFadeStarted)return;
+    card.dataset.deathFadeStarted="true";
+    card.classList.add("enemy-defeated");
+    window.setTimeout(()=>card.remove(),reducedMotion?100:520);
+  });
 }
 
 function attackPreview(attack, targetCount = state.combat?.enemies.filter(enemy=>enemy.hp>0).length || 1, target = state.combat?.enemies[state.target], weaponOverride = state.weapon, chargedOverride = state.chargedAttack) {
@@ -1792,7 +1815,7 @@ function combatAction(action) {
       combatResolution = null;
       combatActionNow(action);
       if (!combatResolution) render();
-    }, reducedMotion ? 90 : state.class === "mage" ? 150 : state.class === "warrior" && action === "heavy" ? 330 : state.class === "warrior" ? 220 : 180);
+    }, reducedMotion ? 90 : state.class === "archer" ? 690 : state.class === "mage" ? 150 : state.class === "warrior" && action === "heavy" ? 330 : state.class === "warrior" ? 220 : 180);
   }, delay);
 }
 
@@ -2121,7 +2144,25 @@ function takePlayerDamage(damage, sourceEnemy = null) {
   if(state.combat){state.combat.damageTaken+=actual;state.runStats.damageTaken+=actual;}
   return actual;
 }
-function winFight() {
+function winFight(afterDeathFade=false) {
+  if(!state?.combat)return;
+  const fallenCards=screen.querySelectorAll(".combat-view .enemy-card[data-enemy-index]");
+  const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if(fallenCards.length&&!reducedMotion&&!afterDeathFade&&!combatVictoryPending){
+    combatVictoryPending=true;
+    const token=++combatResolutionToken;
+    combatResolution={phase:"enemy-death",actor:"Victory",token};
+    updateCombatResolutionPresentation();
+    fadeDefeatedEnemyCards();
+    window.setTimeout(()=>{
+      if(token!==combatResolutionToken||!state?.combat)return;
+      combatVictoryPending=false;
+      combatResolution=null;
+      winFight(true);
+    },520);
+    return;
+  }
+  combatVictoryPending=false;
   clearCombatResolution();
   const fight=state.combat; const room=currentRoom();let totalGold=0,totalXp=0;
   for(const enemy of fight.enemies){totalGold+=enemy.gold;totalXp+=enemy.xp;}

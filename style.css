@@ -599,6 +599,7 @@ button.compass-control:hover { border-color:#405b42; background:#dce2d2; transfo
 .enemy-card.impact-magic .enemy-health b { animation:impactMagic .36s ease-out; }
 .combat-resolving .turn-indicator { border-color:#9b7140; background:#f1e4ce; color:#704d25; }
 .enemy-card.resolving-enemy { border-color:#9b7140; box-shadow:0 0 0 2px rgb(155 113 64 / 24%); transform:translateY(-2px); }
+.enemy-card.enemy-defeated { pointer-events:none; animation:enemyDeathFade .5s ease-in forwards; }
 .combat-resolving.stage-player-windup .combat-header { animation:combatWindup .28s ease-in-out infinite alternate; }
 .combat-resolving.stage-enemy-windup .resolving-enemy { animation:combatWindup .28s ease-in-out infinite alternate; }
 .combat-resolving.stage-player-impact .combat-header,.combat-resolving.stage-enemy-impact .resolving-enemy { animation:impactHeavy .3s ease-out; }
@@ -613,7 +614,6 @@ button.compass-control:hover { border-color:#405b42; background:#dce2d2; transfo
 .outcome-miss .outcome-slashes { animation:groundMiss .65s ease-out var(--outcome-delay,0ms) both; }
 .outcome-blocked .outcome-shield { width:clamp(4.5rem,10vw,8rem); height:clamp(5rem,12vw,9rem); animation:shieldCatch .56s cubic-bezier(.2,.8,.3,1) var(--outcome-delay,0ms) both; }
 .outcome-blocked .outcome-shield path:first-child { fill:rgb(232 222 194 / 92%); stroke:#80663a; stroke-width:5; filter:drop-shadow(0 0 10px #c29c53); }
-.outcome-blocked .outcome-shield path:last-child { fill:none; stroke:#557355; stroke-width:8; stroke-linecap:round; stroke-linejoin:round; }
 .outcome-blocked .blocked-slashes { animation:blockedStrike .56s ease-out var(--outcome-delay,0ms) both; }
 .outcome-blocked .blocked-spell { position:absolute; left:50%; top:50%; width:72%; height:72%; border-radius:50%; background:radial-gradient(circle,var(--outcome-color) 0%,transparent 70%); filter:drop-shadow(0 0 1rem var(--outcome-color)); transform:translate(-50%,-50%); animation:blockedStrike .56s ease-out var(--outcome-delay,0ms) both; }
 .enemy-card>.combat-miss-popup { position:absolute; z-index:4; left:50%; top:8%; color:#a52e27; font:clamp(1.7rem,4vw,3rem) var(--display); text-shadow:0 2px 0 #fff7e6,0 0 1rem #fff; pointer-events:none; animation:missPopup .9s cubic-bezier(.18,.72,.25,1) var(--outcome-delay,0ms) both; }
@@ -625,15 +625,32 @@ button.compass-control:hover { border-color:#405b42; background:#dce2d2; transfo
 .warrior-slashes i:nth-child(2),.outcome-slashes i:nth-child(2),.blocked-slashes i:nth-child(2) { --slash-angle:35deg; animation-delay:.09s; }
 .warrior-attack-vfx.heavy .warrior-slashes i,.warrior-slashes.single i { height:18px; animation-duration:.56s; }
 .outcome-slashes.single i,.blocked-slashes.single i { height:18px; animation-duration:.56s; }
-.mage-attack-vfx span { position:absolute; inset:0; background:radial-gradient(ellipse at center,var(--attack-color) 0%,color-mix(in srgb,var(--attack-color) 55%,transparent) 18%,transparent 68%); filter:drop-shadow(0 0 1.8rem var(--attack-color)); animation:mageFlash .34s ease-out both; }
+.mage-attack-vfx .spell-sigil-ring { position:absolute; left:50%; top:50%; width:48%; aspect-ratio:1; border:2px solid color-mix(in srgb,var(--attack-color) 86%,white); border-radius:50%; box-shadow:0 0 1rem color-mix(in srgb,var(--attack-color) 75%,transparent),inset 0 0 1rem color-mix(in srgb,var(--attack-color) 35%,transparent); transform:translate(-50%,-50%); animation:sigilCast .62s ease-out both; }
+.mage-attack-vfx .spell-sigil-ring::before,.mage-attack-vfx .spell-sigil-ring::after { content:""; position:absolute; inset:-12%; border:1px dashed color-mix(in srgb,var(--attack-color) 78%,white); border-radius:50%; }
+.mage-attack-vfx .spell-sigil-ring::after { inset:19%; border-style:solid; border-radius:8%; transform:rotate(45deg); }
+.mage-attack-vfx .spell-sigil-symbol { position:absolute; left:50%; top:50%; display:grid; width:18%; aspect-ratio:1; place-items:center; color:color-mix(in srgb,var(--attack-color) 70%,white); filter:drop-shadow(0 0 .7rem var(--attack-color)); transform:translate(-50%,-50%); animation:sigilSymbol .62s cubic-bezier(.2,.8,.3,1) both; }
+.mage-attack-vfx .spell-sigil-symbol .effect-icon { width:100%; height:100%; }
+.flying-arrow { position:absolute; z-index:2; top:50%; left:calc(-50% - clamp(13rem,38vw,23rem)); width:clamp(13rem,38vw,23rem); height:auto; overflow:visible; filter:drop-shadow(0 0 .45rem rgb(24 25 27 / 72%)); animation:arrowArc .66s cubic-bezier(.18,.72,.22,1) both; }
+.flying-arrow .arrow-shaft { fill:none; stroke:var(--attack-color); stroke-width:4; stroke-linecap:round; }
+.flying-arrow .arrow-feather { fill:#e7dfc9; stroke:#55483d; stroke-width:1.4; }
+.flying-arrow .arrow-head { fill:#4d5157; stroke:#d5d7d5; stroke-width:1.7; stroke-linejoin:round; }
+.flying-arrow .arrow-edge { fill:none; stroke:#252a30; stroke-width:2; stroke-linejoin:round; }
+.arrow-impact-circle { position:absolute; z-index:1; left:50%; top:50%; display:grid; width:clamp(2.6rem,6vw,4rem); aspect-ratio:1; place-items:center; border:2px solid color-mix(in srgb,var(--attack-color) 84%,white); border-radius:50%; background:color-mix(in srgb,var(--attack-color) 26%,transparent); box-shadow:0 0 1rem color-mix(in srgb,var(--attack-color) 70%,transparent),inset 0 0 .55rem color-mix(in srgb,var(--attack-color) 38%,transparent); opacity:0; transform:translate(-50%,-50%) scale(.35); animation:arrowImpact .28s ease-out .48s both; }
+.arrow-impact-circle>span { display:grid; width:58%; aspect-ratio:1; place-items:center; color:color-mix(in srgb,var(--attack-color) 65%,white); }
+.arrow-impact-circle .effect-icon { width:100%; height:100%; }
 @keyframes slashLine { 0%{opacity:0;transform:translate(-50%,-50%) rotate(var(--slash-angle)) scaleX(0)} 22%{opacity:1;transform:translate(-50%,-50%) rotate(var(--slash-angle)) scaleX(1)} 100%{opacity:0;transform:translate(-50%,-50%) rotate(var(--slash-angle)) scaleX(1.04)} }
 @keyframes mageFlash { 0%{opacity:0;transform:scale(.15)} 28%{opacity:.92;transform:scale(1.08)} 100%{opacity:0;transform:scale(1.3)} }
+@keyframes sigilCast { 0%{opacity:0;transform:translate(-50%,-50%) rotate(-45deg) scale(.48)} 24%{opacity:1} 78%{opacity:.85} 100%{opacity:0;transform:translate(-50%,-50%) rotate(32deg) scale(1.08)} }
+@keyframes sigilSymbol { 0%{opacity:0;transform:translate(-50%,-50%) scale(.35)} 24%{opacity:1;transform:translate(-50%,-50%) scale(1)} 78%{opacity:1} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.18)} }
+@keyframes arrowArc { 0%{left:calc(-50% - clamp(13rem,38vw,23rem));top:72%;opacity:0;transform:rotate(-24deg)} 8%{opacity:1} 32%{left:calc(-8% - clamp(13rem,38vw,23rem));top:34%;transform:rotate(-12deg)} 62%{left:calc(20% - clamp(13rem,38vw,23rem));top:24%;transform:rotate(2deg)} 86%{left:calc(43% - clamp(13rem,38vw,23rem));top:40%;transform:rotate(18deg)} 100%{left:calc(50% - clamp(13rem,38vw,23rem));top:50%;opacity:0;transform:rotate(28deg)} }
+@keyframes arrowImpact { 0%{opacity:0;transform:translate(-50%,-50%) scale(.35)} 32%{opacity:1;transform:translate(-50%,-50%) scale(1.08)} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.24)} }
+@keyframes enemyDeathFade { 0%{opacity:1;filter:none;transform:translateY(0) scale(1)} 100%{opacity:0;filter:grayscale(1);transform:translateY(-.35rem) scale(.97)} }
 @keyframes groundMiss { 0%{opacity:0;transform:translate(-50%,-50%) scale(.72)} 20%{opacity:.85;transform:translate(-50%,-50%) scale(1)} 100%{opacity:0;transform:translate(-50%,-50%) scale(1.12)} }
 @keyframes shieldCatch { 0%{opacity:0;transform:translate(-50%,1.2rem) scale(.55)} 28%{opacity:1;transform:translate(-50%,0) scale(1.08)} 100%{opacity:.72;transform:translate(-50%,.15rem) scale(1)} }
 @keyframes blockedStrike { 0%{opacity:0;filter:brightness(1)} 25%{opacity:1;filter:brightness(1.8)} 100%{opacity:0;filter:brightness(1)} }
 @keyframes redEdgeFlash { 0%{opacity:0} 18%{opacity:1} 100%{opacity:0} }
 @keyframes missPopup { 0%{opacity:0;transform:translate(-50%,.8rem) scale(.55)} 18%{opacity:1;transform:translate(-50%,0) scale(1.12)} 76%{opacity:1} 100%{opacity:0;transform:translate(-50%,-1.8rem) scale(1)} }
-@media (prefers-reduced-motion:reduce) { .player-attack-vfx *, .player-attack-vfx, .combat-outcome-effect *, .combat-outcome-effect, .combat-miss-popup, .screen-edge-flash { animation-duration:.08s!important; animation-delay:0s!important; } }
+@media (prefers-reduced-motion:reduce) { .player-attack-vfx *, .player-attack-vfx, .combat-outcome-effect *, .combat-outcome-effect, .combat-miss-popup, .screen-edge-flash, .enemy-card.enemy-defeated { animation-duration:.08s!important; animation-delay:0s!important; } }
 .settings-modal { width:min(36rem,100%); }
 .combat-pacing-options { display:grid; gap:.55rem; margin:1rem 0; padding:.8rem; border:1px solid #bdb39f; }
 .combat-pacing-options legend { padding:0 .3rem; color:#56574e; font:1.05rem var(--display); }
