@@ -1,4 +1,35 @@
 window.GAME_PATCH_NOTES = {
+  "v1.7": {
+    title: "Update V1.7",
+    subtitle: "Deliberate, readable combat",
+    sections: [
+      {
+        heading: "Combat Pacing",
+        items: [
+          "Combat actions now have a brief wind-up and impact beat, with health and damage feedback arriving when the action lands.",
+          "Enemies resolve one at a time, showing each foe's action before the next begins. Combat controls lock during turn resolution to prevent overlapping actions.",
+          "New Fast and Slow combat pacing options are available in Settings. Slow adds longer, more immersive action cues; reduced-motion preferences minimize animation and delays.",
+          "Enemy attacks now have a clearer wind-up, and combat updates keep the surrounding game interface steady instead of rebuilding it for every hit.",
+          "Warrior strikes and mage spells use distinct impact effects centered on their target. Blocks show a shield, dodges show Miss, and enemy hits add a red edge flash.",
+          "Enemy health now grows steadily with floor depth instead of compounding exponentially. Boss health has been retuned separately, and saved active fights are adjusted to the new curve.",
+          "Shop gear prices rise more gradually with rarity and floor depth, and shop-quality upgrades cost less at each level."
+        ]
+      },
+      {
+        heading: "Shop Economy",
+        items: [
+          "Armor and potions now sell for half of their shop value; shop purchases retain their actual price for resale.",
+          "Weapon upgrade prices rise more smoothly, making three to five upgrades per shop visit more attainable."
+        ]
+      },
+      {
+        heading: "Milestone Fix",
+        items: [
+          "The Floor 20 milestone popup's End Run and Continue buttons now respond correctly."
+        ]
+      }
+    ]
+  },
   "v1.6": {
     title: "Update V1.6",
     subtitle: "UI Overhaul",
@@ -31,6 +62,14 @@ window.GAME_PATCH_NOTES = {
         heading: "Combat and Spells",
         items: [
           "Attack buttons show their expected non-critical damage and effect. Class spells focus on control and support, with longer effects at higher rarities and percentage-based mana costs from Legendary upward."
+        ]
+      },
+      {
+        heading: "Bug Fixes",
+        items: [
+          "Using the last health or mana potion in combat now removes the empty stack, preventing save migration from restoring a consumed potion.",
+          "Global score submission results now update the saved run after returning to the title. Reopened runs with an unresolved submission can retry it.",
+          "Incomplete or damaged save slots no longer offer a crashing Continue action; the title screen explains the issue and lets you delete the save or start a new run."
         ]
       }
     ]

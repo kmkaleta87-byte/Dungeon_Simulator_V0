@@ -9,7 +9,7 @@ function loadBrowserGame(leaderboardApi = "") {
   const storage = new Map();
   const context = {
     document: { querySelector: selector => selector === "#game-screen" ? screen : button },
-    window: { LEADERBOARD_API: leaderboardApi },
+    window: { LEADERBOARD_API: leaderboardApi, confirm: () => true },
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
     confirm: () => true,
     Math: Object.assign(Object.create(Math), { random: () => 0.5 })
@@ -117,13 +117,26 @@ test("V1.3 patch notes cover the weapon, fountain, and chest updates", () => {
   assert.doesNotMatch(v12, /weapon-themed special attack progressions|Fountains now offer a choice|trapped chest now tests your Speed/);
 });
 
+test("V1.7 patch notes describe paced turns, sequential enemies, and pacing settings", () => {
+  const context = { window: {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync("patch-notes.js", "utf8"), context);
+  const notes = context.window.GAME_PATCH_NOTES["v1.7"];
+  assert.equal(notes.title, "Update V1.7");
+  const content = notes.sections.flatMap(section => section.items).join(" ");
+  assert.match(content, /wind-up and impact beat/);
+  assert.match(content, /one at a time/);
+  assert.match(content, /Fast and Slow combat pacing options/);
+});
+
 test("patch notes are ordered newest to oldest", () => {
   const context = { window: {} };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync("patch-notes.js", "utf8"), context);
-  assert.deepEqual(Object.keys(context.window.GAME_PATCH_NOTES), ["v1.6", "v1.5", "v1.4", "v1.3", "v1.2", "v1.1", "v1"]);
+  assert.deepEqual(Object.keys(context.window.GAME_PATCH_NOTES), ["v1.7", "v1.6", "v1.5", "v1.4", "v1.3", "v1.2", "v1.1", "v1"]);
   const html = fs.readFileSync("index.html", "utf8");
-  assert.match(html, /data-patch="v1\.6"[^>]*>Update V1\.6 <span>Current<\/span>/);
+  assert.match(html, /data-patch="v1\.7"[^>]*>Update V1\.7 <span>Current<\/span>/);
+  assert.match(html, /data-patch="v1\.6"[^>]*>Update V1\.6/);
   assert.match(html, /data-patch="v1\.4"[\s\S]*data-patch="v1\.3"[\s\S]*data-patch="v1\.2"[\s\S]*data-patch="v1\.1"[\s\S]*data-patch="v1"/);
-  assert.match(fs.readFileSync("script.js", "utf8"), /renderPatchNotes\("v1\.6"\)/);
+  assert.match(fs.readFileSync("script.js", "utf8"), /renderPatchNotes\("v1\.7"\)/);
 });

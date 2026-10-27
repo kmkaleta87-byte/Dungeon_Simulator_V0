@@ -714,13 +714,13 @@ test("shop odds keep divine rare with a small capped upgrade and prices rise ste
   assert.equal(rules.rollShopRarity(5, 0.997), "Mythic");
   assert.equal(rules.rollShopRarity(5, 0.998), "Divine");
   const prices = vm.runInContext(`["Common","Uncommon","Rare","Epic","Legendary","Mythic","Divine"].map(rarity=>priceFor(100,rarity))`, context);
-  assert.deepEqual(Array.from(prices), [100,135,190,280,450,800,1500]);
+  assert.deepEqual(Array.from(prices), [100,125,160,220,300,400,700]);
 });
 
 test("shop armor prices scale with both rarity and floor-scaled defense", () => {
   const context = loadBrowserGame();
   vm.runInContext("newRun('Tester'); state.floor=8;", context);
-  const prices = vm.runInContext(`Object.fromEntries(["Common","Epic","Legendary","Mythic","Divine"].map(rarity=>{const entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);const value=DUNGEON_RULES.createCatalogArmor(entries[0],state.floor);const base=Math.max(value.goldValue||0,Math.round((value.defense*4+value.damageReduction*6+(value.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return [rarity,priceFor(base,rarity)]}))`, context);
+  const prices = vm.runInContext(`Object.fromEntries(["Common","Epic","Legendary","Mythic","Divine"].map(rarity=>{const entries=ARMOR_INDEX.filter(entry=>entry.rarity===rarity);const value=DUNGEON_RULES.createCatalogArmor(entries[0],state.floor);const base=Math.max(value.goldValue||0,Math.round((value.defense*4+DUNGEON_RULES.armorPieceDamageReduction(value)*200+(value.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.04)));return [rarity,priceFor(base,rarity)]}))`, context);
   assert.ok(prices.Legendary > 500, `Expected floor-eight Legendary armor to cost more than 500 gold; got ${prices.Legendary}`);
   assert.ok(prices.Epic < prices.Legendary);
   assert.ok(prices.Mythic > prices.Legendary);
@@ -742,15 +742,27 @@ test("shop reroll prices rise modestly with floor and stock upgrades, not reroll
   assert.equal(vm.runInContext("shopRerollCost()", context), upgradedCost);
 });
 
-test("shop stock upgrade persists for the run and costs increase exponentially", () => {
+test("shop stock upgrade persists for the run and costs rise by 1.7x per level", () => {
   const context = loadBrowserGame();
   vm.runInContext(`newRun("Tester"); state.gold=10000; state.shopStock=Array.from({length:6},()=>shopItem());`, context);
   const firstCost = vm.runInContext("shopUpgradeCost()", context);
   vm.runInContext("upgradeShopLoot()", context);
   assert.equal(vm.runInContext("state.shopLootUpgradeLevel", context), 1);
   assert.equal(vm.runInContext("state.shopStock.length", context), 6);
-  assert.equal(vm.runInContext("state.shopPotions.length", context), 2);
-  assert.equal(vm.runInContext("shopUpgradeCost()", context), firstCost * 2);
+  assert.equal(vm.runInContext("state.shopPotions.length", context), 1);
+  assert.equal(firstCost, 100);
+  assert.equal(vm.runInContext("shopUpgradeCost()", context), 170);
+});
+
+test("floor-eleven Mythic shop gear and all five quality upgrades stay within a reachable budget", () => {
+  const context = loadBrowserGame();
+  vm.runInContext("newRun('Tester'); state.floor=11;", context);
+  const prices = vm.runInContext(`(()=>{const weaponEntry=GAME_INDEX_DATA.weapons.warrior.find(item=>item.rarity==="Mythic");const weapon=DUNGEON_RULES.createCatalogWeapon(weaponEntry,state.floor);const armorEntry=ARMOR_INDEX.find(item=>item.rarity==="Mythic");const armor=DUNGEON_RULES.createCatalogArmor(armorEntry,state.floor);const armorBase=Math.max(armor.goldValue||0,Math.round((armor.defense*4+DUNGEON_RULES.armorPieceDamageReduction(armor)*200+(armor.healthBonus||0)*0.2)*(1+(state.floor-1)*0.04)));return {weapon:priceFor(weapon.damage*5,weapon.rarity),armor:priceFor(armorBase,armor.rarity)}})()`, context);
+  assert.ok(prices.weapon < 3500, `Expected Mythic weapon under 3,500 gold; got ${prices.weapon}`);
+  assert.ok(prices.armor < 2000, `Expected Mythic armor under 2,000 gold; got ${prices.armor}`);
+  const upgradeCosts = vm.runInContext("[0,1,2,3,4].map(level=>{state.shopLootUpgradeLevel=level;return shopUpgradeCost()})", context);
+  assert.deepEqual(Array.from(upgradeCosts), [100,170,289,491,835]);
+  assert.equal(Array.from(upgradeCosts).reduce((sum,cost)=>sum+cost,0), 1885);
 });
 
 test("shop has six gear offers and a separate two-potion selection", () => {

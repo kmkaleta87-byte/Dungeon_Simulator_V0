@@ -7,6 +7,7 @@ const SAVE_KEY = "dungeon-simulation-browser-save-v1";
 const SAVE_SLOTS_KEY = "dungeon-simulation-browser-slots-v1";
 const LEADERBOARD_KEY = "dungeon-simulation-local-leaderboard-v1";
 const PERSONAL_BESTS_KEY = "dungeon-simulation-personal-bests-v1";
+const COMBAT_PACING_KEY = "dungeon-simulation-combat-pacing-v1";
 const LEADERBOARD_API = window.LEADERBOARD_API || "";
 const LEADERBOARD_DIFFICULTIES = ["easy", "normal", "hard"];
 const SAVE_SLOT_IDS = ["slot1", "slot2", "slot3", "dev"];
@@ -81,6 +82,7 @@ const PLAYER_EFFECT_DESCRIPTIONS = {
   Blind: "Your attacks have a 20% chance to miss while this lasts."
 };
 function floorEnemyScale(floor, growth) { return Math.pow(growth, Math.max(0, floor - 2)); }
+function floorEnemyHealthScale(floor) { return 1 + 0.65 * Math.max(0, floor - 2); }
 function regionForFloor(floor) {
   const safeFloor=Math.max(1,Math.floor(Number(floor)||1));
   const cycleFloor=(safeFloor-1)%REGION_CYCLE_FLOORS;
@@ -263,6 +265,11 @@ let leaderboardEntries = [];
 let leaderboardStatus = "idle";
 let leaderboardRequest = 0;
 let pendingCombatAction = null;
+let combatPacing = (() => { try { return localStorage.getItem(COMBAT_PACING_KEY) === "slow" ? "slow" : "fast"; } catch { return "fast"; } })();
+let combatResolution = null;
+let combatResolutionToken = 0;
+let combatFeedbacks = [];
+let enemyHitFlash = false;
 let lastFocusedModalName = null;
 let modalReturnFocusSelector = null;
 
@@ -284,9 +291,60 @@ screen.addEventListener("keydown", event => {
 
 indexButton.addEventListener("click", () => { modalReturnFocusSelector="#index-button"; modal = "index"; selectedIndexItem = null; showModal(); });
 document.querySelector("#leaderboard-button").addEventListener("click", () => { modalReturnFocusSelector="#leaderboard-button"; modal = "leaderboard"; showModal(); });
+document.querySelector("#settings-button").addEventListener("click", () => { modalReturnFocusSelector="#settings-button"; modal = "settings"; showModal(); });
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+}
+
+function clearCombatResolution() {
+  combatResolution=null;
+  combatResolutionToken++;
+}
+function combatActionLabel(action) {
+  if(action==="heal")return "health potion";
+  if(action==="mana")return "mana potion";
+  if(action==="basic"||action==="attack")return state.class==="mage"?"basic spell":state.class==="archer"?"shot":"basic attack";
+  if(action==="heavy")return "heavy attack";
+  const attack=state.weapon?.attacks?.find(item=>item.command===action)||getEquippedClassSpell(action);
+  return attack?.name||action.replace(/-/g," ");
+}
+function combatResolutionLabel() {
+  if(!combatResolution)return state?.combat?.bonusAttackPending?"Bonus action":"Your turn";
+  const actionLabel=combatResolution.action?combatActionLabel(combatResolution.action):"";
+  return combatResolution.phase==="player-windup"?`Preparing: ${actionLabel}…`:combatResolution.phase==="player-impact"?`Impact: ${actionLabel}.`:combatResolution.phase==="enemy-windup"?`${combatResolution.actor} prepares to act…`:`${combatResolution.actor} acts!`;
+}
+function combatEffectColor(action) {
+  const attack=state?.weapon?.attacks?.find(item=>item.command===action)||getEquippedClassSpell(action);
+  const effect=attack?.effect||attack?.selfEffect||state?.weapon?.effect;
+  const colors={Burn:"#f06436",Poison:"#72b94d",Bleed:"#c52e43",Shock:"#f3d447",Frozen:"#70c9ec",Freeze:"#70c9ec",Root:"#80a857",Pin:"#80a857",Weakness:"#9273bd",Silence:"#8570a8",Blind:"#6f667b",Cripple:"#96754f",Gust:"#77b9cf",Marked:"#edb74c","Life Steal":"#c94f69","Mana Steal":"#4f91d1",Void:"#65518c"};
+  return colors[effect]||"#a7a7a1";
+}
+function recordCombatFeedback(kind,target,action) {
+  const targetIndex=typeof target==="number"?target:state?.combat?.enemies?.indexOf(target);
+  if(!Number.isInteger(targetIndex)||targetIndex<0)return;
+  if(!combatFeedbacks.some(item=>item.kind===kind&&item.targetIndex===targetIndex))combatFeedbacks.push({kind,targetIndex,action,createdAt:Date.now()});
+}
+function renderCombatOutcome(targetIndex) {
+  return combatFeedbacks.filter(item=>item.targetIndex===targetIndex).map(item=>{
+    const elapsed=Math.max(0,Date.now()-(item.createdAt||Date.now()));
+    if(elapsed>900)return "";
+    const timing=`--outcome-delay:-${elapsed}ms`;
+    const color=combatEffectColor(item.action);
+    if(item.kind==="miss")return `<div class="combat-outcome-effect outcome-miss" style="--outcome-color:${color};${timing}" aria-hidden="true"><span class="outcome-slashes ${item.action==="heavy"?"single":""}"><i></i>${item.action==="heavy"?"":"<i></i>"}</span></div><strong class="combat-miss-popup" style="--outcome-delay:-${elapsed}ms">Miss!</strong>`;
+    if(item.kind==="blocked"){
+      const attack=state?.weapon?.attacks?.find(entry=>entry.command===item.action)||getEquippedClassSpell(item.action);
+      const spell=state?.class==="mage"||attack?.spell;
+      const impact=spell?`<span class="blocked-spell"></span>`:`<span class="blocked-slashes ${item.action==="heavy"?"single":""}"><i></i>${item.action==="heavy"?"":"<i></i>"}</span>`;
+      return `<div class="combat-outcome-effect outcome-blocked" style="--outcome-color:${color};${timing}" aria-hidden="true"><svg class="outcome-shield" viewBox="0 0 100 120"><path d="M50 5 91 20v34c0 27-15 46-41 61C24 100 9 81 9 54V20Z"/><path d="m29 57 14 14 29-31"/></svg>${impact}</div>`;
+    }
+    return "";
+  }).join("");
+}
+function renderEnemyHitFlash() {
+  if(!enemyHitFlash)return "";
+  enemyHitFlash=false;
+  return '<div class="screen-edge-flash" aria-hidden="true"></div>';
 }
 
 function animateMenuSwap(element) {
@@ -319,6 +377,21 @@ function loadSaveSlots() {
     return slots;
   } catch { return DUNGEON_RULES.createSaveSlots(); }
 }
+function isResumableSave(saved) {
+  if (!saved || typeof saved !== "object" || Array.isArray(saved) ||
+      !Number.isInteger(saved.floor) || saved.floor < 1 ||
+      !Number.isInteger(saved.level) || saved.level < 1 ||
+      !Array.isArray(saved.log) ||
+      !saved.currentFloor || typeof saved.currentFloor !== "object" ||
+      !Array.isArray(saved.currentFloor.rooms) || !saved.currentFloor.rooms.length) return false;
+  const rooms = saved.currentFloor.rooms;
+  return rooms.every(room => room && typeof room === "object" &&
+      (typeof room.id === "string" || Number.isInteger(room.id)) &&
+      Number.isInteger(room.x) && room.x >= 0 && room.x < 7 &&
+      Number.isInteger(room.y) && room.y >= 0 && room.y < 7 &&
+      typeof room.type === "string") &&
+    rooms.some(room => room.id === saved.currentFloor.currentId);
+}
 function save() {
   try {
     if (!state) return;
@@ -326,6 +399,24 @@ function save() {
     DUNGEON_RULES.writeSaveSlot(slots, SAVE_SLOT_IDS.includes(state.saveSlot) ? state.saveSlot : "slot1", state);
     localStorage.setItem(SAVE_SLOTS_KEY, JSON.stringify(slots));
   } catch { /* Browser storage may be disabled. */ }
+}
+
+function persistRunSubmission(run) {
+  try {
+    if (!run?.submissionId || !SAVE_SLOT_IDS.includes(run.saveSlot)) return;
+    const slots = loadSaveSlots();
+    const saved = slots[run.saveSlot];
+    if (!saved || saved.submissionId !== run.submissionId) return;
+    saved.leaderboardSubmitted = run.leaderboardSubmitted;
+    saved.runSubmissionStatus = run.runSubmissionStatus;
+    localStorage.setItem(SAVE_SLOTS_KEY, JSON.stringify(slots));
+  } catch { /* Browser storage may be disabled. */ }
+}
+function refreshRunSubmissionView(run) {
+  if (state?.submissionId !== run?.submissionId) return;
+  state.leaderboardSubmitted = run.leaderboardSubmitted;
+  state.runSubmissionStatus = run.runSubmissionStatus;
+  if (["death", "run-end"].includes(modal)) render();
 }
 
 function normalizeLeaderboardDifficulty(value) {
@@ -410,6 +501,7 @@ function saveLocalLeaderboardEntry(run) {
 
 function submitCompletedRun(run) {
   if (!run || run.devMode || run.leaderboardSubmitted || !LEADERBOARD_DIFFICULTIES.includes(run.difficulty) || !Number.isInteger(run.floorsCleared) || run.floorsCleared < 1 || run.floorsCleared > 100000) return;
+  run.submissionId ||= `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
   run.leaderboardSubmitted = true;
   run.runSubmissionStatus = LEADERBOARD_API ? "Submitting final score to the global board…" : "Global leaderboard is not configured; personal best is saved on this device.";
   if (!LEADERBOARD_API) { saveLocalLeaderboardEntry(run); return; }
@@ -421,12 +513,14 @@ function submitCompletedRun(run) {
     if (!response.ok) throw new Error(data.error || "Score submission failed");
     if (data.result === "invalid") throw new Error("The server rejected this score as invalid.");
     run.runSubmissionStatus = data.result === "accepted" ? "Your score earned a place on the global top 100." : "Personal best saved. This score did not make the global top 100.";
+    persistRunSubmission(run);
     if (data.result === "accepted" && modal === "leaderboard") refreshGlobalLeaderboard(run.difficulty);
-    if (state === run && ["death","run-end"].includes(modal)) render();
+    refreshRunSubmissionView(run);
   }).catch(error => {
     run.leaderboardSubmitted = false;
     run.runSubmissionStatus = `Personal best saved. Global submission failed: ${error.message}`;
-    if (state === run && ["death","run-end"].includes(modal)) render();
+    persistRunSubmission(run);
+    refreshRunSubmissionView(run);
   });
 }
 
@@ -529,9 +623,13 @@ function addInventoryItem(item) {
   const isPotion = item && ["health", "mana"].includes(item.type);
   if (isPotion) {
     item.quantity = Math.max(1, Math.floor(Number(item.quantity) || 1));
+    item.shopValue = Number(item.shopValue) > 0 ? Number(item.shopValue) : potionShopPrice(item.rarity);
     const stack = state.items.find(existing => existing.type === item.type && existing.name === item.name && existing.rarity === item.rarity && Number(existing.amount) === Number(item.amount));
     if (stack) {
-      stack.quantity = Math.max(1, Math.floor(Number(stack.quantity) || 1)) + item.quantity;
+      const stackQuantity=Math.max(1,Math.floor(Number(stack.quantity)||1));
+      const stackValue=Number(stack.shopValue)>0?Number(stack.shopValue):potionShopPrice(stack.rarity);
+      stack.shopValue=(stackValue*stackQuantity+item.shopValue*item.quantity)/(stackQuantity+item.quantity);
+      stack.quantity = stackQuantity + item.quantity;
       return stack;
     }
   }
@@ -562,7 +660,17 @@ function migrateBrowserSave() {
   if (!state) return;
   state.saveSlot ||= state.devMode ? "dev" : "slot1";
   if(!DIFFICULTIES[state.difficulty])state.difficulty="normal";
-  if(state.combat?.enemies)for(const enemy of state.combat.enemies){if((enemy.damageScaleVersion||0)<2){enemy.damage=Math.max(1,Math.round(enemy.damage*floorEnemyScale(state.floor||1,1.28)/floorEnemyScale(state.floor||1,1.1)));enemy.damageScaleVersion=2;}}
+  if(state.combat?.enemies)for(const enemy of state.combat.enemies){
+    if((enemy.damageScaleVersion||0)<2){enemy.damage=Math.max(1,Math.round(enemy.damage*floorEnemyScale(state.floor||1,1.28)/floorEnemyScale(state.floor||1,1.1)));enemy.damageScaleVersion=2;}
+    if((enemy.healthScaleVersion||0)<1){
+      const floor=state.floor||1;
+      let healthRatio=floorEnemyHealthScale(floor)/floorEnemyScale(floor,1.35);
+      if(enemy.boss)healthRatio*=(2+floor*0.15)/(2+floor*0.5);
+      enemy.maxHp=Math.max(1,Math.round(enemy.maxHp*healthRatio));
+      enemy.hp=enemy.hp>0?Math.max(1,Math.round(enemy.hp*healthRatio)):0;
+      enemy.healthScaleVersion=1;
+    }
+  }
   state.inventoryNotice ??= false;
   state.spells ||= [];
   for(const spell of state.spells)refreshClassSpellProfile(spell);
@@ -653,7 +761,7 @@ function makeEnemy(floor, boss = false, index = 0) {
   const difficulty=DIFFICULTIES[state?.difficulty]||DIFFICULTIES.normal;
   const raceHealthScale=race==="skeleton"?0.8:race==="specter"?0.92:race==="zombie"?1.25:race==="fae"?0.85:race==="myconid"?1.2:1;
   const typeHealthScale=({Assassin:0.78,Paladin:1.18,"Quick Caster":0.82,Brute:1.45,Sharpshooter:0.82})[klass]||1;
-  const hp = Math.round((boss ? baseHp * (floor * 0.5 + 2) * 1.5 * (milestoneBoss?1.5:1) : baseHp*raceHealthScale*typeHealthScale) * floorEnemyScale(floor, 1.35) * difficulty.enemyHealth);
+  const hp = Math.round((boss ? baseHp * (floor * 0.15 + 2) * 1.5 * (milestoneBoss?1.5:1) : baseHp*raceHealthScale*typeHealthScale) * floorEnemyHealthScale(floor) * difficulty.enemyHealth);
   const baseDamage = race === "golem" ? 9 : race === "werewolf" ? 10 : ["orc","harpy"].includes(race) ? 8 : 7;
   const damageScale=({Assassin:0.78,Paladin:0.95,"Quick Caster":0.78,Brute:1.35,Sharpshooter:1.2})[klass]||(race==="werewolf"?1.1:1);
   const element = ({ slime: "Water", skeleton: "Earth", goblin: "Wind", vampire: "Fire", werewolf: "Earth", golem: "Earth", orc:"Fire", kobold:"Wind", harpy:"Wind", fae:"Nature", myconid:"Nature", lizardfolk:"Water" })[race] || "None";
@@ -664,7 +772,7 @@ function makeEnemy(floor, boss = false, index = 0) {
   const typeDefense=klass==="Paladin"?Math.max(1,Math.round((2+floor*0.15)*difficulty.enemyHealth)):0;
   const dodge=Math.min(0.35,(race==="specter"?0.12:race==="kobold"?0.07:0)+(klass==="Assassin"?0.16:klass==="Archer"?0.05:klass==="Sharpshooter"?0.01:0.02));
   const critChance=({Assassin:0.12,Sharpshooter:0.2})[klass]||(race==="werewolf"?0.1:0);
-  return { name:enemyName, race, klass, element, dex:dex+regionDexBonus, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * damageScale * regionDamageBonus * (boss ? 1.5 * (milestoneBoss?1.25:1) : 1) * floorEnemyScale(floor, 1.28) * difficulty.enemyDamage * easyBossDamageScale)), damageReduction:race==="golem"?Math.max(1,Math.round((1+floor*0.35)*difficulty.enemyHealth)):typeDefense, dodge, critChance, lifeSteal:race==="vampire"?0.12:0, boss, milestoneBoss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)), damageScaleVersion:2 };
+  return { name:enemyName, race, klass, element, dex:dex+regionDexBonus, maxHp: hp, hp, damage: Math.max(1,Math.round(baseDamage * damageScale * regionDamageBonus * (boss ? 1.5 * (milestoneBoss?1.25:1) : 1) * floorEnemyScale(floor, 1.28) * difficulty.enemyDamage * easyBossDamageScale)), damageReduction:race==="golem"?Math.max(1,Math.round((1+floor*0.35)*difficulty.enemyHealth)):typeDefense, dodge, critChance, lifeSteal:race==="vampire"?0.12:0, boss, milestoneBoss, elite: false, gold: Math.round((8 + floor * 2) * (boss ? 5 : 1)), xp: Math.round((50 + floor * 24) * (boss ? (floor * 0.5 + 2) : 1)), damageScaleVersion:2, healthScaleVersion:1 };
 }
 
 function assignRunChoice(floor,rooms,random=Math.random){
@@ -770,6 +878,9 @@ function makeFloor(floor) {
 }
 
 function newRun(name, devMode = false, saveSlot = "slot1", difficulty = "normal") {
+  clearCombatResolution();
+  combatFeedbacks=[];
+  enemyHitFlash=false;
   modal=null;
   state = {
     name: name || "Adventurer", devMode, saveSlot, difficulty: DIFFICULTIES[difficulty] ? difficulty : "normal", inventoryNotice: false, shopLootUpgradeLevel: 0, floor: 1, level: 1, xp: 0, skillPoints: 0, hp: 100, maxHp: 100,
@@ -787,15 +898,18 @@ function newRun(name, devMode = false, saveSlot = "slot1", difficulty = "normal"
 function startScreen() {
   titleButton.hidden = true;
   indexButton.hidden = false;
+  indexButton.disabled = false;
+  document.querySelector("#leaderboard-button").disabled = false;
+  document.querySelector("#settings-button").disabled = false;
   const slots = loadSaveSlots();
-  screen.innerHTML = `<div class="title-screen"><div class="title-copy"><p class="eyebrow">A dungeon adventure</p><h2>Every room<br>is a choice.</h2><p>Explore a shifting dungeon, search what you find, and fight your way toward the next floor.</p><button class="secondary-button" data-open-leaderboard>View highest floors</button>${renderPersonalBests()}</div><div class="start-form"><p class="form-kicker">Begin an expedition</p><label for="player-name">Character name</label><input id="player-name" maxlength="22" placeholder="Adventurer" autocomplete="off"><label for="difficulty-choice">Difficulty</label><select id="difficulty-choice"><option value="easy">Easy · gentler enemies, faster leveling, lower prices</option><option value="normal" selected>Normal · standard balance</option><option value="hard">Hard · tougher enemies, slower leveling, higher prices</option></select><div class="save-slots">${SAVE_SLOT_IDS.map(slot=>{const saved=slots[slot];const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;return `<article class="save-slot ${saved?"save-slot-filled":"save-slot-empty"}"><div><strong>${label}</strong><span>${escapeHtml(DUNGEON_RULES.describeSaveSlot(slots,slot))}${saved?` · ${DIFFICULTIES[saved.difficulty]?.label||"Normal"}`:""}</span></div><div class="save-slot-actions">${saved?`<button class="small-button continue-button" data-continue-slot="${slot}">Continue</button>`:""}<button class="small-button start-run-button" data-new-slot="${slot}">${saved?"New run":"Start run"}</button>${saved?`<button class="text-button" data-delete-slot="${slot}">Delete</button>`:""}</div></article>`;}).join("")}</div><p class="fine-print">Run saves are stored in this browser. Global leaderboard records are separate; Dev-slot runs do not count.</p></div></div>`;
+  screen.innerHTML = `<div class="title-screen"><div class="title-copy"><p class="eyebrow">A dungeon adventure</p><h2>Every room<br>is a choice.</h2><p>Explore a shifting dungeon, search what you find, and fight your way toward the next floor.</p><button class="secondary-button" data-open-leaderboard>View highest floors</button>${renderPersonalBests()}</div><div class="start-form"><p class="form-kicker">Begin an expedition</p><label for="player-name">Character name</label><input id="player-name" maxlength="22" placeholder="Adventurer" autocomplete="off"><label for="difficulty-choice">Difficulty</label><select id="difficulty-choice"><option value="easy">Easy · gentler enemies, faster leveling, lower prices</option><option value="normal" selected>Normal · standard balance</option><option value="hard">Hard · tougher enemies, slower leveling, higher prices</option></select><div class="save-slots">${SAVE_SLOT_IDS.map(slot=>{const saved=slots[slot];const resumable=isResumableSave(saved);const label=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;return `<article class="save-slot ${saved?"save-slot-filled":"save-slot-empty"}"><div><strong>${label}</strong><span>${saved&&!resumable?"This save is incomplete or damaged; delete it or start a new run.":escapeHtml(DUNGEON_RULES.describeSaveSlot(slots,slot))}${saved&&resumable?` · ${DIFFICULTIES[saved.difficulty]?.label||"Normal"}`:""}</span></div><div class="save-slot-actions">${resumable?`<button class="small-button continue-button" data-continue-slot="${slot}">Continue</button>`:""}<button class="small-button start-run-button" data-new-slot="${slot}">${saved?"New run":"Start run"}</button>${saved?`<button class="text-button" data-delete-slot="${slot}">Delete</button>`:""}</div></article>`;}).join("")}</div><p class="fine-print">Run saves are stored in this browser. Global leaderboard records are separate; Dev-slot runs do not count.</p></div></div>`;
   screen.querySelector("[data-open-leaderboard]")?.addEventListener("click", () => { modalReturnFocusSelector="[data-open-leaderboard]"; modal = "leaderboard"; showModal(); });
   screen.querySelectorAll("[data-new-slot]").forEach(button=>button.addEventListener("click",()=>{
     const slot=button.dataset.newSlot;const slotLabel=slot==="dev"?"dev":slot.slice(-1);const existing=slots[slot];
     if(existing&&!window.confirm(`Start a new run in ${slotLabel==="dev"?"the dev slot":`slot ${slotLabel}`}? This will replace ${DUNGEON_RULES.describeSaveSlot(slots,slot)}.`))return;
     newRun(screen.querySelector("#player-name").value.trim(),slot==="dev",slot,screen.querySelector("#difficulty-choice").value);
   }));
-  screen.querySelectorAll("[data-continue-slot]").forEach(button=>button.addEventListener("click",()=>{state=slots[button.dataset.continueSlot];state.saveSlot=button.dataset.continueSlot;state.runStats ||= {enemiesDefeated:0,damageDealt:0,damageTaken:0,fights:[]};modal=state.runEnded?"run-end":state.milestonePending?"milestone":null;render();}));
+  screen.querySelectorAll("[data-continue-slot]").forEach(button=>button.addEventListener("click",()=>{const saved=slots[button.dataset.continueSlot];if(!isResumableSave(saved)){startScreen();return;}state=saved;state.saveSlot=button.dataset.continueSlot;state.runStats ||= {enemiesDefeated:0,damageDealt:0,damageTaken:0,fights:[]};if(state.leaderboardSubmitted&&state.runSubmissionStatus?.startsWith("Submitting final score")){state.leaderboardSubmitted=false;state.runSubmissionStatus="Global submission status is unknown: the previous request did not return before this run was reopened. You can retry the score submission.";}modal=state.runEnded?"run-end":state.milestonePending?"milestone":state.hp<=0?"death":null;render();}));
   screen.querySelectorAll("[data-delete-slot]").forEach(button=>button.addEventListener("click",()=>{
     const slot=button.dataset.deleteSlot;const saved=slots[slot];const slotLabel=slot==="dev"?"Dev slot":`Slot ${slot.slice(-1)}`;
     if(!window.confirm(`You are about to delete ${slotLabel}, character ${saved?.name||"Adventurer"}. Are you sure?`))return;
@@ -860,7 +974,7 @@ function renderMap() {
       const title = revealed ? ROOM_LABELS[room.type] : "Unexplored room";
       const isAvailable = available.has(room.id);
       const connectors = (room.visited || current) ? connectionsFor(room).map(connection => `<i class="map-link map-link-${escapeHtml(connection.direction)}" aria-hidden="true"></i>`).join("") : "";
-      const classes = ["map-cell",`room-${slug(room.type)}`,revealed?"visited":"unvisited",current?"current":"",isAvailable?"available":"",revealed&&room.type==="boss"?"boss-cell":""].filter(Boolean).join(" ");
+    const classes = ["map-cell",`room-${slug(room.type)}`,revealed?"visited":"unvisited",current?"current":"",isAvailable?"available":"",revealed&&room.type==="boss"?"boss-cell":""].filter(Boolean).join(" ");
       const art = revealed ? `<img class="room-tile-art" src="${mapRoomImage(room)}" alt="" aria-hidden="true">` : "";
       const marker = current ? `<img class="player-marker" src="Images/player.png" alt="" aria-hidden="true">` : "";
       if (current) html += `<span class="${classes}" aria-current="location" aria-label="Current room: ${escapeHtml(title)}" title="You are here · ${escapeHtml(title)}">${connectors}${art}${marker}</span>`;
@@ -965,7 +1079,7 @@ function renderMovement() {
 }
 
 function inventoryButtonMarkup() {
-  return `<button class="inventory-button" data-open-inventory type="button">Inventory ${state.inventoryNotice?'<span class="inventory-notice" aria-label="New equipment">!</span>':""}</button>`;
+  return `<button class="inventory-button" data-open-inventory type="button" ${combatResolution?"disabled":""}>Inventory ${state.inventoryNotice?'<span class="inventory-notice" aria-label="New equipment">!</span>':""}</button>`;
 }
 function combatActionIcon(kind) {
   const icons = {
@@ -983,7 +1097,8 @@ function combatActionIcon(kind) {
   return `<svg class="action-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[kind]||icons.weapon}</svg>`;
 }
 function combatActionButton(label, hint, {kind="weapon", attribute="attack", command="basic", className="", disabled=false, title=""}={}) {
-  return `<button class="action-button ${className}" data-${attribute}="${escapeHtml(command)}" ${disabled?`disabled${title?` title="${escapeHtml(title)}"`:""}`:""}><span class="action-icon">${combatActionIcon(kind)}</span><span class="action-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hint)}</small></span></button>`;
+  const locked=Boolean(combatResolution);
+  return `<button class="action-button ${className}" data-${attribute}="${escapeHtml(command)}" ${disabled||locked?`disabled${title?` title="${escapeHtml(title)}"`:""}`:""}><span class="action-icon">${combatActionIcon(kind)}</span><span class="action-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(hint)}</small></span></button>`;
 }
 function attackButtonSummary(attack,preview,resource="Ready"){
   const damage=attack.spell?0:Math.max(0,Math.round((preview.rawPrimaryDamage||0)*(preview.elementMultiplier||1)));
@@ -1036,7 +1151,7 @@ function getActions() {
     return `<div class="action-grid">${combatActionButton(basicFallback?basicFallbackName:basicLabel,basicHint,{kind:basicKind,command:"basic",className:"action-primary",disabled:basicDisabled,title:basicResource})}${state.class==="warrior"?combatActionButton("Heavy attack",attackButtonSummary(heavyAttack,heavyPreview,state.cooldown?`Cooldown · ${state.cooldown}t`:"Ready"),{kind:"heavy",command:"heavy",className:"action-heavy",disabled:state.cooldown>0,title:"A stronger melee attack; 2-turn cooldown"}):""}${specials}${disruptAction}${defenseAction}${combatActionButton("Health potion",healthCount?`×${healthCount} available`:"None available",{kind:"health",attribute:"action",command:"heal",className:"action-item",disabled:!healthCount})}${combatActionButton("Mana potion",manaCount?`×${manaCount} available`:"None available",{kind:"mana",attribute:"action",command:"mana",className:"action-mana",disabled:!manaCount})}${combatActionButton(cannotFlee?"Flee unavailable":"Flee",cannotFlee?"Boss fight":"40% chance",{kind:"escape",attribute:"action",command:"flee",className:"action-escape",disabled:cannotFlee,title:cannotFlee?"Fleeing is unavailable during a boss fight":""})}</div>`;
   }
   if (room.type === "boss" && room.cleared) {
-    if(state.milestonePending)return `<p class="prompt-note">The milestone boss is defeated. Choose whether this run ends here or continues into the next region.</p><div class="action-grid"><button class="action-button" data-milestone-end>End run · record ${state.floorsCleared} floors</button><button class="action-button secondary" data-milestone-continue>Continue to floor ${state.floor+1}</button></div>`;
+    if(state.milestonePending)return `<p class="prompt-note">The milestone decision is open. Choose whether to end the run or continue.</p>`;
     return `<p class="prompt-note">The chamber falls quiet. The stair to the next floor is open.</p><div class="action-grid"><button class="action-button" data-next-floor>Descend to floor ${state.floor + 1}</button></div>`;
   }
   if(room.type==="enemy"&&room.routeChoice&&!room.routeChoiceMade)return `<p class="prompt-note">Two routes split through this chamber. One is quiet with a small reward; the other leads to a tougher fight with better loot.</p><div class="action-grid"><button class="action-button" data-action="route-safe">Take the safe route<small>Leave without a fight · small gold reward</small></button><button class="action-button" data-action="route-risky">Take the challenge<small>More enemies · tougher fight · guaranteed loot</small></button></div>`;
@@ -1219,7 +1334,7 @@ function applyUiFeedback(previous) {
     const namedEnemy = Array.from(target).find(card => avoidance.text.includes(card.dataset.enemyName || ""));
     if (namedEnemy && /dodges the attack|reads your movement|misses/i.test(avoidance.text)) {
       namedEnemy.classList.add("enemy-evaded");
-      appendImpact(namedEnemy, "EVADE", "impact-evade");
+      if(!combatFeedbacks.some(item=>item.kind==="miss"&&item.targetIndex===Number(namedEnemy.dataset.enemyIndex)))appendImpact(namedEnemy, "EVADE", "impact-evade");
     } else if (/You evade/i.test(avoidance.text)) {
       hpRow?.classList.add("resource-evade");
       appendImpact(hpRow, "EVADE", "impact-evade");
@@ -1236,7 +1351,7 @@ function applyUiFeedback(previous) {
   pendingCombatAction = null;
 }
 
-function render() {
+function render(persistRun = true) {
   if (!state) return startScreen();
   const previousVitals = captureUiVitals();
   const modalView=captureModalView();
@@ -1251,9 +1366,12 @@ function render() {
   const region=regionForFloor(state.floor);
   titleButton.hidden = false;
   indexButton.hidden = modal === "death";
+  indexButton.disabled=Boolean(combatResolution);
+  document.querySelector("#leaderboard-button").disabled=Boolean(combatResolution);
+  document.querySelector("#settings-button").disabled=Boolean(combatResolution);
   const room = currentRoom();
   const aliveEnemies = state.combat?.enemies.map((enemy, index) => ({ enemy, index })).filter(item => item.enemy.hp > 0) || [];
-  screen.innerHTML = `<div class="run-topline"><span>Floor ${state.floor} · ${escapeHtml(region.name)}</span><span>${escapeHtml(state.name)}</span><span>${DIFFICULTIES[state.difficulty]?.label||"Normal"} · Level ${state.level}${state.skillPoints ? ` · ${state.skillPoints} skill point${state.skillPoints === 1 ? "" : "s"}` : ""}</span><div class="run-shortcuts"><button class="small-button" data-open-recap>Run record</button><button class="small-button" data-open-leaderboard>Leaderboard</button><button class="small-button" data-end-run ${state.floorsCleared<1||state.runEnded?"disabled":""}>End run</button></div></div>
+  screen.innerHTML = `<div class="run-topline"><span>Floor ${state.floor} · ${escapeHtml(region.name)}</span><span>${escapeHtml(state.name)}</span><span>${DIFFICULTIES[state.difficulty]?.label||"Normal"} · Level ${state.level}${state.skillPoints ? ` · ${state.skillPoints} skill point${state.skillPoints === 1 ? "" : "s"}` : ""}</span><div class="run-shortcuts"><button class="small-button" data-open-recap>Run record</button><button class="small-button" data-open-leaderboard>Leaderboard</button><button class="small-button" data-end-run ${state.floorsCleared<1||state.runEnded?"disabled":""}>End run</button></div></div>${renderEnemyHitFlash()}
     <div class="game-layout">
       <aside class="player-panel">
         ${state.combat?renderPlayerIdentity():""}
@@ -1268,6 +1386,10 @@ function render() {
       </aside>
       <section class="play-panel">${renderRegionBriefing(region)}${state.combat ? renderCombat(aliveEnemies) : renderRoomView(room)}</section>
     </div>`;
+  if(combatResolution){
+    screen.querySelectorAll("[data-target]").forEach(button=>button.disabled=true);
+    if(Number.isInteger(combatResolution.enemyIndex))screen.querySelectorAll(".enemy-card[data-enemy-index]")[combatResolution.enemyIndex]?.classList.add("resolving-enemy");
+  }
   applyUiFeedback(previousVitals);
   screen.querySelector("[data-open-leaderboard]")?.addEventListener("click", () => { modalReturnFocusSelector="[data-open-leaderboard]"; modal = "leaderboard"; showModal(); });
   screen.querySelector("[data-end-run]")?.addEventListener("click",endRunEarly);
@@ -1275,11 +1397,103 @@ function render() {
   bindArtFallbacks();
   if (modal) showModal();
   restoreModalView(modalView);
-  save();
+  if(persistRun)save();
 }
 
 function renderRoomView(room) {
   return `${renderEncounterResult(room)}<div class="exploration-layout"><div class="room-heading"><div><p class="section-kicker">Floor ${state.floor} · ${room.type === "start" ? "Beginning" : "Room"}</p><h2>${escapeHtml(room.visited ? (room.type === "trap" && !room.trapRevealed ? "Treasure Room" : ROOM_LABELS[room.type]) : "Unknown Room")}</h2></div><span class="room-index">${room.x+1}.${room.y+1}</span></div>${renderMap()}${renderMovement()}<div class="room-actions"><h3>Actions</h3>${getActions()}</div></div>`;
+}
+
+function updateCombatResolutionPresentation() {
+  const view=screen.querySelector(".combat-view");
+  if(!view||!combatResolution)return false;
+  view.className=`combat-view combat-resolving stage-${combatResolution.phase}`;
+  const indicator=view.querySelector(".turn-indicator");
+  if(indicator)indicator.textContent=combatResolutionLabel();
+  const heading=view.querySelector(".room-actions h3");
+  if(heading)heading.textContent="Resolving turn";
+  view.querySelectorAll("button").forEach(button=>{button.disabled=true;});
+  document.querySelector("#index-button").disabled=true;
+  document.querySelector("#leaderboard-button").disabled=true;
+  document.querySelector("#settings-button").disabled=true;
+  view.querySelectorAll(".enemy-card.resolving-enemy").forEach(card=>card.classList.remove("resolving-enemy"));
+  if(Number.isInteger(combatResolution.enemyIndex))view.querySelectorAll(".enemy-card[data-enemy-index]")[combatResolution.enemyIndex]?.classList.add("resolving-enemy");
+  view.querySelectorAll(".player-attack-vfx").forEach(effect=>effect.remove());
+  if(["player-windup","player-impact"].includes(combatResolution.phase))view.querySelectorAll(".combat-outcome-effect,.combat-miss-popup").forEach(effect=>effect.remove());
+  if(combatResolution.phase==="player-impact"){
+    const target=view.querySelector(`.enemy-card[data-enemy-index="${state.target}"]`);
+    if(target)target.insertAdjacentHTML("afterbegin",renderPlayerAttackVfx(state.target));
+  }
+  return true;
+}
+
+function refreshCombatResolutionReadout(refreshActions=false) {
+  if(!state?.combat)return;
+  const view=screen.querySelector(".combat-view");
+  if(!view)return;
+  const staging=document.createElement("div");
+  staging.innerHTML=renderCombat(state.combat.enemies.map((enemy,index)=>({enemy,index})).filter(item=>item.enemy.hp>0));
+  const nextEnemies=staging.querySelector(".enemy-list");
+  const enemyList=view.querySelector(".enemy-list");
+  if(nextEnemies&&enemyList){
+    const existing=new Map(Array.from(enemyList.querySelectorAll(".enemy-card[data-enemy-index]"),card=>[card.dataset.enemyIndex,card]));
+    for(const card of Array.from(enemyList.querySelectorAll(".enemy-card[data-enemy-index]"))){
+      if(!nextEnemies.querySelector(`.enemy-card[data-enemy-index="${card.dataset.enemyIndex}"]`))card.remove();
+    }
+    for(const nextCard of nextEnemies.querySelectorAll(".enemy-card[data-enemy-index]")){
+      const card=existing.get(nextCard.dataset.enemyIndex);
+      if(card&&card.dataset.signature===nextCard.dataset.signature)continue;
+      if(card)card.replaceWith(nextCard);else enemyList.appendChild(nextCard);
+      nextCard.querySelectorAll("[data-target]").forEach(button=>{
+        button.disabled=Boolean(combatResolution);
+        button.addEventListener("click",()=>{if(combatResolution)return;state.target=Number(button.dataset.target);render();});
+      });
+    }
+  }
+  const statuses=view.querySelector(".player-combat-statuses");
+  const nextStatuses=staging.querySelector(".player-combat-statuses");
+  if(statuses&&nextStatuses)statuses.innerHTML=nextStatuses.innerHTML;
+  for(const [key,value,max] of [["health",state.hp,state.maxHp],["mana",state.mana,state.maxMana]]){
+    const row=screen.querySelector(`[data-resource="${key}"]`);
+    if(!row)continue;
+    row.dataset.value=value;
+    const label=row.querySelector(".stat-label b");
+    if(label)label.textContent=`${value} / ${max}`;
+    const fill=row.querySelector(".meter i");
+    if(fill)fill.style.width=`${Math.max(0,value/max*100)}%`;
+  }
+  const log=screen.querySelector(".context-output");
+  const nextLog=staging.ownerDocument.createElement("div");
+  nextLog.innerHTML=renderLog();
+  const logOutput=nextLog.querySelector(".context-output");
+  if(log&&logOutput)log.innerHTML=logOutput.innerHTML;
+  view.className=`combat-view ${combatResolution?`combat-resolving stage-${combatResolution.phase}`:""}`;
+  const indicator=view.querySelector(".turn-indicator");
+  if(indicator)indicator.textContent=combatResolutionLabel();
+  view.querySelectorAll(".enemy-card[data-enemy-index]").forEach(card=>{
+    if(Number.isInteger(combatResolution?.enemyIndex)&&Number(card.dataset.enemyIndex)===combatResolution.enemyIndex)card.classList.add("resolving-enemy");
+  });
+  view.querySelectorAll("[data-target]").forEach(button=>button.disabled=Boolean(combatResolution));
+  const actions=view.querySelector(".room-actions");
+  const nextActions=staging.querySelector(".room-actions");
+  if(refreshActions&&actions&&nextActions){
+    actions.innerHTML=nextActions.innerHTML;
+    actions.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>{pendingCombatAction=state.combat?button.dataset.action:null;act(button.dataset.action);}));
+    actions.querySelectorAll("[data-attack]").forEach(button=>button.addEventListener("click",()=>{pendingCombatAction=button.dataset.attack;combatAction(button.dataset.attack);}));
+  }
+  const heading=view.querySelector(".room-actions h3");
+  if(heading)heading.textContent=combatResolution?"Resolving turn":"Your turn";
+  view.classList.toggle("combat-resolving",Boolean(combatResolution));
+  view.classList.toggle("stage-enemy-windup",combatResolution?.phase==="enemy-windup");
+  view.classList.toggle("stage-enemy-impact",combatResolution?.phase==="enemy-impact");
+  for(const selector of ["#index-button","#leaderboard-button","#settings-button"]){const button=document.querySelector(selector);if(button)button.disabled=Boolean(combatResolution);}
+  if(enemyHitFlash){
+    enemyHitFlash=false;
+    const flash=document.createElement("div");
+    flash.className="screen-edge-flash";
+    flash.setAttribute("aria-hidden","true");
+    screen.appendChild(flash);
+  }
 }
 
 function renderCombat(enemies) {
@@ -1300,7 +1514,8 @@ function renderCombat(enemies) {
     const protector=enemy.protectedByIndex===undefined?null:state.combat.enemies[enemy.protectedByIndex];
     const formation=enemy.formationRole?`<p class="formation-note">Vanguard · intercepts single-target attacks on its ally</p>`:protector?.hp>0?`<p class="formation-note">Protected by ${escapeHtml(protector.name)} · single-target attacks are intercepted</p>`:protector?`<p class="formation-note">Vanguard fallen · no longer protected</p>`:"";
     const pattern=enemy.boss?`<p class="boss-pattern">Pattern: ${bossPattern(enemy.name).map(step=>escapeHtml(step.label)).join(" → ")}</p>`:"";
-    return `<article class="enemy-card ${enemy.boss ? "boss-enemy" : ""} ${enemy.elite ? "elite-enemy" : ""} ${state.target === index ? "target-selected" : ""}" data-enemy-index="${index}" data-enemy-name="${escapeHtml(enemy.name)}" data-effects="${escapeHtml(Object.keys(enemy.effects||{}).sort().join(","))}" data-hp="${enemy.hp}">${enemyArt(enemy)}<div class="enemy-information"><div class="enemy-name"><strong>${escapeHtml(enemy.name)}</strong><span>${escapeHtml(enemy.klass)}</span></div>${eliteBadge}<div class="enemy-health"><span>${enemy.hp} / ${enemy.maxHp} HP</span><i><b style="width:${Math.max(0, enemy.hp / enemy.maxHp * 100)}%"></b></i></div><p>${enemy.damage} damage · ${Math.round(enemy.dodge * 100)}% dodge · ${enemy.element?elementBadge(enemy.element):"Neutral"}${enemy.damageReduction?` · ${enemy.damageReduction} defense`:""}</p><p class="enemy-trait">${escapeHtml(enemyTrait(enemy))} · ${escapeHtml(relation)}</p>${formation}${pattern}<p class="enemy-intent intent-${slug(intent.key||"preparing")}"><span>Intent</span> <strong>${escapeHtml(intent.label)}</strong>${hint}${affinityTelegraph} ${preview}</p>${renderStatusBadges(enemy.effects)}</div><button class="small-button target-button" data-target="${index}">${state.target === index ? "Targeted" : "Target"}</button></article>`;
+    const signature=JSON.stringify([enemy.hp,enemy.maxHp,enemy.damage,enemy.intent,enemy.effects,enemy.aimedShot,enemy.damageReduction,enemy.protectedByIndex,state.target===index]);
+    return `<article class="enemy-card ${enemy.boss ? "boss-enemy" : ""} ${enemy.elite ? "elite-enemy" : ""} ${state.target === index ? "target-selected" : ""}" data-enemy-index="${index}" data-enemy-name="${escapeHtml(enemy.name)}" data-effects="${escapeHtml(Object.keys(enemy.effects||{}).sort().join(","))}" data-hp="${enemy.hp}" data-signature="${escapeHtml(signature)}">${renderCombatOutcome(index)}${renderPlayerAttackVfx(index)}${enemyArt(enemy)}<div class="enemy-information"><div class="enemy-name"><strong>${escapeHtml(enemy.name)}</strong><span>${escapeHtml(enemy.klass)}</span></div>${eliteBadge}<div class="enemy-health"><span>${enemy.hp} / ${enemy.maxHp} HP</span><i><b style="width:${Math.max(0, enemy.hp / enemy.maxHp * 100)}%"></b></i></div><p>${enemy.damage} damage · ${Math.round(enemy.dodge * 100)}% dodge · ${enemy.element?elementBadge(enemy.element):"Neutral"}${enemy.damageReduction?` · ${enemy.damageReduction} defense`:""}</p><p class="enemy-trait">${escapeHtml(enemyTrait(enemy))} · ${escapeHtml(relation)}</p>${formation}${pattern}<p class="enemy-intent intent-${slug(intent.key||"preparing")}"><span>Intent</span> <strong>${escapeHtml(intent.label)}</strong>${hint}${affinityTelegraph} ${preview}</p>${renderStatusBadges(enemy.effects)}</div><button class="small-button target-button" data-target="${index}">${state.target === index ? "Targeted" : "Target"}</button></article>`;
   }).join("");
   const attackInfo = state.showWeaponInfo ? `<div class="weapon-attack-info">${listedAttacks.map(attack => {
     const preview = attackPreview(attack, targetCount);
@@ -1310,7 +1525,22 @@ function renderCombat(enemies) {
     const effectLength=attack.duration||DUNGEON_RULES.getEffectDefinition(effect)?.duration;
     return `<article><strong>${elementBadge(attack.element||state.weapon?.element||"Physical")} ${escapeHtml(attack.name)}</strong><span>${escapeHtml(attack.description || "A reliable basic strike.")}</span><small>${attack.spell?"Effect spell":`${baseDamage} damage`}${attack.aoe?" · all foes":" · one target"}${effect?` · ${escapeHtml(effect)}${effectLength?` ${effectLength}t`:""}`:""}${preview.cooldown?` · ${preview.cooldown}t cooldown`:""}${preview.manaCost?` · ${attack.spell?classSpellCostLabel(equippedSpell):`${preview.manaCost} mana`}`:""}${preview.ammoCost?` · ${preview.ammoCost} arrow${preview.ammoCost===1?"":"s"}`:""}</small></article>`;
   }).join("")}</div>` : "";
-  return `<div class="combat-view"><div class="combat-header"><div><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><span class="turn-indicator">${state.combat?.bonusAttackPending?"Bonus action":"Your turn"}</span></div><div class="enemy-list">${enemyCards}</div>${renderPlayerCombatStatuses()}<div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}${state.combat?.bonusAttackPending?`<p class="bonus-action-prompt">You’re too fast! Choose one attack before the enemies act.</p>`:""}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>Your turn</h3>${getActions()}</div></div>`;
+  const resolutionLabel=combatResolutionLabel();
+  return `<div class="combat-view ${combatResolution?`combat-resolving stage-${combatResolution.phase}`:""}"><div class="combat-header"><div><p class="section-kicker">Combat · Floor ${state.floor}</p><h2>Fight</h2></div><span class="turn-indicator" aria-live="polite">${escapeHtml(resolutionLabel)}</span></div><div class="enemy-list">${enemyCards}</div><div class="player-combat-statuses">${renderPlayerCombatStatuses()}</div><div class="combat-info"><span>Weapon: ${escapeHtml(state.weapon?.name || "None")}</span><button class="small-button" data-toggle-weapon-info>${state.showWeaponInfo ? "Hide attack info" : "Attack info"}</button></div>${attackInfo}${state.combat?.bonusAttackPending?`<p class="bonus-action-prompt">You’re too fast! Choose one attack before the enemies act.</p>`:""}<div class="combat-toolbar">${inventoryButtonMarkup()}</div><div class="room-actions"><h3>${combatResolution?"Resolving turn":"Your turn"}</h3>${getActions()}</div></div>`;
+}
+
+function renderPlayerAttackVfx(targetIndex) {
+  if (!combatResolution || combatResolution.phase !== "player-impact" || targetIndex !== state?.target || state?.class === "archer") return "";
+  const action = combatResolution.action;
+  const attack = state.weapon?.attacks?.find(item => item.command === action) || getEquippedClassSpell(action);
+  const isEnemyAttack = ["basic", "attack", "heavy"].includes(action) || Boolean(attack && !attack.selfOnly && (attack.effect || attack.multiplier > 0));
+  if (!isEnemyAttack) return "";
+  const color = combatEffectColor(action);
+  if (state?.class === "mage" || attack?.spell) {
+    return `<div class="player-attack-vfx mage-attack-vfx" style="--attack-color:${color}" aria-hidden="true"><span></span></div>`;
+  }
+  const heavy = combatResolution.action === "heavy";
+  return `<div class="player-attack-vfx warrior-attack-vfx${heavy ? " heavy" : ""}" style="--attack-color:${color}" aria-hidden="true"><span class="warrior-slashes ${heavy?"single":""}"><i></i>${heavy?"":"<i></i>"}</span></div>`;
 }
 
 function attackPreview(attack, targetCount = state.combat?.enemies.filter(enemy=>enemy.hp>0).length || 1, target = state.combat?.enemies[state.target], weaponOverride = state.weapon, chargedOverride = state.chargedAttack) {
@@ -1528,7 +1758,7 @@ function startCombat(boss) {
   if(room.riskyChoice)for(const enemy of enemies){enemy.maxHp=Math.round(enemy.maxHp*1.25);enemy.hp=enemy.maxHp;enemy.damage=Math.round(enemy.damage*1.2);}
   if(!boss){applyEliteAffinities(enemies,state.floor);compensateEliteCrowd(enemies,state.floor);}
   const hasFormation=!boss&&assignEnemyFormation(enemies);
-  state.combat={enemies,boss,log:[],damageDealt:0,damageTaken:0,summonedCount:0};state.cooldown=0;state.attackCooldowns={};state.defenseCooldowns={aegis:0,block:0,dodge:0};state.activeDefense=null;state.disruptCooldown=0;state.braced=false;state.aimed=false;state.target=0;
+  combatFeedbacks=[];enemyHitFlash=false;state.combat={enemies,boss,log:[],damageDealt:0,damageTaken:0,summonedCount:0};state.cooldown=0;state.attackCooldowns={};state.defenseCooldowns={aegis:0,block:0,dodge:0};state.activeDefense=null;state.disruptCooldown=0;state.braced=false;state.aimed=false;state.target=0;
   for(const enemy of enemies){if(boss){enemy.bossTurn=0;enemy.intent=nextBossIntent(enemy);}else enemy.intent=DUNGEON_RULES.chooseEnemyIntent(enemy.klass,enemy.race);}
   const enemy=enemies[0];
   const displayedName=enemy.elite?`${enemy.affinity} Elite ${enemy.name}`:enemy.name;
@@ -1544,6 +1774,30 @@ function classSpellCostLabel(spell){return spell.manaPercent?`${Math.round(spell
 function classSpellAttack(spell){if(!spell)return null;const offClass=Boolean(state.class&&spell.className!==state.class);return{...spell,name:spell.spellName,spell:true,element:spell.element||"Arcane",offClass,multiplier:0,manaCost:classSpellManaCost(spell),duration:spell.duration||SPELL_RARITY_DURATION[spell.rarity]||1};}
 
 function combatAction(action) {
+  if (combatResolution) return;
+  if (typeof window.setTimeout !== "function" || modal) return combatActionNow(action);
+  const token = ++combatResolutionToken;
+  combatFeedbacks = [];
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const delay = reducedMotion ? 0 : combatPacing === "slow" ? 520 : 150;
+  combatResolution = { phase: "player-windup", actor: "You", action, token };
+  if(!updateCombatResolutionPresentation())render();
+  window.setTimeout(() => {
+    if (token !== combatResolutionToken || !state?.combat) { clearCombatResolution(); return; }
+    combatResolution = { phase: "player-impact", actor: "You", action, token };
+    pendingCombatAction = action;
+    if(!updateCombatResolutionPresentation())render();
+    window.setTimeout(() => {
+      if (token !== combatResolutionToken || !state?.combat) { clearCombatResolution(); return; }
+      combatResolution = null;
+      combatActionNow(action);
+      if (!combatResolution) render();
+    }, reducedMotion ? 90 : state.class === "mage" ? 150 : state.class === "warrior" && action === "heavy" ? 330 : state.class === "warrior" ? 220 : 180);
+  }, delay);
+}
+
+function combatActionNow(action) {
+  combatFeedbacks=[];
   const fight=state.combat; if(!fight)return;
   const wasBonusAttack=Boolean(fight.bonusAttackPending);
   if(wasBonusAttack && !["basic","attack"].includes(action) && !DUNGEON_RULES.getSpecialAttack(state.weapon,action) && !getEquippedClassSpell(action)){message("You’re too fast! Choose an attack before the enemies act.");render();return;}
@@ -1589,7 +1843,7 @@ function combatAction(action) {
     enemyTurn();return;
   }
   if(action==="flee") { if(fight.boss){message("The boss chamber seals behind you. You cannot flee this fight.","danger");render();return;} if(Math.random()<0.4){state.combat=null;state.braced=false;message("You slip past the enemy and retreat to the previous room.","story");render();return;} message(`${enemy.name} blocks your path and stops you from escaping!` ,"danger");enemyTurn();return; }
-  if(action==="heal"||action==="mana") { const type=action==="heal"?"health":"mana";const item=state.items.find(it=>it.type===type && it.quantity>0);if(!item){message(`No ${type} potion in your inventory.`);render();return;}item.quantity--;if(type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+manaPotionRestore(item));message(`You use a ${item.name}. Your turn passes.`);enemyTurn();return; }
+  if(action==="heal"||action==="mana") { const type=action==="heal"?"health":"mana";const itemIndex=state.items.findIndex(it=>it.type===type && it.quantity>0);if(itemIndex<0){message(`No ${type} potion in your inventory.`);render();return;}const item=state.items[itemIndex];item.quantity--;if(type==="health")state.hp=Math.min(state.maxHp,state.hp+healthPotionRestore(item));else state.mana=Math.min(state.maxMana,state.mana+manaPotionRestore(item));if(item.quantity<=0)state.items.splice(itemIndex,1);message(`You use a ${item.name}. Your turn passes.`);enemyTurn();return; }
   const weapon=state.weapon; if(!weapon){message("You need a weapon before you can attack.");render();return;}
   const spell=getEquippedClassSpell(action);
   const special=DUNGEON_RULES.getSpecialAttack(weapon,action)||spell;
@@ -1616,7 +1870,7 @@ function combatAction(action) {
   if(manaCost)state.mana-=manaCost;
   const arrowCost=["Bow","Crossbow"].includes(weapon.type)&&!basicFallback&&!isSpellCast&&!special?.selfOnly?(weapon.effect==="Overdraw"?2:1):0;
   if(arrowCost){state.arrows??=0;if(state.arrows<arrowCost){message(`Not enough arrows. This shot costs ${arrowCost}.`);render();return;}changeArrowCount(-arrowCost);}
-  if(!special?.aoe&&!special?.selfOnly&&enemy.protectedByIndex!==undefined){const guardian=fight.enemies[enemy.protectedByIndex];if(guardian?.hp>0){message(`${guardian.name} intercepts the attack meant for ${enemy.name}.`,"story");enemy=guardian;}}
+  if(!special?.aoe&&!special?.selfOnly&&enemy.protectedByIndex!==undefined){const guardian=fight.enemies[enemy.protectedByIndex];if(guardian?.hp>0){message(`${guardian.name} intercepts the attack meant for ${enemy.name}.`,"story");recordCombatFeedback("blocked",guardian,action);enemy=guardian;}}
   const charged=state.chargedAttack||{multiplier:1,critBonus:0};
   const multiplier=attack.multiplier*charged.multiplier;
   const armorBonuses=DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class);
@@ -1625,10 +1879,10 @@ function combatAction(action) {
   let landed=Boolean(special?.selfOnly);
   let attackDamageDealt=0;
   for(const target of targets){
-    if(state.playerEffects?.Blind&&Math.random()<0.2){message(`Blindness makes your ${attack.name.toLowerCase()} miss.` ,"danger");continue;}
+    if(state.playerEffects?.Blind&&Math.random()<0.2){message(`Blindness makes your ${attack.name.toLowerCase()} miss.` ,"danger");recordCombatFeedback("miss",target,action);continue;}
     const tracksTarget=["Homing","Snipe","Headshot"].includes(weapon.effect)||["Homing","Snipe","Headshot"].includes(attack.effect);
-    if(target.intent?.key==="dodge"&&!target.effects?.Root&&!tracksTarget){target.intentDodging=true;message(`${target.name} reads your movement and evades the attack!`,"danger");continue;}
-    if(Math.random()<target.dodge&&!target.effects?.Root&&!tracksTarget){message(`${target.name} dodges the attack!`,"danger");continue;}
+    if(target.intent?.key==="dodge"&&!target.effects?.Root&&!tracksTarget){target.intentDodging=true;message(`${target.name} reads your movement and evades the attack!`,"danger");recordCombatFeedback("miss",target,action);continue;}
+    if(Math.random()<target.dodge&&!target.effects?.Root&&!tracksTarget){message(`${target.name} dodges the attack!`,"danger");recordCombatFeedback("miss",target,action);continue;}
     landed=true;
   const passiveBonus=isSpellCast?1:({Penetration:1.15,Pierce:1.10,PiercingShot:1.12,Void:1.12,SpellPower:1.12,SpellEcho:1.08,Focus:1.08,Draw:1.12,DelayedCast:1.15,Overcast:1.25,RangeScaling:1.12,ArcaneCharge:1+Math.min(5,state.arcaneCharge||0)*0.04,Overdraw:1.25})[weapon.effect]||1;
     const momentumBonus=!isSpellCast&&weapon.effect==="Momentum"?1+Math.min(5,state.momentum||0)*0.04:1;
@@ -1642,6 +1896,7 @@ function combatAction(action) {
     let damage=isSpellCast?0:Math.max(1,Math.round(rawDamage-(target.damageReduction||0)*(1-defensePierce)));
     const guardReduced=target.intent?.key==="guard";
     const wardReduced=target.intent?.key==="ward";
+    if(guardReduced||wardReduced)recordCombatFeedback("blocked",target,action);
     if(guardReduced)damage=DUNGEON_RULES.guardDamage(damage,isHeavy);
     if(wardReduced)damage=Math.max(1,Math.round(damage*0.7));
     if(target.effects?.Marked)damage=Math.round(damage*1.2);
@@ -1689,65 +1944,100 @@ function combatAction(action) {
   enemyTurn();
 }
 
-function enemyTurn() {
-  if(!state.combat)return;
-  if(DUNGEON_RULES.allEnemiesDefeated(state.combat.enemies)){winFight();return;}
-  state.combat.freshPlayerEffects=[];
-  const enemies=state.combat?.enemies.filter(enemy=>enemy.hp>0)||[];
-  for(const enemy of enemies){
-    processEnemyEffects(enemy);if(enemy.hp<=0)continue;
-    if(enemy.effects?.Frozen?.turns>0){message(`${enemy.name} is frozen solid and loses this turn.`,"story");continue;}
-    if(DUNGEON_RULES.consumeDisruptedIntent(enemy)){message(`${enemy.name}'s telegraphed action is disrupted.`,"story");continue;}
-    if(enemy.effects?.Silence&&["cast","shoot"].includes(enemy.intent?.key)){message(`${enemy.name} is silenced and cannot use its ranged attack this turn.`,"story");continue;}
-    if(enemy.effects?.Gust){delete enemy.effects.Gust;message(`${enemy.name} reels from the gust and loses its turn.`,"story");continue;}
-    if(enemy.effects?.Freeze&&enemy.effects.Freeze.stacks>=5){delete enemy.effects.Freeze;message(`${enemy.name} is frozen solid and loses its turn.`,"story");continue;}
-    if(enemy.intentDodging){enemy.intentDodging=false;message(`${enemy.name} spends its turn repositioning after the dodge.`,"story");continue;}
-    if(enemy.intent?.key==="dodge"){message(`${enemy.name} slips out of reach and repositions.`,"story");continue;}
-    if(enemy.intent?.key==="aim"){enemy.aimedShot=true;message(`${enemy.name} steadies its aim for a powerful shot.`,"danger");continue;}
-    if(enemy.intent?.key==="guard"){message(`${enemy.name} holds its guard and waits for an opening.`);continue;}
-    if(enemy.intent?.key==="ward"){message(`${enemy.name}'s ward fades after absorbing part of your attack.`);continue;}
-    if(enemy.intent?.key==="summon"||enemy.intent?.key==="buff"){
-      const summonLimit=state.combat.boss?Math.min(4,1+Math.floor(state.floor/10)):Math.min(3,1+Math.floor(state.floor/8));
-      const livingLimit=state.combat.boss?Math.min(7,4+Math.floor(state.floor/10)):Math.min(5,2+Math.floor(state.floor/8));
-      if(enemy.intent.key==="summon"&&state.combat.summonedCount<summonLimit&&state.combat.enemies.filter(item=>item.hp>0).length<livingLimit){
-        const summon=makeEnemy(state.floor,false,0);if(enemy.race==="skeleton"){summon.name="Lesser Skeleton";summon.race="skeleton";summon.klass="Warrior";summon.element="Earth";}summon.maxHp=Math.max(8,Math.round(summon.maxHp*0.35));summon.hp=summon.maxHp;summon.damage=Math.max(1,Math.round(summon.damage*0.45));summon.gold=0;summon.xp=0;summon.summoned=true;summon.intent=DUNGEON_RULES.chooseEnemyIntent(summon.klass,summon.race);state.combat.enemies.push(summon);state.combat.summonedCount++;message(`${enemy.name} calls ${summon.name.toLowerCase()} into the fight!`,"danger");
-      }else if(enemy.intent.key==="buff"){
-        for(const ally of state.combat.enemies.filter(item=>item.hp>0))ally.damage=Math.round(ally.damage*1.15);
-        message(`${enemy.name} rallies its allies, increasing their damage.`,"danger");
-      }else message(`${enemy.name} strains to summon, but its summoning limit is reached.`);
-      continue;
-    }
-    const intent=enemy.intent?.key;
-    const damageScale=enemy.intent?.damageMultiplier||(intent==="cast"?1.15:intent==="shoot"?0.9:intent==="heavy"?1.25:1);
-    const blind=enemy.effects?.Blind||enemy.effects?.Cripple?0.65:1;
-    if(Math.random()<enemy.dodge||state.playerEffects?.Afterimage||Math.random()<passiveEvasionChance()||Math.random()>blind){delete state.playerEffects?.Afterimage;message(`You evade ${enemy.name}'s ${intent==="shoot"?"shot":intent==="cast"?"spell":"attack"}.`,"story");}
-    else {
-      const critical=Math.random()<(enemy.critChance||0);
-      const weaknessScale=enemy.effects?.Weakness?0.55:1;
-      const damage=takePlayerDamage(Math.round(enemy.damage*damageScale*weaknessScale)*(critical?2:1),enemy);
-      message(enemy.boss?`${enemy.name} uses ${enemy.intent.label}${critical?" critically":""} for ${damage} damage.`:`${enemy.name} ${intent==="shoot"?"shoots":intent==="cast"?"casts":intent==="heavy"?"lands a heavy blow on":"strikes"} you${critical?" critically":""} for ${damage} damage.`,"danger");
-      if(enemy.hp<=0)continue;
-      if(enemy.lifeSteal&&damage>0){const healed=Math.min(enemy.maxHp-enemy.hp,Math.max(1,Math.round(damage*enemy.lifeSteal)));enemy.hp+=healed;if(healed)message(`${enemy.name} siphons ${healed} health.` ,"danger");}
-      if(state.hp>0)tryApplyEliteAffinityEffect(enemy,intent,true);
-      const thorns=Math.max(DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).thorns,state.playerEffects?.Thorns?0.2:0);
-      if(thorns){const reflected=Math.max(1,Math.round(damage*thorns));const dealt=Math.min(enemy.hp,reflected);enemy.hp=Math.max(0,enemy.hp-reflected);state.combat.damageDealt+=dealt;state.runStats.damageDealt+=dealt;message(`Your thorns reflect ${reflected} damage to ${enemy.name}.`);}
-      if(state.hp<=0){die();return;}
-    }
+function resolveEnemyTurnAction(enemy) {
+  processEnemyEffects(enemy);if(enemy.hp<=0)return;
+  if(enemy.effects?.Frozen?.turns>0){message(`${enemy.name} is frozen solid and loses this turn.`,"story");return;}
+  if(DUNGEON_RULES.consumeDisruptedIntent(enemy)){message(`${enemy.name}'s telegraphed action is disrupted.`,"story");return;}
+  if(enemy.effects?.Silence&&["cast","shoot"].includes(enemy.intent?.key)){message(`${enemy.name} is silenced and cannot use its ranged attack this turn.`,"story");return;}
+  if(enemy.effects?.Gust){delete enemy.effects.Gust;message(`${enemy.name} reels from the gust and loses its turn.`,"story");return;}
+  if(enemy.effects?.Freeze&&enemy.effects.Freeze.stacks>=5){delete enemy.effects.Freeze;message(`${enemy.name} is frozen solid and loses its turn.`,"story");return;}
+  if(enemy.intentDodging){enemy.intentDodging=false;message(`${enemy.name} spends its turn repositioning after the dodge.`,"story");return;}
+  if(enemy.intent?.key==="dodge"){message(`${enemy.name} slips out of reach and repositions.`,"story");return;}
+  if(enemy.intent?.key==="aim"){enemy.aimedShot=true;message(`${enemy.name} steadies its aim for a powerful shot.`,"danger");return;}
+  if(enemy.intent?.key==="guard"){message(`${enemy.name} holds its guard and waits for an opening.`);return;}
+  if(enemy.intent?.key==="ward"){message(`${enemy.name}'s ward fades after absorbing part of your attack.`);return;}
+  if(enemy.intent?.key==="summon"||enemy.intent?.key==="buff"){
+    const summonLimit=state.combat.boss?Math.min(4,1+Math.floor(state.floor/10)):Math.min(3,1+Math.floor(state.floor/8));
+    const livingLimit=state.combat.boss?Math.min(7,4+Math.floor(state.floor/10)):Math.min(5,2+Math.floor(state.floor/8));
+    if(enemy.intent.key==="summon"&&state.combat.summonedCount<summonLimit&&state.combat.enemies.filter(item=>item.hp>0).length<livingLimit){
+      const summon=makeEnemy(state.floor,false,0);if(enemy.race==="skeleton"){summon.name="Lesser Skeleton";summon.race="skeleton";summon.klass="Warrior";summon.element="Earth";}summon.maxHp=Math.max(8,Math.round(summon.maxHp*0.35));summon.hp=summon.maxHp;summon.damage=Math.max(1,Math.round(summon.damage*0.45));summon.gold=0;summon.xp=0;summon.summoned=true;summon.intent=DUNGEON_RULES.chooseEnemyIntent(summon.klass,summon.race);state.combat.enemies.push(summon);state.combat.summonedCount++;message(`${enemy.name} calls ${summon.name.toLowerCase()} into the fight!`,"danger");
+    }else if(enemy.intent.key==="buff"){
+      for(const ally of state.combat.enemies.filter(item=>item.hp>0))ally.damage=Math.round(ally.damage*1.15);
+      message(`${enemy.name} rallies its allies, increasing their damage.`,"danger");
+    }else message(`${enemy.name} strains to summon, but its summoning limit is reached.`);
+    return;
   }
-  if(!state.combat)return;
-  if(DUNGEON_RULES.allEnemiesDefeated(state.combat.enemies)){winFight();return;}
+  const intent=enemy.intent?.key;
+  const damageScale=enemy.intent?.damageMultiplier||(intent==="cast"?1.15:intent==="shoot"?0.9:intent==="heavy"?1.25:1);
+  const blind=enemy.effects?.Blind||enemy.effects?.Cripple?0.65:1;
+  if(Math.random()<enemy.dodge||state.playerEffects?.Afterimage||Math.random()<passiveEvasionChance()||Math.random()>blind){delete state.playerEffects?.Afterimage;message(`You evade ${enemy.name}'s ${intent==="shoot"?"shot":intent==="cast"?"spell":"attack"}.`,"story");}
+  else {
+    const critical=Math.random()<(enemy.critChance||0);
+    const weaknessScale=enemy.effects?.Weakness?0.55:1;
+    enemyHitFlash=true;
+    const damage=takePlayerDamage(Math.round(enemy.damage*damageScale*weaknessScale)*(critical?2:1),enemy);
+    message(enemy.boss?`${enemy.name} uses ${enemy.intent.label}${critical?" critically":""} for ${damage} damage.`:`${enemy.name} ${intent==="shoot"?"shoots":intent==="cast"?"casts":intent==="heavy"?"lands a heavy blow on":"strikes"} you${critical?" critically":""} for ${damage} damage.`,"danger");
+    if(enemy.hp<=0)return;
+    if(enemy.lifeSteal&&damage>0){const healed=Math.min(enemy.maxHp-enemy.hp,Math.max(1,Math.round(damage*enemy.lifeSteal)));enemy.hp+=healed;if(healed)message(`${enemy.name} siphons ${healed} health.` ,"danger");}
+    if(state.hp>0)tryApplyEliteAffinityEffect(enemy,intent,true);
+    const thorns=Math.max(DUNGEON_RULES.armorBonuses(state.equippedArmor||{},state.class).thorns,state.playerEffects?.Thorns?0.2:0);
+    if(thorns){const reflected=Math.max(1,Math.round(damage*thorns));const dealt=Math.min(enemy.hp,reflected);enemy.hp=Math.max(0,enemy.hp-reflected);state.combat.damageDealt+=dealt;state.runStats.damageDealt+=dealt;message(`Your thorns reflect ${reflected} damage to ${enemy.name}.`);}
+    if(state.hp<=0){die();return;}
+  }
+}
+
+function finishEnemyTurn() {
+  if(!state.combat){combatResolution=null;return;}
+  if(DUNGEON_RULES.allEnemiesDefeated(state.combat.enemies)){combatResolution=null;winFight();return;}
+  const enemies=state.combat.enemies.filter(enemy=>enemy.hp>0);
   for(const enemy of enemies)enemy.effects=DUNGEON_RULES.tickCombatEffects(enemy.effects||{},{durationOnly:true}).statuses;
-  for(const enemy of state.combat.enemies.filter(item=>item.hp>0)){
+  for(const enemy of enemies){
     if(enemy.aimedShot){enemy.aimedShot=false;enemy.intent={key:"shoot",label:"Aimed Shot",damageMultiplier:1.5};}
     else enemy.intent=enemy.boss?nextBossIntent(enemy):DUNGEON_RULES.chooseEnemyIntent(enemy.klass,enemy.race);
   }
-  if(!tickPlayerCombatEffects())return;
+  if(!tickPlayerCombatEffects()){combatResolution=null;return;}
   for(const [key,value] of Object.entries(state.attackCooldowns||{})){state.attackCooldowns[key]=Math.max(0,value-1);if(!state.attackCooldowns[key])delete state.attackCooldowns[key];}
   for(const key of Object.keys(state.defenseCooldowns||{}))state.defenseCooldowns[key]=Math.max(0,state.defenseCooldowns[key]-1);
   state.activeDefense=null;
   state.cooldown=Math.max(0,(state.cooldown||0)-1);
   state.disruptCooldown=DUNGEON_RULES.tickDisruptCooldown(state.disruptCooldown||0);
-  render();
+  combatResolution=null;
+  refreshCombatResolutionReadout(true);
+  save();
+}
+
+function enemyTurn() {
+  if(!state.combat)return;
+  if(DUNGEON_RULES.allEnemiesDefeated(state.combat.enemies)){combatResolution=null;winFight();return;}
+  state.combat.freshPlayerEffects=[];
+  const enemies=state.combat.enemies.filter(enemy=>enemy.hp>0);
+  if(typeof window.setTimeout!=="function"){
+    for(const enemy of enemies){resolveEnemyTurnAction(enemy);if(!state.combat||state.hp<=0)return;}
+    finishEnemyTurn();return;
+  }
+  const token=++combatResolutionToken;
+  const fight=state.combat;
+  const reducedMotion=window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const windup=reducedMotion?0:combatPacing==="slow"?850:320;
+  const beat=reducedMotion?0:combatPacing==="slow"?300:140;
+  let index=0;
+  const advance=()=>{
+    if(token!==combatResolutionToken||state.combat!==fight)return;
+    while(index<enemies.length&&enemies[index].hp<=0)index++;
+    if(index>=enemies.length){finishEnemyTurn();return;}
+    const enemy=enemies[index++];
+    combatResolution={phase:"enemy-windup",actor:enemy.name,enemyIndex:state.combat.enemies.indexOf(enemy),token};
+    if(!updateCombatResolutionPresentation())render();
+    window.setTimeout(()=>{
+      if(token!==combatResolutionToken||state.combat!==fight)return;
+      combatResolution={phase:"enemy-impact",actor:enemy.name,enemyIndex:state.combat.enemies.indexOf(enemy),token};
+      resolveEnemyTurnAction(enemy);
+      if(!state.combat||state.hp<=0){combatResolution=null;return;}
+      refreshCombatResolutionReadout();
+      window.setTimeout(advance,beat);
+    },windup);
+  };
+  advance();
 }
 
 function tryApplyEliteAffinityEffect(enemy,intent,hit,random=Math.random){
@@ -1832,6 +2122,7 @@ function takePlayerDamage(damage, sourceEnemy = null) {
   return actual;
 }
 function winFight() {
+  clearCombatResolution();
   const fight=state.combat; const room=currentRoom();let totalGold=0,totalXp=0;
   for(const enemy of fight.enemies){totalGold+=enemy.gold;totalXp+=enemy.xp;}
   if(room.riskyChoice){totalGold=Math.round(totalGold*1.5);totalXp=Math.round(totalXp*1.5);}
@@ -2004,9 +2295,10 @@ function itemNameWithRarity(item) {
   return item.name.startsWith(prefix)?item.name:`${prefix}${item.name}`;
 }
 
-function die(){state.hp=0;state.braced=false;state.activeDefense=null;if(state.combat){state.runStats.fights.unshift({floor:state.floor,defeat:true,enemies:state.combat.enemies.map(enemy=>enemy.name),damageDealt:state.combat.damageDealt||0,damageTaken:state.combat.damageTaken||0,log:[...(state.combat.log||[])]});state.runStats.fights=state.runStats.fights.slice(0,20);}state.combat=null;state.deaths++;updatePersonalBest(state);submitCompletedRun(state);message(`${state.name} has fallen. The run is over.`,"danger");modal="death";render();}
+function die(){clearCombatResolution();state.hp=0;state.braced=false;state.activeDefense=null;if(state.combat){state.runStats.fights.unshift({floor:state.floor,defeat:true,enemies:state.combat.enemies.map(enemy=>enemy.name),damageDealt:state.combat.damageDealt||0,damageTaken:state.combat.damageTaken||0,log:[...(state.combat.log||[])]});state.runStats.fights=state.runStats.fights.slice(0,20);}state.combat=null;state.deaths++;updatePersonalBest(state);submitCompletedRun(state);message(`${state.name} has fallen. The run is over.`,"danger");modal="death";render();}
 
 function openInventory(){
+  if(combatResolution)return;
   const returningFromSkills=modal==="skills";
   modalReturnFocusSelector="[data-open-inventory]";
   state.inventoryNotice=false;
@@ -2079,7 +2371,7 @@ function showModal(){
     content=`<section class="modal milestone-modal" role="dialog" aria-modal="true" aria-labelledby="milestone-title"><p class="section-kicker">Milestone boss defeated · Floor ${state.floor}</p><h2 id="milestone-title">The threshold is yours.</h2><p>You have cleared ${state.floorsCleared} floors and reached the end of ${escapeHtml(region.name)}.</p><p>End the run to record this result, or continue into the next region. You can reach another milestone boss after 20 more floors.</p><div class="action-grid"><button class="action-button" data-milestone-end>End run · record score</button><button class="action-button secondary" data-milestone-continue>Continue to floor ${state.floor+1}</button></div></section>`;
   } else if(modal==="run-end"){
     const endedAtMilestone=state.runEndReason==="milestone";
-    content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="run-end-title"><p class="section-kicker">Run complete${endedAtMilestone?" · milestone clear":""}</p><h2 id="run-end-title">${endedAtMilestone?`${escapeHtml(state.name)} has conquered the threshold.`:`${escapeHtml(state.name)} ends the expedition.`}</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:"<p class=\"run-submission-result\">Personal best recorded. Global score submission is pending or unavailable.</p>"}${!state.devMode&&state.runSubmissionStatus?.includes("Global submission failed:")?'<button class="small-button" data-retry-score>Retry global submission</button>':""}<div class="action-grid"><button class="action-button" data-title>Return to title</button></div></section>`;
+    content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="run-end-title"><p class="section-kicker">Run complete${endedAtMilestone?" · milestone clear":""}</p><h2 id="run-end-title">${endedAtMilestone?`${escapeHtml(state.name)} has conquered the threshold.`:`${escapeHtml(state.name)} ends the expedition.`}</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:"<p class=\"run-submission-result\">Personal best recorded. Global score submission is pending or unavailable.</p>"}${!state.devMode&&(state.runSubmissionStatus?.includes("Global submission failed:")||state.runSubmissionStatus?.startsWith("Global submission status is unknown:"))?'<button class="small-button" data-retry-score>Retry global submission</button>':""}<div class="action-grid"><button class="action-button" data-title>Return to title</button></div></section>`;
   } else if(modal==="inventory"){
     content=`<section class="modal" role="dialog" aria-modal="true" aria-labelledby="inventory-title"><div class="modal-heading"><div><p class="section-kicker">Pack &amp; equipment</p><h2 id="inventory-title">Inventory</h2></div><button class="icon-close" data-close-modal aria-label="Close inventory">×</button></div><div class="inventory-tabs"><button class="tab-button active" data-tab="weapons">Weapons</button><button class="tab-button" data-tab="armor">Armor</button><button class="tab-button" data-tab="items">Items</button><button class="tab-button" data-tab="class-spells">Class Spells</button><button class="tab-button" data-open-skills>Skills${state.skillPoints ? ` (${state.skillPoints} unspent)` : ""}</button></div><div class="equipped-slots">${["head","chest","legs","feet","shield"].map(slot=>`<div><span>${slot}</span><strong>${escapeHtml(state.equippedArmor?.[slot]?.name||"Empty")}</strong></div>`).join("")}</div><p class="armor-set-summary">${escapeHtml(armorSummaryText())}</p><div class="inventory-list" id="inventory-list">${renderInventoryItems("weapons")}</div><p class="inventory-gold">${state.gold} gold · ${state.class?escapeHtml(CLASS_NAMES[state.class]):"Class unchosen"}</p></section>`;
   } else if(modal==="skills"){
@@ -2089,12 +2381,14 @@ function showModal(){
     if(!upgradeWeapons.some(entry=>entry.index===state.upgradeWeaponIndex))state.upgradeWeaponIndex=upgradeWeapons.find(entry=>entry.weapon===state.weapon)?.index??upgradeWeapons[0]?.index??-1;
     content=`<section class="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title"><div class="modal-heading"><div><p class="section-kicker">Floor ${state.floor} merchant · ${DIFFICULTIES[state.difficulty]?.label||"Normal"}</p><h2 id="shop-title">Shop</h2></div><button class="icon-close" data-close-modal aria-label="Close shop">×</button></div>${renderShopTabs(upgradeWeapons)}<div class="shop-footer"><span>${state.gold} gold</span><button class="small-button" data-reroll ${state.gold<shopRerollCost()?"disabled":""}>Reroll · ${shopRerollCost()} gold</button></div></section>`;
   } else if(modal==="death"){
-    content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-title"><p class="section-kicker">Run ended</p><h2 id="death-title">You have fallen.</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:""}${!state.devMode&&state.runSubmissionStatus?.includes("Global submission failed:")?'<button class="small-button" data-retry-score>Retry global submission</button>':""}<div class="action-grid"><button class="action-button" data-restart>Restart run</button><button class="action-button secondary" data-title>Return to title</button></div></section>`;
+    content=`<section class="modal death-modal" role="dialog" aria-modal="true" aria-labelledby="death-title"><p class="section-kicker">Run ended</p><h2 id="death-title">You have fallen.</h2><p>Floors cleared: ${state.floorsCleared} · Level ${state.level}</p>${state.devMode?`<p class="run-submission-result">Dev runs do not count toward personal or global records.</p>`:state.runSubmissionStatus?`<p class="run-submission-result">${escapeHtml(state.runSubmissionStatus)}</p>`:""}${!state.devMode&&(state.runSubmissionStatus?.includes("Global submission failed:")||state.runSubmissionStatus?.startsWith("Global submission status is unknown:"))?'<button class="small-button" data-retry-score>Retry global submission</button>':""}<div class="action-grid"><button class="action-button" data-restart>Restart run</button><button class="action-button secondary" data-title>Return to title</button></div></section>`;
   } else if(modal==="recap"){
     const fights=state.runStats?.fights||[];
     content=`<section class="modal recap-modal" role="dialog" aria-modal="true" aria-labelledby="recap-title"><div class="modal-heading"><div><p class="section-kicker">Run record · Floor ${state.floor}</p><h2 id="recap-title">Expedition recap</h2></div><button class="icon-close" data-close-modal aria-label="Close run recap">×</button></div><div class="recap-totals"><span><b>${state.floorsCleared}</b> floors cleared</span><span><b>${state.runStats?.enemiesDefeated||0}</b> enemies defeated</span><span><b>${state.runStats?.damageDealt||0}</b> damage dealt</span><span><b>${state.runStats?.damageTaken||0}</b> damage taken</span></div><div class="recap-list">${fights.length?fights.map((fight,index)=>`<details class="recap-entry" ${index===0?"open":""}><summary>${fight.floorClear?`Floor ${fight.floor} cleared`:fight.defeat?`Defeat on Floor ${fight.floor}`:`Floor ${fight.floor} · ${fight.boss?"Boss fight":"Battle"} · ${fight.enemies.map(escapeHtml).join(", ")}`}</summary>${fight.floorClear?`<p>Level ${fight.level} · ${fight.enemiesDefeated} enemies defeated · ${fight.gold} gold carried</p>`:`<p>${escapeHtml(fight.rewards||"Run ended before victory.")}</p><p>${fight.damageDealt||0} damage dealt · ${fight.damageTaken||0} damage taken</p>`}<div class="recap-log">${(fight.log||[]).map(entry=>`<p class="${escapeHtml(entry.tone||"")}">${escapeHtml(entry.text)}</p>`).join("")||"<p>No battle events recorded.</p>"}</div></details>`).join(""):`<p class="empty-list">No battles recorded yet.</p>`}</div></section>`;
   } else if(modal==="leaderboard"){
     content=`<section class="modal leaderboard-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title"><div class="modal-heading"><div><p class="section-kicker">Global rankings · Top 100</p><h2 id="leaderboard-title">Highest floors</h2></div><button class="icon-close" data-close-modal aria-label="Close leaderboard">×</button></div>${renderLeaderboard()}</section>`;
+  } else if(modal==="settings"){
+    content=`<section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div class="modal-heading"><div><p class="section-kicker">Personalize your expedition</p><h2 id="settings-title">Settings</h2></div><button class="icon-close" data-close-modal aria-label="Close settings">×</button></div><fieldset class="combat-pacing-options"><legend>Combat pacing</legend><label class="pacing-option ${combatPacing==="fast"?"selected":""}"><input type="radio" name="combat-pacing" value="fast" data-pacing="fast" ${combatPacing==="fast"?"checked":""}><span><strong>Fast</strong><small>Short cues and quick turns.</small></span></label><label class="pacing-option ${combatPacing==="slow"?"selected":""}"><input type="radio" name="combat-pacing" value="slow" data-pacing="slow" ${combatPacing==="slow"?"checked":""}><span><strong>Slow</strong><small>Longer wind-ups and more time to read each action.</small></span></label></fieldset><p class="settings-note">Reduced-motion preferences minimize combat animation and delays.</p></section>`;
   } else if(modal==="index"){
     content=`<section class="modal index-modal" role="dialog" aria-modal="true" aria-labelledby="index-title"><div class="modal-heading"><div><p class="section-kicker">Field reference</p><h2 id="index-title">Index</h2></div><button class="icon-close" data-close-modal aria-label="Close Index">×</button></div><div class="index-layout"><nav class="index-categories" aria-label="Index categories">${[["guide","Quick Guide"],["regions","Regions"],["enemy-types","Enemy Types"],["warrior","Warrior Weapons"],["archer","Archer Weapons"],["mage","Mage Weapons"],["armor","Armor"],["items","Items"],["effects","Effects"]].map(([key,label])=>`<button class="index-category ${indexCategory===key?"active":""}" data-index-category="${key}">${label}</button>`).join("")}</nav><div class="index-content" id="index-content">${renderIndexCategory()}</div></div></section>`;
   }
@@ -2107,6 +2401,7 @@ function showModal(){
     lastFocusedModalName=modal;
   }
   bindArtFallbacks();
+  screen.querySelectorAll("[data-pacing]").forEach(input=>input.addEventListener("change",()=>{combatPacing=input.dataset.pacing==="slow"?"slow":"fast";try{localStorage.setItem(COMBAT_PACING_KEY,combatPacing);}catch{};showModal();}));
   screen.querySelector("[data-close-modal]")?.addEventListener("click",event=>{
     const backdrop=screen.querySelector(".modal-backdrop");
     if(backdrop?.classList.contains("modal-closing"))return;
@@ -2174,8 +2469,9 @@ function showModal(){
   screen.querySelector("[data-restart]")?.addEventListener("click",()=>newRun(state.name,state.devMode,state.saveSlot,state.difficulty));
   screen.querySelector("[data-retry-score]")?.addEventListener("click",()=>submitCompletedRun(state));
   screen.querySelector("[data-title]")?.addEventListener("click",()=>{modal=null;state=null;titleButton.hidden=true;startScreen();});
-  screen.querySelector("[data-milestone-end]")?.addEventListener("click",finishMilestoneRun);
-  screen.querySelector("[data-milestone-continue]")?.addEventListener("click",()=>{if(!state?.milestonePending)return;state.milestonePending=false;modal=null;advanceFloor();});
+  const milestoneDialog=screen.querySelector(".milestone-modal");
+  milestoneDialog?.querySelector("[data-milestone-end]")?.addEventListener("click",finishMilestoneRun);
+  milestoneDialog?.querySelector("[data-milestone-continue]")?.addEventListener("click",()=>{if(!state?.milestonePending)return;state.milestonePending=false;modal=null;advanceFloor();});
 }
 
 function getIndexWeaponEntries(family) {
@@ -2359,6 +2655,8 @@ function generateShopStock(){
   return state.shopStock;
 }
 function shopClassSpellOffer(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0,Math.random(),state.floor);const value=createClassSpellScroll(state.chosenClass||state.class||"warrior",rarity,false,(state.spells||[]).map(spell=>spell.spellId).filter(Boolean));if(!value)return null;return{kind:"classSpell",value,price:priceFor(24+state.floor*4+classSpellManaCost(value)*2,value.rarity)};}
+function armorShopPrice(armor){const armorBaseValue=Math.max(Number(armor.goldValue)||0,Math.round(((Number(armor.defense)||0)*4+(DUNGEON_RULES.armorPieceDamageReduction(armor)||0)*200+(Number(armor.healthBonus)||0)*0.2)*(1+Math.max(0,state.floor-1)*0.04)));return priceFor(armorBaseValue,armor.rarity);}
+function potionShopPrice(rarity="Common"){return priceFor(18+state.floor*3,rarity);}
 function shopItem(){
   const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0,Math.random(),state.floor);
   const weights=lootNeedWeights();const kind=DUNGEON_RULES.rollLootKind(Math.random,state.chosenClass||state.class,{weapon:weights.weapon,armor:weights.armor,item:0});
@@ -2368,15 +2666,15 @@ function shopItem(){
     if(value)return{kind:"weapon",value,price:priceFor(value.goldValue||value.damage*5,value.rarity)};
   }
   const armor=makeLootArmor(rarity,true,existingNames);
-  if(armor){const armorBaseValue=Math.max(armor.goldValue||0,Math.round((armor.defense*4+DUNGEON_RULES.armorPieceDamageReduction(armor)*200+(armor.healthBonus||0)*0.2)*(1+Math.max(0,state.floor-1)*0.12)));return{kind:"armor",value:armor,price:priceFor(armorBaseValue,armor.rarity)};}
+  if(armor)return{kind:"armor",value:armor,price:armorShopPrice(armor)};
   const weapon=makeLootWeapon(rarity,"Common",existingNames);
   return weapon?{kind:"weapon",value:weapon,price:priceFor(weapon.goldValue||weapon.damage*5,weapon.rarity)}:null;
 }
-function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0,Math.random(),state.floor);const value=makePotionLoot(rarity).value;return{kind:"item",value,price:priceFor(18+state.floor*3,rarity)};}
-function priceFor(base,rarity="Common"){const rarityScale=[1,1.35,1.9,2.8,4.5,8,15][Math.max(0,RARITIES.indexOf(rarity))];return Math.max(1,Math.round(base*rarityScale*(DIFFICULTIES[state.difficulty]?.shopCost||1)*(1-Math.max(0,effectiveStat("cha")-10)*0.02)));}
+function shopPotion(){const rarity=DUNGEON_RULES.rollShopRarity(state.shopLootUpgradeLevel||0,Math.random(),state.floor);const value=makePotionLoot(rarity).value;return{kind:"item",value,price:potionShopPrice(rarity)};}
+function priceFor(base,rarity="Common"){const rarityScale=[1,1.25,1.6,2.2,3,4,7][Math.max(0,RARITIES.indexOf(rarity))];return Math.max(1,Math.round(base*rarityScale*(DIFFICULTIES[state.difficulty]?.shopCost||1)*(1-Math.max(0,effectiveStat("cha")-10)*0.02)));}
 function shopRerollCost(){const floorScale=1+Math.max(0,(state.floor||1)-1)*0.08;const upgradeScale=1+Math.max(0,state.shopLootUpgradeLevel||0)*0.12;return Math.round(30*floorScale*upgradeScale*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
-function shopUpgradeCost(){return Math.round(125*Math.pow(2,state.shopLootUpgradeLevel||0)*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
-function weaponUpgradeCost(weapon){return Math.round((5+3*Math.max(0,(state.floor||1)-1))*Math.pow(1.93,weaponUpgradeCount(weapon))*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
+function shopUpgradeCost(){return Math.round(100*Math.pow(1.7,state.shopLootUpgradeLevel||0)*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
+function weaponUpgradeCost(weapon){return Math.round((5+3*Math.max(0,(state.floor||1)-1))*Math.pow(1.35,weaponUpgradeCount(weapon))*(DIFFICULTIES[state.difficulty]?.shopCost||1));}
 function weaponUpgradeCount(weapon){return (weapon.upgradeFloor||state.floor)===state.floor?(weapon.upgradesThisFloor||0):0;}
 function renderWeaponForge(weapon){
   if(!weapon)return "";
@@ -2404,14 +2702,16 @@ function upgradeWeapon(upgrade){
   weapon.level=(weapon.level||1)+1;weapon.upgradesThisFloor=(weapon.upgradesThisFloor||0)+1;
   message(`${weapon.name} upgraded: ${upgrade}.` ,"reward");modal="shop";render();
 }
-function buyItem(index){const item=state.shopStock[index];if(!item||state.gold<item.price)return;state.gold-=item.price;if(item.kind==="weapon"){state.weapons.push(item.value);state.inventoryNotice=true;}else if(item.kind==="classSpell"){state.spells||=[];state.spells.push(item.value);state.inventoryNotice=true;}else{state.armor.push(item.value);state.inventoryNotice=true;equipCollectedArmor(item.value);}state.shopStock.splice(index,1);if(item.value.rarity==="Divine"){state.shopStock=state.shopStock.filter(offer=>offer.kind!==item.kind||offer.value.name!==item.value.name);}message(`Purchased ${item.value.name}.`);modal="shop";render();}
-function buyPotion(index){const item=state.shopPotions?.[index];if(!item||state.gold<item.price)return;state.gold-=item.price;addInventoryItem(item.value);state.shopPotions.splice(index,1);message(`Purchased ${item.value.name}.`);modal="shop";render();}
+function buyItem(index){const item=state.shopStock[index];if(!item||state.gold<item.price)return;state.gold-=item.price;if(item.kind==="armor")item.value.shopPurchasePrice=item.price;if(item.kind==="weapon"){state.weapons.push(item.value);state.inventoryNotice=true;}else if(item.kind==="classSpell"){state.spells||=[];state.spells.push(item.value);state.inventoryNotice=true;}else{state.armor.push(item.value);state.inventoryNotice=true;equipCollectedArmor(item.value);}state.shopStock.splice(index,1);if(item.value.rarity==="Divine"){state.shopStock=state.shopStock.filter(offer=>offer.kind!==item.kind||offer.value.name!==item.value.name);}message(`Purchased ${item.value.name}.`);modal="shop";render();}
+function buyPotion(index){const item=state.shopPotions?.[index];if(!item||state.gold<item.price)return;state.gold-=item.price;item.value.shopValue=item.price;addInventoryItem(item.value);state.shopPotions.splice(index,1);message(`Purchased ${item.value.name}.`);modal="shop";render();}
 function rerollShop(){const cost=shopRerollCost();if(state.gold<cost){message(`Rerolling costs ${cost} gold.`);modal="shop";render();return;}state.gold-=cost;state.shopStock=generateShopStock();state.shopScrollAdded=true;state.shopPotions=[shopPotion()].filter(Boolean);modal="shop";render();}
 function upgradeShopLoot(){if((state.shopLootUpgradeLevel||0)>=5)return;const cost=shopUpgradeCost();if(state.gold<cost)return;state.gold-=cost;state.shopLootUpgradeLevel=(state.shopLootUpgradeLevel||0)+1;state.shopStock=generateShopStock();state.shopScrollAdded=true;state.shopPotions=[shopPotion()].filter(Boolean);message(`Permanent shop stock upgrade increased to level ${state.shopLootUpgradeLevel} for this run.`);modal="shop";render();}
 
 function sellValue(item,kind){
+  if(kind==="armor"){const shopPrice=Number(item.shopPurchasePrice)>0?Number(item.shopPurchasePrice):armorShopPrice(item);return Math.max(1,Math.round(shopPrice*0.5));}
+  if(kind==="item"&&["health","mana"].includes(item.type)){const shopPrice=Number(item.shopValue)>0?Number(item.shopValue):potionShopPrice(item.rarity);return Math.max(1,Math.round(shopPrice*0.5));}
   const rarityIndex=Math.max(0,RARITIES.indexOf(item.rarity||"Common"));
-  const base=kind==="weapon"?Math.max(8,Math.round((item.damage||1)*2.5)):kind==="armor"?Math.max(8,Math.round((item.goldValue||item.defense*5||5)*0.4)):kind==="spell"?Math.max(8,Math.round((item.manaCost||5)*1.5)):Math.max(2,Math.round((item.amount||5)*0.15));
+  const base=kind==="weapon"?Math.max(8,Math.round((item.damage||1)*2.5)):kind==="spell"?Math.max(8,Math.round((item.manaCost||5)*1.5)):Math.max(2,Math.round((item.amount||5)*0.15));
   return Math.max(1,Math.round(base*(1+rarityIndex*0.35)));
 }
 
@@ -2476,4 +2776,4 @@ function renderPatchNotes(version){
 }
 
 document.querySelectorAll?.("[data-patch]").forEach(button=>button.addEventListener("click",()=>renderPatchNotes(button.dataset.patch)));
-renderPatchNotes("v1.6");
+renderPatchNotes("v1.7");
